@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TODO App</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="empty"></div>
+<div class="conatiner">
+    <div class="header">
+        <a href="completed_tasks.html"><button id="green">Completed Tasks</button></a>
+        
+                <a href="#task_conatiner"><button id="blue">Tasks</button></a>
+        <button type="menu" id="filter_button" onclick="toggle_filter()">Filter</button>
+        
+        <div id="filter" style="display: none;">
+            <form id="filterform">
+                <hr>
+                <select name="status" id="status" required>
+                    <option value="" disabled selected>select status</option>
+                    <option value="pending">pending</option>
+                    <option value="accomplished">accomplished</option>
+                </select>
+                <hr>
+
+                <select name="precedence" id="precedence">
+                    <option value="" disabled selected>select Priority</option>
+                    <option value="Low">Low</option>
+                    <option value="Medium">Medium</option>
+                    <option value="High">High</option>
+                </select>
+            <hr>
+
+            <select name="deadline" id="deadline">
+                <option value="" disabled selected>Select the deadline</option>
+                <option value="1">1 day</option>
+                <option value="2">2 days</option>
+                <option value="3">3 days</option>
+                <option value="4">4 days</option>
+                <option value="5">5 days</option>
+                <option value="6">6 days</option>
+                <option value="7">7 days</option>
+                <option value="365">More than 7 days</option>
+            </select>
+               
+                   <label for="apply"></label>
+                <button type="checkbox" id="apply"> Apply </button>
+
+                
+            </form>
+        </div>
+    </div>
+    
+    <div class="form_field">
+    <form id="formdata" >
+
+        <label for="title">Title: </label>
+        <input type="text" id="title" name="title" placeholder="Enter Title" required></br>
+        <hr>
+        
+        <label for="description">Description: </label>
+        <textarea name="description" id="description" placeholder="Enter Description" rows="4" cols="50" required></textarea></br>
+        <hr>
+        
+        <label for="date">Due date: </label>
+        <input type="date" id="date" name="date" required></br>
+        <hr>
+        
+        <label for="priority_level">Priority Level</label>
+            <select value="" name="priority_level" id="priority_level" required>
+            <option  value="" >Select the priority_level</option>
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+            </select>
+        </select>
+        <hr>
+        <button type="submit" id="addtask" >Add Task</button>
+   
+
+
+        </form>
+        
+        <form id="formdata2" style="display: none;">
+
+            <label for="title2">Title: </label>
+            <input type="text" id="title2" placeholder="Title" name="title2" required></br>
+            <hr>
+            
+            <label for="description2">Description: </label>
+            <textarea name="description2" placeholder="Description" id="description2" rows="4" cols="50" required></textarea></br>
+            <hr>
+            
+            <label for="date2">Due date: </label>
+            <input type="date" id="date2" name="date2" required></br>
+            <hr>
+            
+            <label for="priority_level">Priority Level</label>
+            <select value="" name="priority_level2" id="priority_level2" required>
+            <option  value="" >Select the priority_level</option>
+            <option value="Low">Low</option>
+            <option value="Medium">Medium</option>
+            <option value="High">High</option>
+            </select>
+            <hr>
+            <button type="submit" id="update">Update</button>
+    
+            </form>
+
+
+        <hr>
+        <hr>
+    </div>
+        <div><h1>Task Pending</h1>
+        <div id="task_conatiner">
+        </div></div>
+        <div id="filtered_task_container" style="display: none;">
+            
+        </div>
+        
+        
+</div>
+
+
+<script src="script.js"></script>
+</body>
+</html>

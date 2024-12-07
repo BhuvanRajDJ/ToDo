@@ -1,0 +1,232 @@
+
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: #c495d0;;
+  color: #333;
+  margin: 20px;
+}
+#green{
+  background-color: #218838;
+  color: white;
+  font-family: sans-serif;
+  border-style: groove;
+}
+
+.incomplete{
+  background-color: #218838;
+  color: white;
+  font-family: sans-serif;
+  border-style: groove;
+}
+
+#blue{
+  background-color: #0056b3;
+  color: white;
+  font-family: sans-serif;
+  border-style: groove;
+}
+
+#filter_button{
+  background-color: rgb(146, 108, 13);
+  color: white;
+  font-family: sans-serif;
+  border-style: groove;
+}
+
+.empty{
+  background:#c495d0;
+  height: 15px;
+}
+.container {
+  padding-top: 30px;
+  max-width: 800px;
+  margin: 20px auto;
+  padding: 20px;
+  background:#c495d0;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+a {
+  text-decoration: none;
+  color: #007BFF;
+  font-size: 18px;
+  margin-bottom: 20px;
+  display: inline-block;
+}
+
+
+h1 {
+  text-align: center;
+  color: #444;
+}
+
+
+#task_conatiner, #completed_tasks,
+#filtered_task_container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 20px;
+  
+}
+
+.todo_box {
+  background: rgb(169, 179, 247);
+  padding: 15px;
+  border-radius: 5px;
+  border: 1px solid #ddd;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  color: white;
+}
+
+.todo_box:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+
+.todo_box h3 {
+  font-size: 18px;
+  margin: 0;
+  color: rgb(21, 96, 210);
+}
+
+.todo_box p {
+  font-size: 14px;
+  margin: 10px 0;
+  color: #555;
+}
+
+.todo_box h4 {
+  font-size: 14px;
+  margin: 5px 0;
+  color: #777;
+}
+
+button {
+  margin-top: 10px;
+  padding: 8px 12px;
+  font-size: 14px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  border-style: groove;
+}
+
+button:hover{
+  scale: 1.05;
+}
+
+button.edit {
+  background-color: #f5b906;
+  color: #fff;
+  border-style:groove;
+}
+
+button.edit:hover {
+  background-color: #e0a800;
+  
+}
+
+button.delete {
+  background-color: #dc3545;
+  color: #fff;
+  border-style:groove;
+}
+
+button.delete:hover {
+  background-color: #c82333;
+}
+
+button.completed {
+  background-color: #28a745;
+  color: #fff;
+  border-style:groove;
+}
+
+button.completed:hover {
+  background-color: #218838;
+}
+
+
+#filter {
+  display: none;
+  margin: 20px 0;
+  padding: 15px;
+  background-color: #696868;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  
+}
+
+#filter form {
+  width: 90%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+#filter input,
+#filter select,
+#filter button {
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid #8a8989;
+}
+
+
+form {
+  
+  width: 90%;
+}
+
+form input,
+form select,
+form textarea {
+  width: 100%;
+  padding: 10px;
+  margin: 10px 0;
+  border-radius: 4px;
+  border: 1px solid #696969;
+  font-size: 14px;
+}
+
+form button {
+  background-color: #007BFF;
+  color: #fff;
+}
+
+form button:hover {
+  background-color: #0056b3;
+}
+
+/* Responsive Design */
+@media (max-width: 600px) {
+  .todo_box {
+      padding: 10px;
+  }
+
+  button {
+      padding: 6px 10px;
+      font-size: 12px;
+  }
+}
+
+/* .header{ */
+  
+  /* background-color: #c495d0; */
+  /* padding: 10px;
+  position: fixed;
+  top: 0;
+  right: 5px;
+
+} */
+
+/* #completed_tasks{
+
+} */
