@@ -2,128 +2,800 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TODO App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Aurora Companion</title>
+    <!-- Professional Todo SVG Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2222%22 fill=%22%236366f1%22/><path d=%22M30 52 l15 15 l28-28%22 fill=%22none%22 stroke=%22white%22 stroke-width=%2210%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/></svg>">
+    <!-- High-end Fonts & Icons -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
+    <meta name="theme-color" content="#06070a">
 </head>
-<body>
-<div class="empty"></div>
-<div class="conatiner">
-    <div class="header">
-        <a href="completed_tasks.html"><button id="green">Completed Tasks</button></a>
-        
-                <a href="#task_conatiner"><button id="blue">Tasks</button></a>
-        <button type="menu" id="filter_button" onclick="toggle_filter()">Filter</button>
-        
-        <div id="filter" style="display: none;">
-            <form id="filterform">
-                <hr>
-                <select name="status" id="status" required>
-                    <option value="" disabled selected>select status</option>
-                    <option value="pending">pending</option>
-                    <option value="accomplished">accomplished</option>
-                </select>
-                <hr>
+<body class="theme-dark accent-indigo">
 
-                <select name="precedence" id="precedence">
-                    <option value="" disabled selected>select Priority</option>
-                    <option value="Low">Low</option>
-                    <option value="Medium">Medium</option>
-                    <option value="High">High</option>
-                </select>
-            <hr>
-
-            <select name="deadline" id="deadline">
-                <option value="" disabled selected>Select the deadline</option>
-                <option value="1">1 day</option>
-                <option value="2">2 days</option>
-                <option value="3">3 days</option>
-                <option value="4">4 days</option>
-                <option value="5">5 days</option>
-                <option value="6">6 days</option>
-                <option value="7">7 days</option>
-                <option value="365">More than 7 days</option>
-            </select>
-               
-                   <label for="apply"></label>
-                <button type="checkbox" id="apply"> Apply </button>
-
-                
-            </form>
-        </div>
-    </div>
+<div id="app" class="app_shell">
     
-    <div class="form_field">
-    <form id="formdata" >
+    <!-- 1. COLLAPSIBLE SIDEBAR PANEL (DESKTOP NAVIGATION DRAWER) -->
+    <aside class="desktop_sidebar">
+        <div class="sidebar_header">
+            <div class="brand_logo">
+                <span class="logo_accent"></span>
+                <h1>Aurora</h1>
+            </div>
+            <!-- Collapsible trigger chevron button -->
+            <button id="sidebar_toggle_trigger" class="sidebar_collapse_btn" aria-label="Collapse Navigation">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 19l-7-7 7-7"/></svg>
+            </button>
+        </div>
 
-        <label for="title">Title: </label>
-        <input type="text" id="title" name="title" placeholder="Enter Title" required></br>
-        <hr>
-        
-        <label for="description">Description: </label>
-        <textarea name="description" id="description" placeholder="Enter Description" rows="4" cols="50" required></textarea></br>
-        <hr>
-        
-        <label for="date">Due date: </label>
-        <input type="date" id="date" name="date" required></br>
-        <hr>
-        
-        <label for="priority_level">Priority Level</label>
-            <select value="" name="priority_level" id="priority_level" required>
-            <option  value="" >Select the priority_level</option>
-            <option value="Low">Low</option>
-            <option value="Medium">Medium</option>
-            <option value="High">High</option>
-            </select>
-        </select>
-        <hr>
-        <button type="submit" id="addtask" >Add Task</button>
-   
+        <nav class="sidebar_nav">
+            <div class="nav_group">
+                <span class="nav_group_label">Command Center</span>
+                <button class="nav_tab active" data-view="dashboard">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+                    <span>Dashboard</span>
+                </button>
+                <button class="nav_tab" data-view="today">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>
+                    <span>Focus Today</span>
+                </button>
+                <button class="nav_tab" data-view="all">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                    <span>Task List</span>
+                </button>
+                <button class="nav_tab" data-view="completed">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                    <span>Completed Tasks</span>
+                </button>
+            </div>
 
+            <div class="nav_group">
+                <span class="nav_group_label">Daily Schedule</span>
+                <button class="nav_tab" data-view="routine">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                    <span>Daily Schedule</span>
+                </button>
+                <button class="nav_tab" data-view="consistency_history">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"></path></svg>
+                    <span>Consistency History</span>
+                </button>
+            </div>
 
+            <div class="nav_group">
+                <span class="nav_group_label">Habit Progress</span>
+                <button class="nav_tab" data-view="consistency">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2.1l4 4-4 4"></path><path d="M3 12.2v-2a4 4 0 0 1 4-4h14"></path><path d="M7 21.9l-4-4 4-4"></path><path d="M21 11.8v2a4 4 0 0 1-4 4H3"></path></svg>
+                    <span>Habits Tracker</span>
+                </button>
+                <button class="nav_tab" data-view="timer">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    <span>Focus Timer</span>
+                </button>
+                <button class="nav_tab" data-view="insights">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+                    <span>Performance Analytics</span>
+                </button>
+            </div>
+
+            <div class="nav_group">
+                <span class="nav_group_label">Reflections</span>
+                <button class="nav_tab" data-view="journal">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
+                    <span>Daily Journal</span>
+                </button>
+                <button class="nav_tab" data-view="settings">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                    <span>Settings</span>
+                </button>
+            </div>
+        </nav>
+    </aside>
+
+    <!-- 2. MAIN SCROLL CONTAINER PANEL -->
+    <main class="main_content">
+        
+        <!-- BROWSER NOTIFICATION REQUEST BANNER -->
+        <div id="notification_banner" class="notification_banner">
+            <div class="banner_content">
+                <p>Enable browser notifications to receive focus updates and goal deadline alerts.</p>
+            </div>
+            <div class="banner_actions">
+                <button id="grant_notifications" class="banner_btn primary">Enable</button>
+                <button id="close_notification_banner" class="banner_btn secondary" aria-label="Dismiss">Dismiss</button>
+            </div>
+        </div>
+
+        <!-- VIEW LANDMARK HEADER -->
+        <header class="view_header">
+            <div class="title_group">
+                <!-- Hamburger trigger for mobile sidebar slide out -->
+                <button id="mobile_hamburger_trigger" class="mobile_hamburger_btn" aria-label="Open Navigation Menu">
+                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+                </button>
+                <h2 id="active_view_title">Today's Focus</h2>
+                <span id="active_view_count" class="count_pill">(0)</span>
+            </div>
+
+            <!-- Global Streak Flame Tracker -->
+            <div class="streak_badge" title="Highest consecutive habit completion streak">
+                <span class="streak_text">STREAK</span>
+                <span id="streak_count" class="streak_count_number">0</span>
+            </div>
+        </header>
+
+        <!-- =====================================================================
+             A. PANEL: COMMAND CENTER DASHBOARD (LANDING SCREEN)
+             ===================================================================== -->
+        <section id="dashboard_panel" class="app_panel">
+            
+            <!-- Daily Quotes Prompt Block -->
+            <div class="dash_wisdom_box">
+                <div class="dash_wisdom_content">
+                    <p id="dash_wisdom_prompt_quote">"Simplify. Focus on the single next action."</p>
+                </div>
+            </div>
+
+            <!-- Progression Rings Widgets -->
+            <div class="dash_metrics_grid">
+                <div class="dash_metric_card">
+                    <div class="dash_ring_visual">
+                        <svg viewBox="0 0 100 100">
+                            <circle class="ring_bg" cx="50" cy="50" r="40"></circle>
+                            <circle id="ring_tasks_today" class="ring_stroke stroke-indigo" cx="50" cy="50" r="40"></circle>
+                        </svg>
+                        <span id="dash_tasks_pct_label" class="ring_label">0%</span>
+                    </div>
+                    <div class="dash_ring_text">
+                        <h4>Today's Goals</h4>
+                        <p>Scheduled objectives</p>
+                    </div>
+                </div>
+
+                <div class="dash_metric_card">
+                    <div class="dash_ring_visual">
+                        <svg viewBox="0 0 100 100">
+                            <circle class="ring_bg" cx="50" cy="50" r="40"></circle>
+                            <circle id="ring_habits_today" class="ring_stroke stroke-emerald" cx="50" cy="50" r="40"></circle>
+                        </svg>
+                        <span id="dash_habits_pct_label" class="ring_label">0%</span>
+                    </div>
+                    <div class="dash_ring_text">
+                        <h4>Atomic Habits</h4>
+                        <p>Consistency matrix checked</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Focus Nudge recommendation widget -->
+            <div id="dash_focus_nudge_area" class="dash_focus_nudge_container"></div>
+
+            <div class="dash_split_columns_row">
+                <!-- Timeline: Now / Next scheduled block -->
+                <div class="dash_timeline_column">
+                    <h3>Timetable Flow</h3>
+                    <p class="dash_col_sub">Active routine block</p>
+                    <div class="dash_timeline_box">
+                        <span class="timeline_node_badge">NOW RUNNING</span>
+                        <div id="dash_now_block"></div>
+                        
+                        <div class="timeline_connector_line"></div>
+                        
+                        <span class="timeline_node_badge secondary">UPCOMING NEXT</span>
+                        <div id="dash_next_block"></div>
+                    </div>
+                </div>
+
+                <!-- Short Summary list of high priority deadlines -->
+                <div class="dash_tasks_column">
+                    <h3>Urgent Actions</h3>
+                    <p class="dash_col_sub">Prioritized overdue and high priority goals</p>
+                    <div id="dash_urgent_tasks" class="dash_tasks_list_box"></div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- =====================================================================
+             B. PANEL: STANDARD TASK SHEETS VIEW
+             ===================================================================== -->
+        <section id="tasks_panel" class="app_panel" style="display: none;">
+            <!-- Real-time filtering search deck -->
+            <div class="filter_deck">
+                <div class="search_wrapper">
+                    <svg class="search_icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                    <input type="text" id="search_bar" placeholder="Search goals or context notes...">
+                </div>
+
+                <div class="filters_wrapper">
+                    <select id="filter_priority" class="pill_select" aria-label="Filter Priority">
+                        <option value="All">All Priorities</option>
+                        <option value="High">High Priority</option>
+                        <option value="Medium">Medium Priority</option>
+                        <option value="Low">Low Priority</option>
+                    </select>
+
+                    <select id="filter_category" class="pill_select" aria-label="Filter Category">
+                        <option value="All">All Tags</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Active Card Container -->
+            <div id="task_list_container" class="card_stack"></div>
+        </section>
+
+        <!-- =====================================================================
+             C. PANEL: DAILY TIMETABLE ROUTINE PLANNER
+             ===================================================================== -->
+        <section id="routine_panel" class="app_panel" style="display: none;">
+            <div class="routine_header_row">
+                <div class="routine_header_text">
+                    <h3>My Waking Timeline</h3>
+                    <p>Waking block planner. Sleeping boundaries hidden from list.</p>
+                </div>
+                <button class="routine_quick_add_btn" onclick="window.indigoApp.openRoutineSheet()">+ Schedule Block</button>
+            </div>
+
+            <!-- Modern Weekday Switcher Tabs -->
+            <div class="routine_days_tabs_wrapper" id="routine_day_tabs_bar">
+                <button class="routine_day_tab" data-day="Mon">Mon</button>
+                <button class="routine_day_tab" data-day="Tue">Tue</button>
+                <button class="routine_day_tab" data-day="Wed">Wed</button>
+                <button class="routine_day_tab" data-day="Thu">Thu</button>
+                <button class="routine_day_tab" data-day="Fri">Fri</button>
+                <button class="routine_day_tab" data-day="Sat">Sat</button>
+                <button class="routine_day_tab" data-day="Sun">Sun</button>
+            </div>
+
+            <!-- View Layout Selectors -->
+            <div class="routine_layout_selector_row">
+                <div class="layout_toggle_pills" id="routine_layout_pills">
+                    <button class="pill_btn active" data-layout="timeline">Timeline Agenda</button>
+                    <button class="pill_btn" data-layout="grid">Hourly Grid</button>
+                </div>
+            </div>
+            
+            <div id="routine_timetable_scroller" class="routine_scroller"></div>
+        </section>
+
+        <!-- =====================================================================
+             D. PANEL: HABITS CONSISTENCY MATRIX AND HEATMAPS
+             ===================================================================== -->
+        <section id="consistency_panel" class="app_panel" style="display: none;">
+            
+            <!-- Weekly habit checklist matrix grid -->
+            <div class="consistency_matrix_card">
+                <div class="matrix_header_row">
+                    <div>
+                        <h3>Weekly Habit Tracker</h3>
+                        <p>Sleek grid checklist. Complete habits daily to expand streaks.</p>
+                    </div>
+                    <button class="matrix_addition_btn" id="btn_consistency_add_habit">+ Add Habit</button>
+                </div>
+
+                <div class="matrix_table_responsive_wrapper">
+                    <table class="matrix_table">
+                        <thead>
+                            <tr>
+                                <th>Atomic Habit</th>
+                                <th>Mon</th>
+                                <th>Tue</th>
+                                <th>Wed</th>
+                                <th>Thu</th>
+                                <th>Fri</th>
+                                <th>Sat</th>
+                                <th>Sun</th>
+                            </tr>
+                        </thead>
+                        <tbody id="habit_matrix_tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Monthly Contribution Heatmap SVG block -->
+            <div class="consistency_heatmap_card">
+                <h3>Monthly Achievement Heatmap</h3>
+                <p class="heatmap_sub">Habit completions density grid</p>
+                <div id="chart_heatmap_grid" class="heatmap_box"></div>
+                <div class="heatmap_shades_legend">
+                    <span>Less consistent</span>
+                    <span class="shade_box shade-0"></span>
+                    <span class="shade_box shade-1"></span>
+                    <span class="shade_box shade-2"></span>
+                    <span class="shade_box shade-3"></span>
+                    <span>Fully committed</span>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- =====================================================================
+             I. PANEL: DEDICATED CONSISTENCY HISTORY PAGE
+             ===================================================================== -->
+        <section id="consistency_history_panel" class="app_panel" style="display: none;">
+            <div class="consistency_history_header">
+                <h3>Consistency History</h3>
+                <p>Track your historical performance, streaks, and long-term habits progression.</p>
+            </div>
+
+            <div class="consistency_history_summary_grid">
+                <div class="stat_card">
+                    <div class="stat_label">Active Habits</div>
+                    <div id="history_active_habits_count" class="stat_value">0</div>
+                </div>
+                <div class="stat_card">
+                    <div class="stat_label">Average Streak</div>
+                    <div id="history_avg_streak" class="stat_value">0d</div>
+                </div>
+                <div class="stat_card">
+                    <div class="stat_label">All-time Completions</div>
+                    <div id="history_total_completions" class="stat_value">0</div>
+                </div>
+                <div class="stat_card">
+                    <div class="stat_label">Consistency Rate</div>
+                    <div id="history_overall_rate" class="stat_value">0%</div>
+                </div>
+            </div>
+
+            <!-- Streaks Progression List -->
+            <div class="history_section_card">
+                <h3>Habit Streaks & Progress</h3>
+                <p class="history_section_sub">Current vs. Best consecutive days</p>
+                <div id="history_streaks_container" class="history_streaks_list"></div>
+            </div>
+
+            <div class="charts_row">
+                <!-- Weekly Consistency Trend -->
+                <div class="chart_card half">
+                    <h3>7-Day Completion Trend</h3>
+                    <p class="chart_sub">Number of habits completed daily</p>
+                    <div id="chart_weekly_consistency_trend" class="chart_box"></div>
+                </div>
+
+                <!-- Monthly Consistency Rate -->
+                <div class="chart_card half">
+                    <h3>Category Mastery</h3>
+                    <p class="chart_sub">Completions by habit category</p>
+                    <div id="chart_category_consistency" class="chart_box"></div>
+                </div>
+            </div>
+
+            <!-- Chronological Timeline Log -->
+            <div class="history_section_card">
+                <h3>Chronological Completion Log</h3>
+                <p class="history_section_sub">Recent daily habit records</p>
+                <div id="history_chronological_log" class="history_log_timeline"></div>
+            </div>
+        </section>
+
+        <!-- =====================================================================
+             E. PANEL: POMODORO TIMER WORKSPACE
+             ===================================================================== -->
+        <section id="timer_panel" class="app_panel" style="display: none;">
+            <div class="timer_pills_container">
+                <button id="timer_pomo_btn" class="pomo_type_tab active">Focus Block (25m)</button>
+                <button id="timer_short_btn" class="pomo_type_tab">Short Break (5m)</button>
+                <button id="timer_long_btn" class="pomo_type_tab">Long Break (15m)</button>
+                <button id="timer_stopwatch_btn" class="pomo_type_tab">Stopwatch</button>
+            </div>
+
+            <div class="timer_visualization">
+                <svg class="timer_progress_ring" viewBox="0 0 220 220">
+                    <circle class="timer_progress_ring_bg" cx="110" cy="110" r="100"></circle>
+                    <circle id="timer_progress_ring_circle" class="timer_progress_ring_stroke" cx="110" cy="110" r="100"></circle>
+                </svg>
+                <div class="timer_text_layer">
+                    <span id="timer_countdown_text">25:00</span>
+                    <span class="timer_sub_msg">Focus Flow Ticking</span>
+                </div>
+            </div>
+
+            <!-- Focus Time Adjuster Controls -->
+            <div class="timer_adjuster_row" id="timer_adjuster">
+                <button class="adjust_btn" id="btn_timer_dec" title="Decrease time">- 5m</button>
+                <span class="adjust_label">Adjust Duration</span>
+                <button class="adjust_btn" id="btn_timer_inc" title="Increase time">+ 5m</button>
+            </div>
+
+            <div id="timer_task_details" class="timer_task_detail_container"></div>
+
+            <div class="timer_controls">
+                <button id="timer_reset_btn" class="timer_control_sec" aria-label="Reset Timer" title="Reset Session">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+                </button>
+                <button id="timer_start_pause_btn" class="timer_control_main play" aria-label="Start Timer">
+                    <svg id="timer_play_icon" viewBox="0 0 24 24" width="26" height="26" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    <svg id="timer_pause_icon" viewBox="0 0 24 24" width="26" height="26" fill="currentColor" style="display: none;"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+                </button>
+                <button id="timer_skip_btn" class="timer_control_sec" aria-label="Skip Session" title="Skip Session">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
+                </button>
+            </div>
+        </section>
+
+        <!-- =====================================================================
+             F. PANEL: BULLET JOURNAL SELF-REFLECTION
+             ===================================================================== -->
+        <section id="journal_panel" class="app_panel" style="display: none;">
+            <div class="journal_header_row">
+                <h3>Reflections Bullet Journal</h3>
+                <p>Morning intentions and evening reviews reduce mental load.</p>
+            </div>
+            <div id="journal_entries_container"></div>
+        </section>
+
+        <!-- =====================================================================
+             G. PANEL: HISTORICAL ANALYTICS SCREEN
+             ===================================================================== -->
+        <section id="insights_panel" class="app_panel" style="display: none;">
+            <div class="stats_grid">
+                <div class="stat_card">
+                    <div class="stat_label">Tasks Cleared Today</div>
+                    <div id="stat_completed_today" class="stat_value">0</div>
+                </div>
+                <div class="stat_card">
+                    <div class="stat_label">Completion Ratio</div>
+                    <div id="stat_weekly_completion_pct" class="stat_value">0%</div>
+                </div>
+                <div class="stat_card">
+                    <div class="stat_label">Focused Hours Today</div>
+                    <div id="stat_total_focus_hours" class="stat_value">0.0h</div>
+                </div>
+                <div class="stat_card">
+                    <div class="stat_label">Consistency Streaks</div>
+                    <div id="stat_total_active_streak" class="stat_value">0d</div>
+                </div>
+            </div>
+
+            <div class="charts_column">
+                <div class="chart_card">
+                    <h3>Completion Velocity</h3>
+                    <p class="chart_sub">Daily tasks achieved over last 7 days</p>
+                    <div id="chart_weekly_productivity" class="chart_box"></div>
+                </div>
+
+                <div class="charts_row">
+                    <div class="chart_card half">
+                        <h3>Category Focus Distribution</h3>
+                        <div id="chart_category_breakdown" class="chart_box"></div>
+                    </div>
+                    <div class="chart_card half">
+                        <h3>Pomodoro Intensity Time</h3>
+                        <p class="chart_sub">Daily logged focus minutes</p>
+                        <div id="chart_focus_distribution" class="chart_box"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =====================================================================
+             H. PANEL: SYSTEM SETTINGS AND PREFERENCES
+             ===================================================================== -->
+        <section id="settings_panel" class="app_panel" style="display: none;"></section>
+
+    </main>
+
+    <!-- 3. RESPONSIVE MOBILE NAVIGATION TAB BAR (BOTTOM DRAWER NAV) -->
+    <nav class="mobile_bottom_nav">
+        <button class="nav_tab active" data-view="dashboard">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
+            <span>Dashboard</span>
+        </button>
+        <button class="nav_tab" data-view="today">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>
+            <span>Today</span>
+        </button>
+        <button class="nav_tab" data-view="routine">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+            <span>Routine</span>
+        </button>
+        <button class="nav_tab" data-view="consistency">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2.1l4 4-4 4"></path><path d="M3 12.2v-2a4 4 0 0 1 4-4h14"></path><path d="M7 21.9l-4-4 4-4"></path><path d="M21 11.8v2a4 4 0 0 1-4 4H3"></path></svg>
+            <span>Habits</span>
+        </button>
+        <button class="nav_tab" data-view="timer">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            <span>Timer</span>
+        </button>
+    </nav>
+
+    <!-- 4. THUMB-FRIENDLY FLOATING ACTION BUTTON (FAB) -->
+    <button id="fab_add" class="fab_action_trigger" aria-label="Quick-Add Goal">
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <line x1="12" y1="5" x2="12" y2="19"></line>
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+    </button>
+
+    <!-- 5. TASK SLIDE-UP BOTTOM SHEET (MODAL CREATOR & EDITOR DRAWER) -->
+    <div id="bottom_sheet_overlay" class="bottom_sheet_overlay"></div>
+    <div id="bottom_sheet" class="bottom_sheet_drawer" role="dialog" aria-labelledby="sheet_form_title">
+        <div class="sheet_drag_bar"></div>
+        <div class="sheet_header">
+            <h3 id="sheet_form_title">Capture New Goal</h3>
+            <button id="close_sheet" class="sheet_close_btn" aria-label="Dismiss Sheet">✕</button>
+        </div>
+
+        <form id="sheet_form" class="sheet_form_body">
+            <div class="form_group">
+                <label for="task_title">Goal Objective</label>
+                <input type="text" id="task_title" placeholder="Capture your next objective..." required autocomplete="off">
+            </div>
+
+            <div class="form_group">
+                <label for="task_desc">Goal Context (Notes)</label>
+                <textarea id="task_desc" rows="3" placeholder="Context details, tags, sub-notes..."></textarea>
+            </div>
+
+            <div class="form_grid_row">
+                <div class="form_group">
+                    <label for="task_due_date">Target Deadline Date</label>
+                    <div class="quick_date_chips">
+                        <button type="button" class="date_chip" data-days="0">Today</button>
+                        <button type="button" class="date_chip" data-days="1">Tomorrow</button>
+                        <button type="button" class="date_chip" data-days="7">Next Wk</button>
+                    </div>
+                    <input type="date" id="task_due_date" required>
+                </div>
+
+                <div class="form_group">
+                    <label for="task_priority">Priority Level</label>
+                    <select id="task_priority" required>
+                        <option value="Low">Low Priority</option>
+                        <option value="Medium" selected>Medium Priority</option>
+                        <option value="High">High Priority</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form_grid_row">
+                <div class="form_group">
+                    <label for="task_category">Category Tag</label>
+                    <select id="task_category" required>
+                        <option value="Inbox">Inbox</option>
+                        <option value="Work">Work</option>
+                        <option value="Personal">Personal</option>
+                        <option value="Health">Health</option>
+                        <option value="Finance">Finance</option>
+                        <option value="custom">+ Create Tag...</option>
+                    </select>
+                </div>
+
+                <div class="form_group">
+                    <label for="task_duration">Estimated focus (m)</label>
+                    <select id="task_duration" required>
+                        <option value="15">15 mins</option>
+                        <option value="25" selected>25 mins</option>
+                        <option value="40">40 mins</option>
+                        <option value="60">60 mins</option>
+                        <option value="90">90 mins</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form_group">
+                <label for="task_recurring">Repetitive Recurrence</label>
+                <select id="task_recurring" required>
+                    <option value="none" selected>Do not repeat</option>
+                    <option value="daily">Repeat Daily</option>
+                    <option value="weekly">Repeat Weekly</option>
+                    <option value="monthly">Repeat Monthly</option>
+                </select>
+            </div>
+
+            <button type="submit" id="sheet_submit" class="sheet_primary_commit">Commit Task</button>
         </form>
-        
-        <form id="formdata2" style="display: none;">
-
-            <label for="title2">Title: </label>
-            <input type="text" id="title2" placeholder="Title" name="title2" required></br>
-            <hr>
-            
-            <label for="description2">Description: </label>
-            <textarea name="description2" placeholder="Description" id="description2" rows="4" cols="50" required></textarea></br>
-            <hr>
-            
-            <label for="date2">Due date: </label>
-            <input type="date" id="date2" name="date2" required></br>
-            <hr>
-            
-            <label for="priority_level">Priority Level</label>
-            <select value="" name="priority_level2" id="priority_level2" required>
-            <option  value="" >Select the priority_level</option>
-            <option value="Low">Low</option>
-            <option value="Medium">Medium</option>
-            <option value="High">High</option>
-            </select>
-            <hr>
-            <button type="submit" id="update">Update</button>
-    
-            </form>
-
-
-        <hr>
-        <hr>
     </div>
-        <div><h1>Task Pending</h1>
-        <div id="task_conatiner">
-        </div></div>
-        <div id="filtered_task_container" style="display: none;">
-            
-        </div>
-        
-        
-</div>
 
+    <!-- 6. ROUTINE SLIDE-UP BOTTOM SHEET (DAILY TIMETABLE TIMEBLOCK CREATOR) -->
+    <div id="routine_sheet_overlay" class="bottom_sheet_overlay"></div>
+    <div id="routine_sheet" class="bottom_sheet_drawer" role="dialog" aria-labelledby="routine_sheet_title">
+        <div class="sheet_drag_bar"></div>
+        <div class="sheet_header">
+            <h3 id="routine_sheet_title">Schedule Routine Block</h3>
+            <button id="close_routine_sheet" class="sheet_close_btn" aria-label="Dismiss Sheet">✕</button>
+        </div>
+
+        <form id="routine_sheet_form" class="sheet_form_body">
+            <div class="form_group">
+                <label for="routine_title">Routine Block Objective</label>
+                <input type="text" id="routine_title" placeholder="e.g., Deep Focus Block, Mindfulness..." required autocomplete="off">
+            </div>
+
+            <div class="form_grid_row">
+                <div class="form_group">
+                    <label for="routine_start_time">Start Time</label>
+                    <input type="time" id="routine_start_time" required>
+                </div>
+
+                <div class="form_group">
+                    <label for="routine_end_time">End Time</label>
+                    <input type="time" id="routine_end_time" required>
+                </div>
+            </div>
+
+            <div class="form_grid_row">
+                <div class="form_group">
+                    <label for="routine_category">Category</label>
+                    <select id="routine_category" required>
+                        <option value="Routine" selected>Routine</option>
+                        <option value="Work">Work</option>
+                        <option value="Health">Health</option>
+                        <option value="Personal">Personal</option>
+                    </select>
+                </div>
+
+                <div class="form_group">
+                    <label for="routine_color">Color Tag</label>
+                    <select id="routine_color" required>
+                        <option value="indigo" selected>Indigo</option>
+                        <option value="emerald">Emerald</option>
+                        <option value="rose">Rose</option>
+                        <option value="amber">Amber</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form_group">
+                <label>Recurrent Weekdays</label>
+                <div class="routine_days_checkboxes_row">
+                    <label class="day_checkbox_wrapper"><input type="checkbox" name="routine_days" value="Mon" checked><span>M</span></label>
+                    <label class="day_checkbox_wrapper"><input type="checkbox" name="routine_days" value="Tue" checked><span>T</span></label>
+                    <label class="day_checkbox_wrapper"><input type="checkbox" name="routine_days" value="Wed" checked><span>W</span></label>
+                    <label class="day_checkbox_wrapper"><input type="checkbox" name="routine_days" value="Thu" checked><span>T</span></label>
+                    <label class="day_checkbox_wrapper"><input type="checkbox" name="routine_days" value="Fri" checked><span>F</span></label>
+                    <label class="day_checkbox_wrapper"><input type="checkbox" name="routine_days" value="Sat"><span>S</span></label>
+                    <label class="day_checkbox_wrapper"><input type="checkbox" name="routine_days" value="Sun"><span>S</span></label>
+                </div>
+            </div>
+
+            <button type="submit" id="routine_sheet_submit" class="sheet_primary_commit">Schedule Block</button>
+        </form>
+    </div>
+
+    <!-- 7. HABIT SLIDE-UP BOTTOM SHEET (MODAL ATOMIC HABIT CREATOR) -->
+    <div id="habit_sheet_overlay" class="bottom_sheet_overlay"></div>
+    <div id="habit_sheet" class="bottom_sheet_drawer" role="dialog" aria-labelledby="habit_sheet_title">
+        <div class="sheet_drag_bar"></div>
+        <div class="sheet_header">
+            <h3 id="habit_sheet_title">Create Atomic Habit</h3>
+            <button id="close_habit_sheet" class="sheet_close_btn" aria-label="Dismiss Sheet">✕</button>
+        </div>
+
+        <form id="habit_sheet_form" class="sheet_form_body">
+            <div class="form_group">
+                <label for="habit_title">Habit Name</label>
+                <input type="text" id="habit_title" placeholder="e.g., Drink 3L Water, 15m Reading..." required autocomplete="off">
+            </div>
+
+            <div class="form_grid_row">
+                <div class="form_group">
+                    <label for="habit_category">Category</label>
+                    <select id="habit_category" required>
+                        <option value="Routine" selected>Routine</option>
+                        <option value="Mind">Mind</option>
+                        <option value="Health">Health</option>
+                        <option value="Skill">Skill</option>
+                        <option value="Work">Work</option>
+                    </select>
+                </div>
+
+                <div class="form_group">
+                    <label for="habit_color">Accent Color</label>
+                    <select id="habit_color" required>
+                        <option value="indigo" selected>Indigo</option>
+                        <option value="emerald">Emerald</option>
+                        <option value="rose">Rose</option>
+                        <option value="amber">Amber</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Recommended Habit Templates Section -->
+            <div class="form_group" style="margin-top: 12px;">
+                <label>Recommended Habit Templates</label>
+                <div class="habit_templates_chips" id="habit_templates">
+                    <button type="button" class="template_chip" data-title="Drink 3L Water" data-cat="Health" data-color="emerald">💧 Hydrate</button>
+                    <button type="button" class="template_chip" data-title="15m Mindful Breathing" data-cat="Mind" data-color="indigo">🧘 Meditate</button>
+                    <button type="button" class="template_chip" data-title="Read 10 Pages" data-cat="Skill" data-color="amber">📚 Read</button>
+                    <button type="button" class="template_chip" data-title="Stretch & Mobility" data-cat="Health" data-color="rose">💪 Stretch</button>
+                    <button type="button" class="template_chip" data-title="Write Evening Journal" data-cat="Mind" data-color="indigo">📝 Reflect</button>
+                </div>
+            </div>
+
+            <button type="submit" class="sheet_primary_commit" style="margin-top: 16px;">Save Habit</button>
+        </form>
+    </div>
+
+    <!-- 8. WELCOME PRIVACY DIALOG (FIRST TIME BOOT) -->
+    <div id="welcome_dialog" class="modal_dialog_overlay" style="display: none;">
+        <div class="modal_dialog_content welcome_modal">
+            <div class="modal_dialog_header">
+                <h2>Welcome to Aurora</h2>
+            </div>
+            <div class="modal_dialog_body">
+                <p>Welcome to <strong>Aurora</strong>, your personal companion for productivity and atomic habit building. Your privacy and security are our absolute priority.</p>
+                <div class="privacy_principles_list">
+                    <div class="privacy_principle_item">
+                        <div class="principle_icon_container">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                        </div>
+                        <div class="principle_text">
+                            <h4>Local Storage Only</h4>
+                            <p>All your tasks, routines, habits, and journal entries are saved locally on your device's secure browser database (IndexedDB).</p>
+                        </div>
+                    </div>
+                    <div class="privacy_principle_item">
+                        <div class="principle_icon_container">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                        </div>
+                        <div class="principle_text">
+                            <h4>Zero Server Transmissions</h4>
+                            <p>Absolutely no data is ever uploaded, transmitted, or stored on any remote servers. Your thoughts and records are for your eyes only.</p>
+                        </div>
+                    </div>
+                    <div class="privacy_principle_item">
+                        <div class="principle_icon_container">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M14.31 8l5.74 9.94M9.69 8h11.48M7.38 12l5.74-9.94M9.69 16L3.95 6.06M14.31 16H2.83M16.62 12L10.88 21"/></svg>
+                        </div>
+                        <div class="principle_text">
+                            <h4>No Tracking or Sharing</h4>
+                            <p>This application does not collect, track, analyze, or share any personal details, metrics, or usage behavior. It is completely tracking-free.</p>
+                        </div>
+                    </div>
+                    <div class="privacy_principle_item">
+                        <div class="principle_icon_container">
+                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                        </div>
+                        <div class="principle_text">
+                            <h4>Completely Offline</h4>
+                            <p>Aurora functions entirely offline, without requiring an active internet connection. Focus without distractions, completely private.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal_dialog_footer">
+                <button id="welcome_dismiss_btn" class="modal_primary_btn">Let's Begin</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 9. FLOATING FOCUS TIMER (DRAGGABLE IN-APP OVERLAY) -->
+    <div id="floating_timer_widget" class="floating_timer_container" style="display: none;">
+        <div class="floating_timer_drag_handle"></div>
+        
+        <div class="floating_timer_circle">
+            <svg class="floating_progress_ring" viewBox="0 0 100 100">
+                <circle class="floating_progress_ring_bg" cx="50" cy="50" r="45"></circle>
+                <circle id="floating_progress_ring_circle" class="floating_progress_ring_stroke" cx="50" cy="50" r="45"></circle>
+            </svg>
+            <div class="floating_timer_text_layer">
+                <span id="floating_timer_time">25:00</span>
+                <span id="floating_timer_sub">Focus</span>
+            </div>
+        </div>
+
+        <!-- Expanded Hover Quick Controls -->
+        <div class="floating_timer_controls">
+            <button id="btn_floating_play_pause" class="floating_ctrl_btn" title="Pause / Resume">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            </button>
+            <button id="btn_floating_stop" class="floating_ctrl_btn" title="Stop Timer">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+            </button>
+            <button id="btn_floating_pip" class="floating_ctrl_btn" title="Always on Top Overlay">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2"/><rect x="13" y="13" width="5" height="5" rx="1"/></svg>
+            </button>
+            <button id="btn_floating_open" class="floating_ctrl_btn" title="Open Focus Session">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+            </button>
+        </div>
+    </div>
+
+</div>
 
 <script src="script.js"></script>
 </body>
-</html>
+</html></html>

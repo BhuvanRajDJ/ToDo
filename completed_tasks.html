@@ -3,20 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Redirecting...</title>
+    <script>
+        // Store the redirection target view
+        localStorage.setItem("indigo_redirect_view", "completed");
+        window.location.href = "index.html";
+    </script>
 </head>
-<body>
-    <div class="container">
-        
-        <a href="index.html"><button id="blue">Home</button></a>
-    <div>
-        <h1>Task completed</h1>
-        <div id="completed_tasks">
-        </div>
+<body style="background-color: #080a13; color: #ffffff; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0;">
+    <div style="text-align: center;">
+        <p style="font-size: 18px; font-weight: 500;">Upgrading your productivity experience...</p>
     </div>
-
-
-        <script src="completed.js"></script>
 </body>
 </html>
