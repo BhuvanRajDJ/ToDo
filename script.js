@@ -6,6 +6,97 @@
 
 document.addEventListener("DOMContentLoaded", async function () {
   // =========================================================================
+  // 0. SYSTEM CONFIGURATIONS (DYNAMIC DATA DRIVERS)
+  // =========================================================================
+  const CONFIG_CAPTURE_NEW_GOAL = {
+    priorities: [
+      { value: "Low", label: "Low Priority" },
+      { value: "Medium", label: "Medium Priority" },
+      { value: "High", label: "High Priority" }
+    ],
+    categories: ["Inbox", "Work", "Personal", "Health", "Finance"],
+    durations: [
+      { value: "15", label: "15 mins" },
+      { value: "25", label: "25 mins" },
+      { value: "40", label: "40 mins" },
+      { value: "60", label: "60 mins" },
+      { value: "90", label: "90 mins" }
+    ],
+    recurrences: [
+      { value: "none", label: "Do not repeat" },
+      { value: "daily", label: "Repeat Daily" },
+      { value: "weekly", label: "Repeat Weekly" },
+      { value: "monthly", label: "Repeat Monthly" }
+    ]
+  };
+
+  const CONFIG_SCHEDULE_ROUTINE = {
+    categories: ["Routine", "Work", "Health", "Personal"],
+    colors: [
+      { value: "indigo", label: "Indigo" },
+      { value: "emerald", label: "Emerald" },
+      { value: "rose", label: "Rose" },
+      { value: "amber", label: "Amber" }
+    ],
+    weekdays: [
+      { value: "Mon", label: "M" },
+      { value: "Tue", label: "T" },
+      { value: "Wed", label: "W" },
+      { value: "Thu", label: "T" },
+      { value: "Fri", label: "F" },
+      { value: "Sat", label: "S" },
+      { value: "Sun", label: "S" }
+    ]
+  };
+
+  const CONFIG_CREATE_HABIT = {
+    categories: ["Routine", "Mind", "Health", "Skill", "Work"],
+    colors: [
+      { value: "indigo", label: "Indigo" },
+      { value: "emerald", label: "Emerald" },
+      { value: "rose", label: "Rose" },
+      { value: "amber", label: "Amber" }
+    ],
+    templates: [
+      {
+        title: "Drink 3L Water",
+        cat: "Health",
+        color: "emerald",
+        label: "Hydrate",
+        svg: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>`
+      },
+      {
+        title: "15m Mindful Breathing",
+        cat: "Mind",
+        color: "indigo",
+        label: "Meditate",
+        svg: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/></svg>`
+      },
+      {
+        title: "Read 10 Pages",
+        cat: "Skill",
+        color: "amber",
+        label: "Read",
+        svg: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20M4 19.5V4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5z"/></svg>`
+      },
+      {
+        title: "Stretch & Mobility",
+        cat: "Health",
+        color: "rose",
+        label: "Stretch",
+        svg: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 10.5h11M18.5 6.5v8M5.5 6.5v8M12 5.5v13"/></svg>`
+      },
+      {
+        title: "Write Evening Journal",
+        cat: "Mind",
+        color: "indigo",
+        label: "Reflect",
+        svg: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>`
+      }
+    ]
+  };
+
+  // =========================================================================
   // 1. TRANSACTIONAL INDEXEDDB STORAGE SERVICE
   // =========================================================================
   class StorageService {
@@ -261,6 +352,9 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       const accent = await StorageService.getPreference("accent", null);
       if (accent === null) await StorageService.savePreference("accent", "indigo");
+
+      const uiStyle = await StorageService.getPreference("ui_style", null);
+      if (uiStyle === null) await StorageService.savePreference("ui_style", "neo-brutalism");
     }
 
     static async loadAllData() {
@@ -275,7 +369,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         accent,
         sidebarCollapsed,
         notificationsEnabled,
-        bannerDismissed
+        bannerDismissed,
+        uiStyle
       ] = await Promise.all([
         StorageService.getAllItems("tasks"),
         StorageService.getAllItems("routines"),
@@ -287,7 +382,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         StorageService.getPreference("accent", "indigo"),
         StorageService.getPreference("sidebar_collapsed", false),
         StorageService.getPreference("notifications_enabled", true),
-        StorageService.getPreference("banner_dismissed", false)
+        StorageService.getPreference("banner_dismissed", false),
+        StorageService.getPreference("ui_style", "neo-brutalism")
       ]);
 
       const journal = {};
@@ -308,7 +404,8 @@ document.addEventListener("DOMContentLoaded", async function () {
           accent,
           sidebarCollapsed,
           notificationsEnabled,
-          bannerDismissed
+          bannerDismissed,
+          uiStyle
         }
       };
     }
@@ -331,7 +428,9 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       this.theme = dbData.preferences.theme;
       this.accent = dbData.preferences.accent;
+      this.uiStyle = dbData.preferences.uiStyle || "neo-brutalism";
       this.sidebarCollapsed = dbData.preferences.sidebarCollapsed;
+      console.log("State Store Loaded Visual Vibe Style:", this.uiStyle);
 
       this.timer = {
         isRunning: false,
@@ -339,7 +438,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         duration: 25 * 60,
         totalDuration: 25 * 60,
         activeTaskId: null,
-        elapsedSeconds: 0
+        elapsedSeconds: 0,
+        completedSessions: 0
       };
 
       this.filters = { search: "", priority: "All", category: "All" };
@@ -525,7 +625,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         endTime: data.endTime,
         category: data.category || "Routine",
         color: data.color || "indigo",
-        icon: data.icon || "⏳",
+        icon: data.icon || "",
         days: data.days || ["Mon", "Tue", "Wed", "Thu", "Fri"]
       };
       this.routines.push(routine);
@@ -547,7 +647,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           endTime: data.endTime,
           category: data.category || "Routine",
           color: data.color || "indigo",
-          icon: data.icon || "⏳",
+          icon: data.icon || "",
           days: data.days || ["Mon", "Tue", "Wed", "Thu", "Fri"]
         };
 
@@ -795,22 +895,36 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
 
     timerComplete() {
+      const completedType = this.timer.type;
       this.pauseTimer();
 
-      NotificationService.send("Session Achieved! 🎉", {
-        body: this.timer.type === "pomodoro" ? "Focus session cleared! Take a breather." : "Break completed! Ready to lock in?"
+      NotificationService.send("Session Achieved!", {
+        body: completedType === "pomodoro" ? "Focus session cleared! Take a breather." : "Break completed! Ready to lock in?"
       });
 
       if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
 
-      if (this.timer.type === "pomodoro" && this.timer.activeTaskId) {
-        this.logFocusSession(this.timer.activeTaskId, 25);
+      if (completedType === "pomodoro") {
+        const minutes = Math.round(this.timer.totalDuration / 60) || 25;
+        this.logFocusSession(this.timer.activeTaskId || "general_focus", minutes);
+        this.timer.completedSessions = (this.timer.completedSessions || 0) + 1;
       }
 
       this.playAlarmLoop();
 
-      // Change type and set duration directly without stopping the alarm
-      this.timer.type = (this.timer.type === "pomodoro") ? "shortBreak" : "pomodoro";
+      // Determine next timer type based on the Pomodoro cycle:
+      // Focus -> Short Break -> Focus -> Short Break -> Focus -> Short Break -> Focus -> Long Break
+      if (completedType === "pomodoro") {
+        if (this.timer.completedSessions >= 4) {
+          this.timer.type = "longBreak";
+          this.timer.completedSessions = 0; // reset cycle
+        } else {
+          this.timer.type = "shortBreak";
+        }
+      } else {
+        this.timer.type = "pomodoro";
+      }
+
       this.timer.activeTaskId = null;
       this.setTimerDuration();
       this.emit("timerStateChanged", this.timer);
@@ -819,7 +933,25 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
 
     logFocusSession(taskId, minutes) {
-      const task = this.tasks.find(t => t.id === taskId);
+      let task;
+      if (!taskId || taskId === "general_focus") {
+        task = this.tasks.find(t => t.id === "general_focus");
+        if (!task) {
+          task = {
+            id: "general_focus",
+            title: "General Focus",
+            description: "Accumulated unlinked focus sessions",
+            category: "Inbox",
+            completed: false,
+            focusSessions: [],
+            createdAt: new Date().toISOString()
+          };
+          this.tasks.push(task);
+        }
+      } else {
+        task = this.tasks.find(t => t.id === taskId);
+      }
+
       if (task) {
         if (!task.focusSessions) task.focusSessions = [];
         task.focusSessions.push({
@@ -831,7 +963,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         StorageService.putItem("tasks", task);
 
         this.emit("tasksUpdated", this.tasks);
-        this.emit("notification", { message: `Logged ${minutes}m focus time on "${task.title}"! 🚀`, type: "success" });
+        this.emit("notification", { message: `Logged ${minutes}m focus time on "${task.title}"!`, type: "success" });
       }
     }
 
@@ -919,6 +1051,12 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.emit("preferenceChanged", { theme });
     }
 
+    setUiStyle(style) {
+      this.uiStyle = style;
+      StorageService.savePreference("ui_style", style);
+      this.emit("preferenceChanged", { uiStyle: style });
+    }
+
     setAccent(accent) {
       this.accent = accent;
       StorageService.savePreference("accent", accent);
@@ -974,6 +1112,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.store = store;
       this.activeEditingTaskId = null;
       this.activeEditingRoutineId = null;
+      this.activeEditingHabitId = null;
       this.selectedRoutineDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date().getDay()];
       this.routineLayoutMode = "timeline";
       this.cachedQuote = null;
@@ -987,6 +1126,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.cacheDOMElements();
       this.bindStoreEvents();
       this.bindUserInteractions();
+      this.populateCreationFormsFromConfigs();
 
       // Initialize Floating Focus Timer
       this.initFloatingTimer();
@@ -1123,7 +1263,11 @@ document.addEventListener("DOMContentLoaded", async function () {
       if (this.bottomSheetOverlay) {
         this.bottomSheetOverlay.addEventListener("click", () => {
           this.desktopSidebar.classList.remove("mobile_reveal");
-          this.bottomSheetOverlay.classList.remove("visible");
+          if (this.bottomSheet && this.bottomSheet.classList.contains("visible")) {
+            this.closeBottomSheet();
+          } else {
+            this.bottomSheetOverlay.classList.remove("visible");
+          }
         });
       }
 
@@ -1133,7 +1277,11 @@ document.addEventListener("DOMContentLoaded", async function () {
           const target = btn.getAttribute("data-view");
           this.store.setView(target);
           this.desktopSidebar.classList.remove("mobile_reveal");
-          this.bottomSheetOverlay.classList.remove("visible");
+          if (this.bottomSheet && this.bottomSheet.classList.contains("visible")) {
+            this.closeBottomSheet();
+          } else {
+            this.bottomSheetOverlay.classList.remove("visible");
+          }
         });
       });
 
@@ -1159,6 +1307,52 @@ document.addEventListener("DOMContentLoaded", async function () {
           e.preventDefault();
           this.handleFormSubmission();
         });
+
+        // Add Category creation trigger
+        const taskCategorySelect = document.getElementById("task_category");
+        let previousCategoryValue = "Inbox";
+
+        if (taskCategorySelect) {
+          taskCategorySelect.addEventListener("focus", () => {
+            if (taskCategorySelect.value !== "custom") {
+              previousCategoryValue = taskCategorySelect.value;
+            }
+          });
+
+          taskCategorySelect.addEventListener("change", () => {
+            if (taskCategorySelect.value === "custom") {
+              const newTagRaw = prompt("Enter a custom category tag name:");
+              const newTag = newTagRaw ? newTagRaw.trim() : null;
+              if (newTag) {
+                const capitalizedTag = newTag.charAt(0).toUpperCase() + newTag.slice(1);
+                let existingOption = Array.from(taskCategorySelect.options).find(opt => opt.value === capitalizedTag);
+                if (!existingOption) {
+                  const opt = document.createElement("option");
+                  opt.value = capitalizedTag;
+                  opt.textContent = capitalizedTag;
+                  taskCategorySelect.insertBefore(opt, taskCategorySelect.options[taskCategorySelect.options.length - 1]);
+                  
+                  const filterCatSelect = document.getElementById("filter_category");
+                  if (filterCatSelect) {
+                    const existsInFilter = Array.from(filterCatSelect.options).some(opt => opt.value === capitalizedTag);
+                    if (!existsInFilter) {
+                      const filterOpt = document.createElement("option");
+                      filterOpt.value = capitalizedTag;
+                      filterOpt.textContent = capitalizedTag;
+                      filterCatSelect.appendChild(filterOpt);
+                    }
+                  }
+                }
+                taskCategorySelect.value = capitalizedTag;
+                previousCategoryValue = capitalizedTag;
+              } else {
+                taskCategorySelect.value = previousCategoryValue;
+              }
+            } else {
+              previousCategoryValue = taskCategorySelect.value;
+            }
+          });
+        }
 
         // Quick Date scheduler chips inside creator sheet
         const dateChips = this.sheetForm.querySelectorAll(".date_chip");
@@ -1422,7 +1616,11 @@ document.addEventListener("DOMContentLoaded", async function () {
           const cat = document.getElementById("habit_category").value;
           const color = document.getElementById("habit_color").value;
           if (title) {
-            this.store.addHabit(title, cat, color);
+            if (this.activeEditingHabitId !== null) {
+              this.store.updateHabit(this.activeEditingHabitId, { title, category: cat, color });
+            } else {
+              this.store.addHabit(title, cat, color);
+            }
             this.closeHabitSheet();
           }
         });
@@ -1458,6 +1656,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     updateThemeClasses() {
       document.body.className = `theme-${this.store.theme} accent-${this.store.accent}`;
+      document.body.setAttribute("data-style", this.store.uiStyle || "neo-brutalism");
     }
 
     updateSidebarClass() {
@@ -1472,7 +1671,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     populateCategoryDropdowns() {
       const cats = ["All", "Inbox", "Work", "Personal", "Health", "Finance"];
-      this.store.tasks.forEach(t => {
+      this.store.tasks.filter(t => t.id !== "general_focus").forEach(t => {
         if (t.category && !cats.includes(t.category)) cats.push(t.category);
       });
 
@@ -1484,6 +1683,91 @@ document.addEventListener("DOMContentLoaded", async function () {
       if (taskCatSelect) {
         const optionSet = cats.filter(c => c !== "All");
         taskCatSelect.innerHTML = optionSet.map(c => `<option value="${c}">${c}</option>`).join("") + `<option value="custom">+ Create Tag...</option>`;
+      }
+    }
+
+    populateCreationFormsFromConfigs() {
+      // 1. Capture New Goal (Task) Form Select Options
+      const taskPriority = document.getElementById("task_priority");
+      if (taskPriority && CONFIG_CAPTURE_NEW_GOAL.priorities) {
+        taskPriority.innerHTML = CONFIG_CAPTURE_NEW_GOAL.priorities.map(p => 
+          `<option value="${p.value}">${p.label}</option>`
+        ).join("");
+      }
+
+      const taskCategory = document.getElementById("task_category");
+      if (taskCategory && CONFIG_CAPTURE_NEW_GOAL.categories) {
+        const optionSet = CONFIG_CAPTURE_NEW_GOAL.categories;
+        taskCategory.innerHTML = optionSet.map(c => 
+          `<option value="${c}">${c}</option>`
+        ).join("") + `<option value="custom">+ Create Tag...</option>`;
+      }
+
+      const taskDuration = document.getElementById("task_duration");
+      if (taskDuration && CONFIG_CAPTURE_NEW_GOAL.durations) {
+        taskDuration.innerHTML = CONFIG_CAPTURE_NEW_GOAL.durations.map(d => 
+          `<option value="${d.value}">${d.label}</option>`
+        ).join("");
+      }
+
+      const taskRecurring = document.getElementById("task_recurring");
+      if (taskRecurring && CONFIG_CAPTURE_NEW_GOAL.recurrences) {
+        taskRecurring.innerHTML = CONFIG_CAPTURE_NEW_GOAL.recurrences.map(r => 
+          `<option value="${r.value}">${r.label}</option>`
+        ).join("");
+      }
+
+      // 2. Schedule Routine Form Select Options
+      const routineCategory = document.getElementById("routine_category");
+      if (routineCategory && CONFIG_SCHEDULE_ROUTINE.categories) {
+        routineCategory.innerHTML = CONFIG_SCHEDULE_ROUTINE.categories.map(c => 
+          `<option value="${c}">${c}</option>`
+        ).join("");
+      }
+
+      const routineColor = document.getElementById("routine_color");
+      if (routineColor && CONFIG_SCHEDULE_ROUTINE.colors) {
+        routineColor.innerHTML = CONFIG_SCHEDULE_ROUTINE.colors.map(col => 
+          `<option value="${col.value}">${col.label}</option>`
+        ).join("");
+      }
+
+      // 3. Create Habit Form Select Options
+      const habitCategory = document.getElementById("habit_category");
+      if (habitCategory && CONFIG_CREATE_HABIT.categories) {
+        habitCategory.innerHTML = CONFIG_CREATE_HABIT.categories.map(c => 
+          `<option value="${c}">${c}</option>`
+        ).join("");
+      }
+
+      const habitColor = document.getElementById("habit_color");
+      if (habitColor && CONFIG_CREATE_HABIT.colors) {
+        habitColor.innerHTML = CONFIG_CREATE_HABIT.colors.map(col => 
+          `<option value="${col.value}">${col.label}</option>`
+        ).join("");
+      }
+
+      // 4. Recommended Habit Templates Chips in index.html dynamically
+      const templatesBox = document.getElementById("habit_templates");
+      if (templatesBox && CONFIG_CREATE_HABIT.templates) {
+        templatesBox.innerHTML = CONFIG_CREATE_HABIT.templates.map(tpl => 
+          `<button type="button" class="template_chip" data-title="${tpl.title}" data-cat="${tpl.cat}" data-color="${tpl.color}">
+            ${tpl.svg ? tpl.svg : ""} ${tpl.label}
+          </button>`
+        ).join("");
+
+        // Bind click events to dynamically populated templates chips
+        templatesBox.querySelectorAll(".template_chip").forEach(chip => {
+          chip.addEventListener("click", () => {
+            document.getElementById("habit_title").value = chip.getAttribute("data-title");
+            document.getElementById("habit_category").value = chip.getAttribute("data-cat");
+            document.getElementById("habit_color").value = chip.getAttribute("data-color");
+            
+            // Toggle highlight
+            templatesBox.querySelectorAll(".template_chip").forEach(c => c.classList.remove("active"));
+            chip.classList.add("active");
+          });
+        });
       }
     }
 
@@ -1558,7 +1842,12 @@ document.addEventListener("DOMContentLoaded", async function () {
       if (routineMap.now) {
         nowNode.innerHTML = `
           <div class="dash_rout_card border-${routineMap.now.color}">
-            <span class="dash_rout_icon">${routineMap.now.icon}</span>
+            <span class="dash_rout_icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+            </span>
             <div class="dash_rout_text">
               <h4>${this.escapeHTML(routineMap.now.title)}</h4>
               <p>${routineMap.now.startTime} - ${routineMap.now.endTime} (${routineMap.now.category})</p>
@@ -1572,7 +1861,14 @@ document.addEventListener("DOMContentLoaded", async function () {
       if (routineMap.next) {
         nextNode.innerHTML = `
           <div class="dash_rout_card next border-${routineMap.next.color}">
-            <span class="dash_rout_icon">${routineMap.next.icon}</span>
+            <span class="dash_rout_icon">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+              </svg>
+            </span>
             <div class="dash_rout_text">
               <h4>${this.escapeHTML(routineMap.next.title)}</h4>
               <p>Upcoming at ${routineMap.next.startTime}</p>
@@ -1584,7 +1880,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
 
       const listSummaryBox = document.getElementById("dash_urgent_tasks");
-      const pendingTasks = this.store.tasks.filter(t => !t.completed);
+      const pendingTasks = this.store.tasks.filter(t => t.id !== "general_focus" && !t.completed);
       
       const todayStr = new Date().toISOString().split("T")[0];
       const urgentTasks = pendingTasks.filter(t => t.dueDate <= todayStr || t.priority === "High")
@@ -1841,9 +2137,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                     <h4>${this.escapeHTML(rout.title)}</h4>
                   </div>
                   <div class="agenda_block_actions">
-                    <button class="agenda_block_btn edit" title="Edit block">
-                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                    </button>
+                    <button class="agenda_block_btn edit" title="Edit block">Edit</button>
                     <button class="agenda_block_btn delete" title="Delete block">✕</button>
                   </div>
                 </div>
@@ -2149,7 +2443,10 @@ document.addEventListener("DOMContentLoaded", async function () {
                 <div style="flex: 1; display: flex; flex-direction: column;">
                   <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                     <h4>${this.escapeHTML(habit.title)}</h4>
-                    <button class="habit_delete_btn" data-id="${habit.id}" title="Remove Habit">✕</button>
+                    <div style="display: flex; gap: 8px;">
+                      <button class="habit_edit_btn" data-id="${habit.id}" title="Edit Habit">Edit</button>
+                      <button class="habit_delete_btn" data-id="${habit.id}" title="Remove Habit">✕</button>
+                    </div>
                   </div>
                   <p>Streak: <span>${habit.streak || 0}d</span> (PB: ${habit.maxStreak || 0}d)</p>
                 </div>
@@ -2167,6 +2464,17 @@ document.addEventListener("DOMContentLoaded", async function () {
           const id = btn.getAttribute("data-id");
           const dStr = btn.getAttribute("data-date");
           this.store.toggleHabitCompletion(id, dStr);
+        });
+      });
+
+      matrixBox.querySelectorAll(".habit_edit_btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          const id = btn.getAttribute("data-id");
+          const h = this.store.habits.find(hb => hb.id === id);
+          if (h) {
+            this.openHabitSheet(h);
+          }
         });
       });
 
@@ -2875,13 +3183,18 @@ document.addEventListener("DOMContentLoaded", async function () {
       if (filtered.length === 0) {
         this.taskListContainer.innerHTML = `
           <div class="empty_state">
-            <svg viewBox="0 0 24 24" width="64" height="64" fill="none" stroke="currentColor" stroke-width="1.5">
+            <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom: 16px; color: var(--text-muted);">
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            <h3>No tasks here</h3>
-            <p>You are fully caught up! Enjoy your momentum, or slide up a new goal.</p>
+            <h3>All caught up</h3>
+            <p>Your task list is perfectly clear. Take a breather or capture a new goal!</p>
+            <button class="sheet_primary_commit" id="empty_state_add_task" style="display: inline-flex; align-items: center; justify-content: center; padding: 0 20px; height: 40px; width: auto; font-weight: 600; font-size: 14px; margin-top: 16px; border-radius: 6px;">+ Add First Task</button>
           </div>
         `;
+        setTimeout(() => {
+          const btn = document.getElementById("empty_state_add_task");
+          if (btn) btn.addEventListener("click", () => this.openBottomSheet());
+        }, 50);
         return;
       }
 
@@ -2898,7 +3211,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       tomorrow.setDate(tomorrow.getDate() + 1);
       const tomorrowStr = tomorrow.toISOString().split("T")[0];
 
-      let list = this.store.tasks;
+      let list = this.store.tasks.filter(t => t.id !== "general_focus");
 
       if (view === "completed") {
         list = list.filter(t => t.completed);
@@ -2983,13 +3296,14 @@ document.addEventListener("DOMContentLoaded", async function () {
             <div class="card_text">
               <div class="card_title_row">
                 <h3 class="card_title">${this.escapeHTML(task.title)}</h3>
-                ${task.recurring !== "none" ? `<span class="recurring_icon" title="Repeats ${task.recurring}">🔄</span>` : ""}
+                ${task.recurring !== "none" ? `<span class="recurring_icon" title="Repeats ${task.recurring}"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;"><path d="M17 2.1l4 4-4 4"></path><path d="M3 12.2v-2a4 4 0 0 1 4-4h14"></path><path d="M7 21.9l-4-4 4-4"></path><path d="M21 11.8v2a4 4 0 0 1-4 4H3"></path></svg></span>` : ""}
               </div>
               ${task.description ? `<p class="card_desc">${this.escapeHTML(task.description)}</p>` : ""}
             </div>
           </div>
 
           <div class="card_meta_row">
+            <span class="meta_item priority_badge priority-${task.priority.toLowerCase()}">${task.priority.toUpperCase()}</span>
             <span class="meta_item category_badge">${this.escapeHTML(task.category)}</span>
             <span class="meta_item date_badge">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
@@ -3001,7 +3315,8 @@ document.addEventListener("DOMContentLoaded", async function () {
               ${task.dueDate}
             </span>
             ${remainingBadge}
-            ${task.estimatedDuration ? `<span class="meta_item duration_badge">${task.estimatedDuration}m</span>` : ""}
+            ${task.estimatedDuration ? `<span class="meta_item duration_badge"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>${task.estimatedDuration}m</span>` : ""}
+            <span class="meta_item xp_badge"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>+${(task.estimatedDuration || 25) * 4} XP</span>
           </div>
 
           ${hasSub ? `
@@ -3036,10 +3351,6 @@ document.addEventListener("DOMContentLoaded", async function () {
             
             <div class="card_control_buttons">
               <button class="action_btn edit_btn" aria-label="Edit Task">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"></path>
-                  <path d="M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                </svg>
                 Edit
               </button>
               ${!task.completed ? `
@@ -3254,11 +3565,22 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       if (this.activeEditingTaskId !== null) {
         this.store.updateTask(this.activeEditingTaskId, formData);
+        this.closeBottomSheet();
       } else {
-        this.store.addTask(formData);
-      }
+        const newTask = this.store.addTask(formData);
+        this.closeBottomSheet();
 
-      this.closeBottomSheet();
+        if (newTask) {
+          // If we are not currently in a task list view, redirect to "all" (Inbox Archive) so we can see the task
+          if (!["all", "today", "tomorrow", "upcoming", "overdue"].includes(this.store.currentView)) {
+            this.store.setView("all");
+          }
+          // Highlight the newly created task card with celebration particles
+          setTimeout(() => {
+            this.triggerCelebration(newTask.id);
+          }, 300);
+        }
+      }
     }
 
     // -------------------------------------------------------------------------
@@ -3340,9 +3662,9 @@ document.addEventListener("DOMContentLoaded", async function () {
     // ADVANCED SVG ANALYTICS VIEW
     // -------------------------------------------------------------------------
     renderInsightsUI() {
-      const completed = this.store.tasks.filter(t => t.completed);
-      const pending = this.store.tasks.filter(t => !t.completed);
-      const total = this.store.tasks.length;
+      const completed = this.store.tasks.filter(t => t.id !== "general_focus" && t.completed);
+      const pending = this.store.tasks.filter(t => t.id !== "general_focus" && !t.completed);
+      const total = this.store.tasks.filter(t => t.id !== "general_focus").length;
       const completionRate = total > 0 ? Math.round((completed.length / total) * 100) : 0;
 
       let totalFocusMin = 0;
@@ -3364,7 +3686,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     getCompletedTodayCount() {
       const todayStr = new Date().toISOString().split("T")[0];
-      return this.store.tasks.filter(t => t.completed && t.completedDate && t.completedDate.startsWith(todayStr)).length;
+      return this.store.tasks.filter(t => t.id !== "general_focus" && t.completed && t.completedDate && t.completedDate.startsWith(todayStr)).length;
     }
 
     renderCompletionLineChart(completed) {
@@ -3589,9 +3911,17 @@ document.addEventListener("DOMContentLoaded", async function () {
           
           <div class="setting_row">
             <span class="setting_label">Visual Vibe Theme</span>
-            <div class="theme_toggle_pills">
+            <div class="theme_toggle_pills" id="settings_theme_toggle">
               <button class="pill_btn ${currentTheme === "dark" ? "active" : ""}" data-theme="dark">Dark Aura</button>
               <button class="pill_btn ${currentTheme === "light" ? "active" : ""}" data-theme="light">Light Aurora</button>
+            </div>
+          </div>
+
+          <div class="setting_row">
+            <span class="setting_label">UI Visual Style</span>
+            <div class="theme_toggle_pills" id="settings_style_toggle">
+              <button class="pill_btn ${this.store.uiStyle === "minimalism" ? "active" : ""}" data-style="minimalism">Minimalism</button>
+              <button class="pill_btn ${this.store.uiStyle === "neo-brutalism" ? "active" : ""}" data-style="neo-brutalism">Neo-Brutalism</button>
             </div>
           </div>
 
@@ -3641,14 +3971,20 @@ document.addEventListener("DOMContentLoaded", async function () {
         </div>
       `;
 
-      // Bind settings click listeners
-      this.settingsSection.querySelectorAll(".theme_toggle_pills button").forEach(btn => {
-        if (!btn.parentElement.id) {
-          btn.addEventListener("click", () => {
-            this.store.setTheme(btn.getAttribute("data-theme"));
-            this.renderSettingsUI();
-          });
-        }
+      // Bind settings click listeners for theme
+      this.settingsSection.querySelectorAll("#settings_theme_toggle button").forEach(btn => {
+        btn.addEventListener("click", () => {
+          this.store.setTheme(btn.getAttribute("data-theme"));
+          this.renderSettingsUI();
+        });
+      });
+
+      // Bind settings click listeners for UI Style
+      this.settingsSection.querySelectorAll("#settings_style_toggle button").forEach(btn => {
+        btn.addEventListener("click", () => {
+          this.store.setUiStyle(btn.getAttribute("data-style"));
+          this.renderSettingsUI();
+        });
       });
 
       this.settingsSection.querySelectorAll(".accent_pill").forEach(btn => {
@@ -3782,23 +4118,42 @@ document.addEventListener("DOMContentLoaded", async function () {
       let banner = document.getElementById("floating_alarm_banner");
       if (active) {
         if (!banner) {
+          const type = this.store.timer.type;
+          let title = "Focus Session Achieved!";
+          let desc = "Time to take a break or start the next block.";
+          let btnText = "Stop Alarm";
+
+          if (type === "shortBreak" || type === "longBreak") {
+            title = "Break Completed!";
+            desc = "Ready to lock in? Let's start the next Focus session!";
+            btnText = "Start Next Focus";
+          }
+
           banner = document.createElement("div");
           banner.id = "floating_alarm_banner";
           banner.className = "floating_alarm_banner";
           banner.innerHTML = `
             <div class="alarm_banner_content">
-              <span class="alarm_icon">🔔</span>
+              <span class="alarm_icon">
+                <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
+              </span>
               <div class="alarm_text">
-                <h3>Focus Session Achieved!</h3>
-                <p>Time to take a break or start the next block.</p>
+                <h3>${title}</h3>
+                <p>${desc}</p>
               </div>
-              <button class="alarm_stop_btn" id="btn_floating_stop_alarm">Stop Alarm</button>
+              <button class="alarm_stop_btn" id="btn_floating_stop_alarm">${btnText}</button>
             </div>
           `;
           document.body.appendChild(banner);
-          
+
           document.getElementById("btn_floating_stop_alarm").addEventListener("click", () => {
             this.store.stopAlarm();
+            if (type === "shortBreak" || type === "longBreak") {
+              this.store.startTimer();
+            }
           });
         }
         // Force reflow to ensure CSS transitions trigger properly
@@ -4262,7 +4617,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     // 3. Construct synchronous State Store & App Controller from memory cache
     const store = new TaskStore(dbData);
     window.indigoApp = new AppController(store);
-    console.log("Aurora Companion SPA Booted Flawlessly on Transactional IndexedDB! 🚀");
+    console.log("Aurora Companion SPA Booted Flawlessly on Transactional IndexedDB!");
   } catch (err) {
     console.error("Critical failure during Aurora Companion database startup:", err);
   }

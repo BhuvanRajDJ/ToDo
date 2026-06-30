@@ -15,6 +15,22 @@
   
   --sidebar-width: 260px;
   --sidebar-collapsed-width: 64px;
+
+  /* --- RESPONSIVE TYPOGRAPHY DESIGN TOKENS --- */
+  --font-xs: clamp(0.7rem, 1.5vw, 0.8rem);
+  --font-sm: clamp(0.8rem, 1.8vw, 0.9rem);
+  --font-md: clamp(0.9rem, 2vw, 1.05rem);
+  --font-lg: clamp(1.05rem, 2.5vw, 1.25rem);
+  --font-xl: clamp(1.25rem, 3vw, 1.5rem);
+  --font-2xl: clamp(1.5rem, 4vw, 1.85rem);
+  --font-3xl: clamp(1.85rem, 5vw, 2.25rem);
+  
+  /* --- RESPONSIVE SPACING TOKENS --- */
+  --spacing-xs: clamp(4px, 1vw, 8px);
+  --spacing-sm: clamp(8px, 1.5vw, 12px);
+  --spacing-md: clamp(12px, 2.5vw, 18px);
+  --spacing-lg: clamp(18px, 4vw, 28px);
+  --spacing-xl: clamp(28px, 6vw, 42px);
 }
 
 /* Light Theme Tokens - Authentic GitHub Light */
@@ -1794,6 +1810,7 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  margin-bottom: 24px;
 }
 
 svg text { font-family: var(--font-stack); }
@@ -2227,12 +2244,12 @@ svg text { font-family: var(--font-stack); }
   .journal_split_prompts_row { flex-direction: row; }
 
   .bottom_sheet_drawer {
-    width: 480px; max-height: 80%;
+    width: 580px; max-height: 85%;
     bottom: 10%; border-radius: 24px; border: 1px solid var(--border-color);
-    left: calc(50% - 240px); right: calc(50% - 240px);
+    left: calc(50% - 290px); right: calc(50% - 290px);
     transform: translateY(150%) scale(0.95);
     transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.25);
-    padding: 24px;
+    padding: 32px;
   }
   
   .bottom_sheet_drawer.visible { transform: translateY(0) scale(1); }
@@ -2280,9 +2297,9 @@ svg text { font-family: var(--font-stack); }
 #timer_panel.ticking #timer_countdown_text { animation: breathePulse 2s ease-in-out infinite; }
 
 *:focus-visible {
-  outline: 2px solid var(--accent-primary) !important;
-  outline-offset: 3px !important;
-  box-shadow: 0 0 0 4px var(--accent-glow) !important;
+  outline: 1.5px solid var(--accent-primary) !important;
+  outline-offset: 2px !important;
+  box-shadow: none !important;
 }
 
 @media (max-width: 350px) {
@@ -2479,10 +2496,10 @@ svg text { font-family: var(--font-stack); }
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: 16px;
-  max-width: 500px;
+  max-width: 650px;
   width: 100%;
   box-shadow: var(--shadow-lg);
-  padding: 24px;
+  padding: 32px;
   animation: modalSlideUp 0.3s ease-out;
 }
 
@@ -3261,6 +3278,25 @@ svg text { font-family: var(--font-stack); }
   background-color: rgba(99, 102, 241, 0.04);
 }
 
+.habit_edit_btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.habit_edit_btn:hover {
+  background-color: rgba(99, 102, 241, 0.1);
+  color: var(--accent-primary) !important;
+}
+
 .habit_delete_btn {
   background: none;
   border: none;
@@ -3846,3 +3882,494 @@ body.journal-distraction-free #journal_panel {
   max-width: 720px !important;
   margin: 0 auto !important;
 }
+
+/* =========================================================================
+   NEO-BRUTALISM DESIGN SYSTEM OVERRIDES (Aesthetic, Bold & Highly Tactile)
+   ========================================================================= */
+
+/* Universal variable bindings scoped to visual style states */
+body {
+  /* Default Minimalism Token Values */
+  --border-width: 1px;
+  --border-style: solid;
+  --border-color-token: var(--border-color);
+  --border-radius-lg-token: var(--border-radius-lg);
+  --border-radius-md-token: var(--border-radius-md);
+  --border-radius-sm-token: var(--border-radius-sm);
+  
+  --shadow-sm-token: var(--shadow-sm);
+  --shadow-md-token: var(--shadow-md);
+  --shadow-lg-token: var(--shadow-lg);
+  
+  --btn-hover-transform: none;
+  --btn-hover-shadow: var(--shadow-sm);
+  --btn-active-transform: translateY(1px);
+  --btn-active-shadow: none;
+  
+  --font-weight-title: 700;
+  --font-weight-nav: 600;
+  --font-weight-body: 400;
+}
+
+/* Scoped variables when Neo-Brutalism mode is active */
+body[data-style="neo-brutalism"] {
+  --border-width: 3px;
+  --border-style: solid;
+  --border-color-token: var(--text-primary);
+  
+  --border-radius-lg-token: 0px;
+  --border-radius-md-token: 0px;
+  --border-radius-sm-token: 0px;
+  
+  --shadow-sm-token: 3px 3px 0px 0px var(--text-primary);
+  --shadow-md-token: 6px 6px 0px 0px var(--text-primary);
+  --shadow-lg-token: 10px 10px 0px 0px var(--text-primary);
+  
+  --btn-hover-transform: translate(-2px, -2px);
+  --btn-hover-shadow: 6px 6px 0px 0px var(--text-primary);
+  --btn-active-transform: translate(1px, 1px);
+  --btn-active-shadow: 1px 1px 0px 0px var(--text-primary);
+  
+  --font-weight-title: 800;
+  --font-weight-nav: 700;
+  --font-weight-body: 500;
+  
+  /* Snappy snappier transitions for brutal mechanical vibe */
+  --transition-smooth: 0.1s linear;
+  --transition-spring: 0.1s cubic-bezier(0, 0, 0, 1);
+}
+
+/* Neo-Brutalist Light Mode Specific Colors Override */
+body[data-style="neo-brutalism"].theme-light,
+.theme-light[data-style="neo-brutalism"] {
+  --bg-primary: #fffdf9; /* warm neo sand canvas */
+  --bg-secondary: #f4efdf; /* light cream panel frames */
+  --card-bg: #ffffff; /* pure crisp white container cards */
+  --text-primary: #000000; /* pure absolute black text */
+  --text-secondary: #242424; /* warm charcoal dark gray */
+  --text-muted: #5e5e5e; /* neutral gray labels */
+  --border-color: #000000; /* pure black card borders */
+  --glass-border: #000000;
+  --shadow-sm-token: 3px 3px 0px 0px #000000;
+  --shadow-md-token: 6px 6px 0px 0px #000000;
+  --shadow-lg-token: 10px 10px 0px 0px #000000;
+}
+
+/* Neo-Brutalist Dark Mode Specific Colors Override */
+body[data-style="neo-brutalism"].theme-dark,
+.theme-dark[data-style="neo-brutalism"] {
+  --bg-primary: #121214; /* blocky dark background */
+  --bg-secondary: #1d1d21; /* deep gray container grids */
+  --card-bg: #27272b; /* card base elements */
+  --text-primary: #ffffff; /* pure white labels */
+  --text-secondary: #e0e0e6; /* clear light gray copy */
+  --text-muted: #96969f; /* subtle dark gray descriptions */
+  --border-color: #ffffff; /* pure white borders */
+  --glass-border: #ffffff;
+  --shadow-sm-token: 3px 3px 0px 0px #000000; /* black shadows stand on white borders perfectly! */
+  --shadow-md-token: 6px 6px 0px 0px #000000;
+  --shadow-lg-token: 10px 10px 0px 0px #000000;
+}
+
+/* Scoped Neo-Brutalist Component Styling Overrides */
+body[data-style="neo-brutalism"] h1,
+body[data-style="neo-brutalism"] h2,
+body[data-style="neo-brutalism"] h3,
+body[data-style="neo-brutalism"] h4,
+body[data-style="neo-brutalism"] h5,
+body[data-style="neo-brutalism"] h6 {
+  font-weight: 800 !important;
+  letter-spacing: -0.03em !important;
+  text-transform: uppercase !important;
+}
+
+/* Apply thick borders, 0px border-radius, and offset unblurred shadows to cards/panels */
+body[data-style="neo-brutalism"] .dash_wisdom_box,
+body[data-style="neo-brutalism"] .dash_metric_card,
+body[data-style="neo-brutalism"] .dash_nudge_prompt_card,
+body[data-style="neo-brutalism"] .dash_rout_card,
+body[data-style="neo-brutalism"] .dash_tasks_clear_card,
+body[data-style="neo-brutalism"] .task_card,
+body[data-style="neo-brutalism"] .consistency_matrix_card,
+body[data-style="neo-brutalism"] .consistency_heatmap_card,
+body[data-style="neo-brutalism"] .journal_prompts_card,
+body[data-style="neo-brutalism"] .stat_card,
+body[data-style="neo-brutalism"] .chart_card,
+body[data-style="neo-brutalism"] .history_section_card,
+body[data-style="neo-brutalism"] .agenda_empty_card,
+body[data-style="neo-brutalism"] .journal_entry_node,
+body[data-style="neo-brutalism"] .routine_planner_node,
+body[data-style="neo-brutalism"] .settings_group,
+body[data-style="neo-brutalism"] .desktop_sidebar,
+body[data-style="neo-brutalism"] .notification_banner,
+body[data-style="neo-brutalism"] .modal_dialog_content,
+body[data-style="neo-brutalism"] .bottom_sheet_drawer,
+body[data-style="neo-brutalism"] .routine_quick_add_card,
+body[data-style="neo-brutalism"] .timetable_block,
+body[data-style="neo-brutalism"] .agenda_timeline_item,
+body[data-style="neo-brutalism"] .routine_table_responsive_wrapper,
+body[data-style="neo-brutalism"] .journal_editor_view,
+body[data-style="neo-brutalism"] .history_streak_item,
+body[data-style="neo-brutalism"] .welcome_dialog_content,
+body[data-style="neo-brutalism"] .shutdown_checklist_wrapper,
+body[data-style="neo-brutalism"] .dash_timeline_box,
+body[data-style="neo-brutalism"] .active_focus_task,
+body[data-style="neo-brutalism"] .welcome_dialog_content,
+body[data-style="neo-brutalism"] .modal_dialog_content,
+body[data-style="neo-brutalism"] .floating_timer_circle {
+  border: var(--border-width) var(--border-style) var(--border-color-token) !important;
+  border-radius: var(--border-radius-lg-token) !important;
+  box-shadow: var(--shadow-md-token) !important;
+  background-color: var(--card-bg) !important;
+  transition: transform 0.1s ease, box-shadow 0.1s ease, background-color 0.1s ease !important;
+}
+
+/* Apply satisfying tactile button lifts and presses to interactive controllers */
+body[data-style="neo-brutalism"] button.pill_btn,
+body[data-style="neo-brutalism"] button.accent_pill,
+body[data-style="neo-brutalism"] button.action_btn,
+body[data-style="neo-brutalism"] button.banner_btn,
+body[data-style="neo-brutalism"] button.modal_primary_btn,
+body[data-style="neo-brutalism"] button.sidebar_collapse_btn,
+body[data-style="neo-brutalism"] button.mobile_hamburger_btn,
+body[data-style="neo-brutalism"] button.setting_secondary_btn,
+body[data-style="neo-brutalism"] button.mood_btn,
+body[data-style="neo-brutalism"] button.journal_save_trigger_btn,
+body[data-style="neo-brutalism"] button.journal_action_btn,
+body[data-style="neo-brutalism"] button.journal_tab_btn,
+body[data-style="neo-brutalism"] button.journal_submit_btn,
+body[data-style="neo-brutalism"] button.timer_control_main,
+body[data-style="neo-brutalism"] button.timer_control_sec,
+body[data-style="neo-brutalism"] button.adjust_btn,
+body[data-style="neo-brutalism"] button.floating_ctrl_btn,
+body[data-style="neo-brutalism"] button.journal_nav_item,
+body[data-style="neo-brutalism"] button.mood_pill,
+body[data-style="neo-brutalism"] button.alarm_stop_btn,
+body[data-style="neo-brutalism"] button.sheet_primary_commit,
+body[data-style="neo-brutalism"] button.nudge_focus_btn,
+body[data-style="neo-brutalism"] button.agenda_block_btn,
+body[data-style="neo-brutalism"] button.routine_block_delete_btn,
+body[data-style="neo-brutalism"] button.habit_edit_btn,
+body[data-style="neo-brutalism"] button.habit_delete_btn,
+body[data-style="neo-brutalism"] .date_chip,
+body[data-style="neo-brutalism"] .nav_tab,
+body[data-style="neo-brutalism"] .routine_day_tab,
+body[data-style="neo-brutalism"] .day_checkbox_wrapper span,
+body[data-style="neo-brutalism"] .fab_action_trigger {
+  border: var(--border-width) var(--border-style) var(--border-color-token) !important;
+  border-radius: var(--border-radius-sm-token) !important;
+  box-shadow: var(--shadow-sm-token) !important;
+  text-transform: uppercase !important;
+  font-weight: 800 !important;
+  transition: transform 0.08s ease, box-shadow 0.08s ease, background-color 0.08s ease !important;
+}
+
+body[data-style="neo-brutalism"] button.pill_btn:hover,
+body[data-style="neo-brutalism"] button.accent_pill:hover,
+body[data-style="neo-brutalism"] button.action_btn:hover,
+body[data-style="neo-brutalism"] button.banner_btn:hover,
+body[data-style="neo-brutalism"] button.modal_primary_btn:hover,
+body[data-style="neo-brutalism"] button.sidebar_collapse_btn:hover,
+body[data-style="neo-brutalism"] button.mobile_hamburger_btn:hover,
+body[data-style="neo-brutalism"] button.setting_secondary_btn:hover,
+body[data-style="neo-brutalism"] button.mood_btn:hover,
+body[data-style="neo-brutalism"] button.journal_save_trigger_btn:hover,
+body[data-style="neo-brutalism"] button.journal_action_btn:hover,
+body[data-style="neo-brutalism"] button.journal_tab_btn:hover,
+body[data-style="neo-brutalism"] button.journal_submit_btn:hover,
+body[data-style="neo-brutalism"] button.timer_control_main:hover,
+body[data-style="neo-brutalism"] button.timer_control_sec:hover,
+body[data-style="neo-brutalism"] button.adjust_btn:hover,
+body[data-style="neo-brutalism"] button.floating_ctrl_btn:hover,
+body[data-style="neo-brutalism"] button.journal_nav_item:hover,
+body[data-style="neo-brutalism"] button.mood_pill:hover,
+body[data-style="neo-brutalism"] button.alarm_stop_btn:hover,
+body[data-style="neo-brutalism"] button.sheet_primary_commit:hover,
+body[data-style="neo-brutalism"] button.nudge_focus_btn:hover,
+body[data-style="neo-brutalism"] button.agenda_block_btn:hover,
+body[data-style="neo-brutalism"] button.routine_block_delete_btn:hover,
+body[data-style="neo-brutalism"] button.habit_edit_btn:hover,
+body[data-style="neo-brutalism"] button.habit_delete_btn:hover,
+body[data-style="neo-brutalism"] .date_chip:hover,
+body[data-style="neo-brutalism"] .nav_tab:hover,
+body[data-style="neo-brutalism"] .routine_day_tab:hover,
+body[data-style="neo-brutalism"] .day_checkbox_wrapper span:hover,
+body[data-style="neo-brutalism"] .fab_action_trigger:hover {
+  transform: var(--btn-hover-transform) !important;
+  box-shadow: var(--btn-hover-shadow) !important;
+}
+
+body[data-style="neo-brutalism"] button.pill_btn:active,
+body[data-style="neo-brutalism"] button.accent_pill:active,
+body[data-style="neo-brutalism"] button.action_btn:active,
+body[data-style="neo-brutalism"] button.banner_btn:active,
+body[data-style="neo-brutalism"] button.modal_primary_btn:active,
+body[data-style="neo-brutalism"] button.sidebar_collapse_btn:active,
+body[data-style="neo-brutalism"] button.mobile_hamburger_btn:active,
+body[data-style="neo-brutalism"] button.setting_secondary_btn:active,
+body[data-style="neo-brutalism"] button.mood_btn:active,
+body[data-style="neo-brutalism"] button.journal_save_trigger_btn:active,
+body[data-style="neo-brutalism"] button.journal_action_btn:active,
+body[data-style="neo-brutalism"] button.journal_tab_btn:active,
+body[data-style="neo-brutalism"] button.journal_submit_btn:active,
+body[data-style="neo-brutalism"] button.timer_control_main:active,
+body[data-style="neo-brutalism"] button.timer_control_sec:active,
+body[data-style="neo-brutalism"] button.adjust_btn:active,
+body[data-style="neo-brutalism"] button.floating_ctrl_btn:active,
+body[data-style="neo-brutalism"] button.journal_nav_item:active,
+body[data-style="neo-brutalism"] button.mood_pill:active,
+body[data-style="neo-brutalism"] button.alarm_stop_btn:active,
+body[data-style="neo-brutalism"] button.sheet_primary_commit:active,
+body[data-style="neo-brutalism"] button.nudge_focus_btn:active,
+body[data-style="neo-brutalism"] button.agenda_block_btn:active,
+body[data-style="neo-brutalism"] button.routine_block_delete_btn:active,
+body[data-style="neo-brutalism"] button.habit_edit_btn:active,
+body[data-style="neo-brutalism"] button.habit_delete_btn:active,
+body[data-style="neo-brutalism"] .date_chip:active,
+body[data-style="neo-brutalism"] .nav_tab:active,
+body[data-style="neo-brutalism"] .routine_day_tab:active,
+body[data-style="neo-brutalism"] .day_checkbox_wrapper span:active,
+body[data-style="neo-brutalism"] .fab_action_trigger:active {
+  transform: var(--btn-active-transform) !important;
+  box-shadow: var(--btn-active-shadow) !important;
+}
+
+/* Navigation tabs, mood options and pills active states highlights */
+body[data-style="neo-brutalism"] .nav_tab.active,
+body[data-style="neo-brutalism"] .routine_day_tab.active,
+body[data-style="neo-brutalism"] .pill_btn.active,
+body[data-style="neo-brutalism"] .mood_pill.active,
+body[data-style="neo-brutalism"] .journal_tab_btn.active,
+body[data-style="neo-brutalism"] .journal_nav_item.active,
+body[data-style="neo-brutalism"] .date_chip.active {
+  background-color: var(--accent-primary) !important;
+  color: #ffffff !important;
+  border-color: var(--text-primary) !important;
+  box-shadow: 2px 2px 0px 0px var(--text-primary) !important;
+  font-weight: 800 !important;
+  transform: translate(1px, 1px) !important;
+}
+
+body[data-style="neo-brutalism"] .nav_tab.active svg {
+  stroke: #ffffff !important;
+}
+
+/* Done/Completed state: flat card sink animation */
+body[data-style="neo-brutalism"] .task_card.completed {
+  opacity: 0.8 !important;
+  box-shadow: 2px 2px 0px 0px var(--border-color-token) !important;
+  transform: translate(2px, 2px) !important;
+}
+
+/* Solid 3D tactile checkboxes */
+body[data-style="neo-brutalism"] .checkbox_btn,
+body[data-style="neo-brutalism"] .sub_check_btn {
+  border: var(--border-width) var(--border-style) var(--border-color-token) !important;
+  border-radius: 0px !important;
+  box-shadow: 2px 2px 0px 0px var(--border-color-token) !important;
+  width: 22px !important;
+  height: 22px !important;
+  background-color: var(--bg-secondary) !important;
+  transition: transform 0.08s ease, box-shadow 0.08s ease !important;
+}
+
+body[data-style="neo-brutalism"] .task_card.completed .checkbox_btn,
+body[data-style="neo-brutalism"] .sub_check_btn.checked {
+  background-color: var(--accent-primary) !important;
+  box-shadow: 1px 1px 0px 0px var(--border-color-token) !important;
+  transform: translate(1px, 1px) !important;
+}
+
+/* Habit Matrix checklist grid check boxes */
+body[data-style="neo-brutalism"] .habit_matrix_check_pill {
+  border-radius: 0px !important;
+  border-width: 2.5px !important;
+  border-style: solid !important;
+  border-color: var(--text-primary) !important;
+  box-shadow: 3px 3px 0px 0px var(--text-primary) !important;
+  width: 32px !important;
+  height: 32px !important;
+  background-color: var(--bg-secondary) !important;
+}
+
+body[data-style="neo-brutalism"] .habit_matrix_check_pill.completed {
+  border-color: var(--text-primary) !important;
+  box-shadow: 1px 1px 0px 0px var(--text-primary) !important;
+  transform: translate(2px, 2px) !important;
+}
+
+/* Redesigned structured input and select forms elements */
+body[data-style="neo-brutalism"] input,
+body[data-style="neo-brutalism"] select,
+body[data-style="neo-brutalism"] textarea,
+body[data-style="neo-brutalism"] .settings_dropdown {
+  border: 1.5px var(--border-style) var(--border-color-token) !important;
+  border-radius: 0px !important;
+  background-color: var(--bg-secondary) !important;
+  color: var(--text-primary) !important;
+  box-shadow: 2px 2px 0px 0px var(--text-primary) !important;
+  transition: box-shadow 0.1s ease, border-color 0.1s ease !important;
+}
+
+body[data-style="neo-brutalism"] input:focus,
+body[data-style="neo-brutalism"] select:focus,
+body[data-style="neo-brutalism"] textarea:focus,
+body[data-style="neo-brutalism"] .settings_dropdown:focus {
+  outline: none !important;
+  border-color: var(--accent-primary) !important;
+  box-shadow: 3px 3px 0px 0px var(--text-primary) !important;
+}
+
+/* Custom indicator components badges & view count metrics */
+body[data-style="neo-brutalism"] .streak_badge,
+body[data-style="neo-brutalism"] .count_pill {
+  border: var(--border-width) var(--border-style) var(--border-color-token) !important;
+  border-radius: 0px !important;
+  box-shadow: 2px 2px 0px 0px var(--text-primary) !important;
+  font-weight: 800 !important;
+  text-transform: uppercase !important;
+}
+
+/* High contrast charts & analytics SVGs rendering */
+body[data-style="neo-brutalism"] #chart_focus_distribution svg rect {
+  rx: 0px !important;
+  stroke: var(--text-primary) !important;
+  stroke-width: 2px !important;
+  fill: var(--accent-primary) !important;
+}
+
+body[data-style="neo-brutalism"] #chart_weekly_productivity svg polyline {
+  stroke-width: 5px !important;
+  stroke: var(--accent-primary) !important;
+}
+
+body[data-style="neo-brutalism"] #chart_weekly_productivity svg circle {
+  r: 6 !important;
+  stroke: var(--text-primary) !important;
+  stroke-width: 2.5px !important;
+  fill: var(--accent-primary) !important;
+}
+
+body[data-style="neo-brutalism"] #chart_weekly_consistency_trend svg polyline {
+  stroke-width: 4px !important;
+  stroke: var(--accent-primary) !important;
+}
+
+body[data-style="neo-brutalism"] #chart_weekly_consistency_trend svg circle {
+  r: 5 !important;
+  stroke: var(--text-primary) !important;
+  stroke-width: 2px !important;
+  fill: var(--accent-primary) !important;
+}
+
+body[data-style="neo-brutalism"] #chart_category_consistency svg rect {
+  rx: 0px !important;
+  stroke: var(--text-primary) !important;
+  stroke-width: 1.5px !important;
+}
+
+body[data-style="neo-brutalism"] #chart_heatmap_grid svg rect {
+  rx: 0px !important;
+  stroke: var(--text-primary) !important;
+  stroke-width: 1px !important;
+}
+
+/* =========================================================================
+   ADDITIONAL HIGH-FIDELITY UX POLISH & ACCESSIBILITY AUDIT FIXES
+   ========================================================================= */
+
+/* 1. Fully scrollable modal overlay and prevent mobile clipping cut-offs */
+body[data-style="neo-brutalism"] .modal_dialog_overlay,
+.modal_dialog_overlay {
+  overflow-y: auto !important;
+  align-items: flex-start !important; /* align top so content scrolls down */
+  justify-content: center !important;
+  padding: 40px var(--spacing-sm) !important; /* Fluid responsive margin */
+}
+
+body[data-style="neo-brutalism"] .modal_dialog_content,
+.modal_dialog_content {
+  margin: auto 0 !important; /* Vertical center when size permits */
+  max-height: none !important; /* Ensure content is never cut off */
+  height: auto !important;
+  overflow: visible !important; /* Remove individual inner vertical scrolling */
+}
+
+/* 2. Responsive setting rows stacking to prevent horizontal overlap on narrow mobile viewports */
+@media (max-width: 480px) {
+  .setting_row {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+    padding: 18px 0 !important;
+  }
+  
+  .setting_row .theme_toggle_pills,
+  .setting_row .accent_pills_grid,
+  .setting_row .settings_dropdown,
+  .setting_row button,
+  .setting_row input[type="time"] {
+    width: 100% !important;
+    display: flex !important;
+    justify-content: space-between !important;
+  }
+  
+  .setting_row .theme_toggle_pills button {
+    flex: 1 !important;
+    text-align: center !important;
+  }
+
+  .setting_row .accent_pills_grid {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    width: 100% !important;
+    gap: 8px !important;
+  }
+
+  .setting_row .accent_pills_grid .accent_pill {
+    width: 100% !important;
+    height: 36px !important;
+    border-radius: 0px !important; /* Match blocky vibe */
+  }
+}
+
+/* 3. Universal high-contrast solid color inversion hover strategy for zero low-visibility bugs */
+body[data-style="neo-brutalism"] button:hover:not(.active),
+body[data-style="neo-brutalism"] .date_chip:hover:not(.active),
+body[data-style="neo-brutalism"] .nav_tab:hover:not(.active),
+body[data-style="neo-brutalism"] .routine_day_tab:hover:not(.active),
+body[data-style="neo-brutalism"] .day_checkbox_wrapper span:hover {
+  background-color: var(--text-primary) !important;
+  color: var(--bg-primary) !important;
+  border-color: var(--text-primary) !important;
+}
+
+body[data-style="neo-brutalism"] button.active:hover,
+body[data-style="neo-brutalism"] .date_chip.active:hover,
+body[data-style="neo-brutalism"] .nav_tab.active:hover,
+body[data-style="neo-brutalism"] .routine_day_tab.active:hover,
+body[data-style="neo-brutalism"] .pill_btn.active:hover,
+body[data-style="neo-brutalism"] .mood_pill.active:hover,
+body[data-style="neo-brutalism"] .journal_tab_btn.active:hover,
+body[data-style="neo-brutalism"] .journal_nav_item.active:hover {
+  background-color: var(--text-primary) !important;
+  color: var(--bg-primary) !important;
+  box-shadow: 4px 4px 0px 0px var(--text-primary) !important;
+  transform: translate(-1px, -1px) !important;
+}
+
+/* 4. Complete visual audit contrast correction for warning/danger action hovers */
+body[data-style="neo-brutalism"] button.setting_secondary_btn.danger:hover {
+  background-color: #ef4444 !important;
+  color: #ffffff !important;
+  border-color: var(--text-primary) !important;
+}
+
+body[data-style="neo-brutalism"] button.routine_block_delete_btn:hover,
+body[data-style="neo-brutalism"] button.habit_delete_btn:hover {
+  background-color: #ef4444 !important;
+  color: #ffffff !important;
+  border-color: var(--text-primary) !important;
+}
+
+
