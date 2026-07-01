@@ -3942,33 +3942,67 @@ body[data-style="neo-brutalism"] {
 /* Neo-Brutalist Light Mode Specific Colors Override */
 body[data-style="neo-brutalism"].theme-light,
 .theme-light[data-style="neo-brutalism"] {
-  --bg-primary: #fffdf9; /* warm neo sand canvas */
-  --bg-secondary: #f4efdf; /* light cream panel frames */
-  --card-bg: #ffffff; /* pure crisp white container cards */
-  --text-primary: #000000; /* pure absolute black text */
-  --text-secondary: #242424; /* warm charcoal dark gray */
-  --text-muted: #5e5e5e; /* neutral gray labels */
-  --border-color: #000000; /* pure black card borders */
-  --glass-border: #000000;
-  --shadow-sm-token: 3px 3px 0px 0px #000000;
-  --shadow-md-token: 6px 6px 0px 0px #000000;
-  --shadow-lg-token: 10px 10px 0px 0px #000000;
+  --bg-primary: #faf9f5; /* ultra-premium textured alabaster sand */
+  --bg-secondary: #eae6df; /* elegant architectural warm grey */
+  --card-bg: #ffffff; /* pure crisp linen white */
+  --text-primary: #121212; /* sharp absolute black text */
+  --text-secondary: #2e3033; /* warm architectural charcoal */
+  --text-muted: #6b7280; /* cool steel grey */
+  --border-color: #121212; /* pure black card borders */
+  --glass-border: #121212;
+  --shadow-sm-token: 3px 3px 0px 0px #121212;
+  --shadow-md-token: 6px 6px 0px 0px #121212;
+  --shadow-lg-token: 10px 10px 0px 0px #121212;
+
+  /* Premium Hover Palette for Light Mode */
+  --hover-bg-primary-btn: #1d4ed8;      /* Royal Cobalt Blue */
+  --hover-text-primary-btn: #ffffff;
+  --hover-bg-secondary-btn: #facc15;    /* Premium Canary Yellow */
+  --hover-text-secondary-btn: #121212;
+  --hover-bg-danger-btn: #ef4444;       /* Sharp Crimson Coral */
+  --hover-text-danger-btn: #ffffff;
+  --hover-bg-nav-tab: #e0f2fe;          /* Soft Ice Blue */
+  --hover-text-nav-tab: #0369a1;        /* Cool Ocean Teal */
+  --hover-bg-checkbox: #10b981;         /* Emerald Mint */
+  --hover-bg-date-chip: #ffedd5;        /* Warm Peach Cream */
+  --hover-text-date-chip: #c2410c;       /* Rust Orange */
+  --hover-bg-mood-pill: #f3e8ff;        /* Lavender Mist */
+  --hover-text-mood-pill: #6b21a8;      /* Rich Orchid Purple */
+  --hover-bg-habit-matrix: #a7f3d0;     /* Mint Pastel */
+  --hover-bg-fab: #ec4899;              /* Luminous Hot Pink */
 }
 
 /* Neo-Brutalist Dark Mode Specific Colors Override */
 body[data-style="neo-brutalism"].theme-dark,
 .theme-dark[data-style="neo-brutalism"] {
-  --bg-primary: #121214; /* blocky dark background */
-  --bg-secondary: #1d1d21; /* deep gray container grids */
-  --card-bg: #27272b; /* card base elements */
-  --text-primary: #ffffff; /* pure white labels */
-  --text-secondary: #e0e0e6; /* clear light gray copy */
-  --text-muted: #96969f; /* subtle dark gray descriptions */
+  --bg-primary: #0a0b0d; /* absolute rich abyss black */
+  --bg-secondary: #141518; /* deep metallic slate */
+  --card-bg: #1e1f22; /* crisp charcoal container cards */
+  --text-primary: #ffffff; /* pure absolute white */
+  --text-secondary: #e4e4e7; /* clean light slate copy */
+  --text-muted: #8e919a; /* subtle carbon gray labels */
   --border-color: #ffffff; /* pure white borders */
   --glass-border: #ffffff;
   --shadow-sm-token: 3px 3px 0px 0px #000000; /* black shadows stand on white borders perfectly! */
   --shadow-md-token: 6px 6px 0px 0px #000000;
   --shadow-lg-token: 10px 10px 0px 0px #000000;
+
+  /* Premium Hover Palette for Dark Mode */
+  --hover-bg-primary-btn: #60a5fa;      /* Vibrant Sky Blue */
+  --hover-text-primary-btn: #0a0b0d;
+  --hover-bg-secondary-btn: #fde047;    /* Electric Sun Yellow */
+  --hover-text-secondary-btn: #0a0b0d;
+  --hover-bg-danger-btn: #fca5a5;       /* Electric Soft Pink Red */
+  --hover-text-danger-btn: #0a0b0d;
+  --hover-bg-nav-tab: #1e293b;          /* Midnight Slate Blue */
+  --hover-text-nav-tab: #38bdf8;        /* Glowing Cyan Blue */
+  --hover-bg-checkbox: #34d399;         /* Luminous Mint Green */
+  --hover-bg-date-chip: #4c1d95;        /* Deep Regal Purple */
+  --hover-text-date-chip: #f3e8ff;      /* Pastel Periwinkle */
+  --hover-bg-mood-pill: #065f46;        /* Deep Velvet Emerald */
+  --hover-text-mood-pill: #a7f3d0;      /* Luminous Pastel Mint */
+  --hover-bg-habit-matrix: #047857;     /* High-contrast Teal Forest */
+  --hover-bg-fab: #f472b6;              /* Electric Neon Orchid Pink */
 }
 
 /* Scoped Neo-Brutalist Component Styling Overrides */
@@ -4333,43 +4367,141 @@ body[data-style="neo-brutalism"] .modal_dialog_content,
   }
 }
 
-/* 3. Universal high-contrast solid color inversion hover strategy for zero low-visibility bugs */
-body[data-style="neo-brutalism"] button:hover:not(.active),
-body[data-style="neo-brutalism"] .date_chip:hover:not(.active),
-body[data-style="neo-brutalism"] .nav_tab:hover:not(.active),
-body[data-style="neo-brutalism"] .routine_day_tab:hover:not(.active),
-body[data-style="neo-brutalism"] .day_checkbox_wrapper span:hover {
-  background-color: var(--text-primary) !important;
-  color: var(--bg-primary) !important;
+/* 3. Universal premium component-by-component hover strategy */
+
+/* Navigation Sidebar Tabs */
+body[data-style="neo-brutalism"] .nav_tab:hover:not(.active) {
+  background-color: var(--hover-bg-nav-tab) !important;
+  color: var(--hover-text-nav-tab) !important;
   border-color: var(--text-primary) !important;
 }
 
-body[data-style="neo-brutalism"] button.active:hover,
-body[data-style="neo-brutalism"] .date_chip.active:hover,
-body[data-style="neo-brutalism"] .nav_tab.active:hover,
-body[data-style="neo-brutalism"] .routine_day_tab.active:hover,
-body[data-style="neo-brutalism"] .pill_btn.active:hover,
-body[data-style="neo-brutalism"] .mood_pill.active:hover,
-body[data-style="neo-brutalism"] .journal_tab_btn.active:hover,
-body[data-style="neo-brutalism"] .journal_nav_item.active:hover {
-  background-color: var(--text-primary) !important;
-  color: var(--bg-primary) !important;
-  box-shadow: 4px 4px 0px 0px var(--text-primary) !important;
-  transform: translate(-1px, -1px) !important;
+body[data-style="neo-brutalism"] .nav_tab.active:hover {
+  background-color: var(--hover-bg-primary-btn) !important;
+  color: var(--hover-text-primary-btn) !important;
 }
 
-/* 4. Complete visual audit contrast correction for warning/danger action hovers */
-body[data-style="neo-brutalism"] button.setting_secondary_btn.danger:hover {
-  background-color: #ef4444 !important;
-  color: #ffffff !important;
+/* Primary Action & Commit Buttons */
+body[data-style="neo-brutalism"] button.sheet_primary_commit:hover,
+body[data-style="neo-brutalism"] button.timer_control_main:hover,
+body[data-style="neo-brutalism"] button.modal_primary_btn:hover,
+body[data-style="neo-brutalism"] button.nudge_focus_btn:hover,
+body[data-style="neo-brutalism"] button.journal_submit_btn:hover,
+body[data-style="neo-brutalism"] button.banner_btn.primary:hover {
+  background-color: var(--hover-bg-primary-btn) !important;
+  color: var(--hover-text-primary-btn) !important;
   border-color: var(--text-primary) !important;
 }
 
+/* Secondary Actions / Options & Regular Buttons */
+body[data-style="neo-brutalism"] button.pill_btn:hover:not(.active),
+body[data-style="neo-brutalism"] button.action_btn:hover,
+body[data-style="neo-brutalism"] button.banner_btn.secondary:hover,
+body[data-style="neo-brutalism"] button.sidebar_collapse_btn:hover,
+body[data-style="neo-brutalism"] button.mobile_hamburger_btn:hover,
+body[data-style="neo-brutalism"] button.setting_secondary_btn:hover:not(.danger),
+body[data-style="neo-brutalism"] button.adjust_btn:hover,
+body[data-style="neo-brutalism"] button.floating_ctrl_btn:hover,
+body[data-style="neo-brutalism"] button.journal_nav_item:hover:not(.active),
+body[data-style="neo-brutalism"] button.journal_tab_btn:hover:not(.active),
+body[data-style="neo-brutalism"] button.journal_action_btn:hover,
+body[data-style="neo-brutalism"] button.routine_day_tab:hover:not(.active),
+body[data-style="neo-brutalism"] button.agenda_block_btn:hover {
+  background-color: var(--hover-bg-secondary-btn) !important;
+  color: var(--hover-text-secondary-btn) !important;
+  border-color: var(--text-primary) !important;
+}
+
+/* Secondary Button Active States Hover Overrides */
+body[data-style="neo-brutalism"] button.pill_btn.active:hover,
+body[data-style="neo-brutalism"] button.journal_nav_item.active:hover,
+body[data-style="neo-brutalism"] button.journal_tab_btn.active:hover,
+body[data-style="neo-brutalism"] button.routine_day_tab.active:hover {
+  background-color: var(--hover-bg-primary-btn) !important;
+  color: var(--hover-text-primary-btn) !important;
+}
+
+/* Danger / Warning Action Hovers */
+body[data-style="neo-brutalism"] button.setting_secondary_btn.danger:hover,
 body[data-style="neo-brutalism"] button.routine_block_delete_btn:hover,
 body[data-style="neo-brutalism"] button.habit_delete_btn:hover {
-  background-color: #ef4444 !important;
+  background-color: var(--hover-bg-danger-btn) !important;
+  color: var(--hover-text-danger-btn) !important;
+  border-color: var(--text-primary) !important;
+}
+
+body[data-style="neo-brutalism"] button.habit_edit_btn:hover {
+  background-color: var(--hover-bg-secondary-btn) !important;
+  color: var(--hover-text-secondary-btn) !important;
+  border-color: var(--text-primary) !important;
+}
+
+/* Mood Selection Options & Emotion Pills */
+body[data-style="neo-brutalism"] button.mood_btn:hover,
+body[data-style="neo-brutalism"] button.mood_pill:hover:not(.active) {
+  background-color: var(--hover-bg-mood-pill) !important;
+  color: var(--hover-text-mood-pill) !important;
+  border-color: var(--text-primary) !important;
+}
+
+body[data-style="neo-brutalism"] button.mood_pill.active:hover {
+  background-color: var(--hover-bg-primary-btn) !important;
+  color: var(--hover-text-primary-btn) !important;
+}
+
+/* Interactive Checkboxes & Subtask Check Buttons */
+body[data-style="neo-brutalism"] .checkbox_btn:hover,
+body[data-style="neo-brutalism"] .sub_check_btn:hover {
+  background-color: var(--hover-bg-checkbox) !important;
+  border-color: var(--text-primary) !important;
+  transform: scale(1.08) !important;
+}
+
+/* Habit Matrix Checklist Grid Buttons */
+body[data-style="neo-brutalism"] .habit_matrix_check_pill:hover {
+  background-color: var(--hover-bg-habit-matrix) !important;
+  border-color: var(--text-primary) !important;
+  transform: scale(1.1) !important;
+}
+
+/* Date Selection Chips & Day Selection Checkboxes */
+body[data-style="neo-brutalism"] .date_chip:hover:not(.active),
+body[data-style="neo-brutalism"] .day_checkbox_wrapper span:hover {
+  background-color: var(--hover-bg-date-chip) !important;
+  color: var(--hover-text-date-chip) !important;
+  border-color: var(--text-primary) !important;
+}
+
+body[data-style="neo-brutalism"] .date_chip.active:hover {
+  background-color: var(--hover-bg-primary-btn) !important;
+  color: var(--hover-text-primary-btn) !important;
+}
+
+/* Floating Action Trigger (FAB) */
+body[data-style="neo-brutalism"] .fab_action_trigger:hover {
+  background-color: var(--hover-bg-fab) !important;
   color: #ffffff !important;
   border-color: var(--text-primary) !important;
+}
+
+/* Tactile Float Hover Animations for Cards & Containers */
+body[data-style="neo-brutalism"] .task_card:hover,
+body[data-style="neo-brutalism"] .dash_metric_card:hover,
+body[data-style="neo-brutalism"] .dash_wisdom_box:hover,
+body[data-style="neo-brutalism"] .stat_card:hover,
+body[data-style="neo-brutalism"] .chart_card:hover,
+body[data-style="neo-brutalism"] .agenda_timeline_item:hover {
+  transform: translate(-3px, -3px) !important;
+  box-shadow: 10px 10px 0px 0px var(--text-primary) !important;
+  border-color: var(--text-primary) !important;
+}
+
+/* Tactile Input Hover States */
+body[data-style="neo-brutalism"] input:hover:not(:focus),
+body[data-style="neo-brutalism"] select:hover:not(:focus),
+body[data-style="neo-brutalism"] textarea:hover:not(:focus) {
+  border-color: var(--text-primary) !important;
+  box-shadow: 4px 4px 0px 0px var(--text-primary) !important;
 }
 
 
