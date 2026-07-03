@@ -45,6 +45,10 @@
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
                     <span>Task List</span>
                 </button>
+                <button class="nav_tab" data-view="later">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 2h14"></path><path d="M5 22h14"></path><path d="M19 2v4c0 3.86-3.14 7-7 7s-7-3.14-7-7V2"></path><path d="M5 22v-4c0-3.86 3.14-7 7-7s7 3.14 7 7v4"></path></svg>
+                    <span>Do It Later</span>
+                </button>
                 <button class="nav_tab" data-view="completed">
                     <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
                     <span>Completed Tasks</span>
@@ -536,8 +540,9 @@
                         <button type="button" class="date_chip" data-days="0">Today</button>
                         <button type="button" class="date_chip" data-days="1">Tomorrow</button>
                         <button type="button" class="date_chip" data-days="7">Next Wk</button>
+                        <button type="button" class="date_chip" id="chip_do_later">Do Later</button>
                     </div>
-                    <input type="date" id="task_due_date" required>
+                    <input type="date" id="task_due_date">
                 </div>
 
                 <div class="form_group">

@@ -475,6 +475,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         dueDate: data.dueDate || new Date().toISOString().split("T")[0],
         priority: data.priority || "Medium",
         category: data.category || "Inbox",
+        isLater: data.isLater || false,
         subtasks: data.subtasks || [],
         completed: false,
         completedDate: null,
@@ -1363,19 +1364,44 @@ document.addEventListener("DOMContentLoaded", async function () {
             dateChips.forEach(c => c.classList.remove("active"));
             chip.classList.add("active");
 
-            const days = parseInt(chip.getAttribute("data-days") || 0);
-            const d = new Date();
-            d.setDate(d.getDate() + days);
+            const daysStr = chip.getAttribute("data-days");
+            if (daysStr !== null) {
+              const days = parseInt(daysStr || 0);
+              const d = new Date();
+              d.setDate(d.getDate() + days);
 
-            const Y = d.getFullYear();
-            const M = String(d.getMonth() + 1).padStart(2, "0");
-            const D = String(d.getDate()).padStart(2, "0");
-            dateInput.value = `${Y}-${M}-${D}`;
+              const Y = d.getFullYear();
+              const M = String(d.getMonth() + 1).padStart(2, "0");
+              const D = String(d.getDate()).padStart(2, "0");
+              dateInput.value = `${Y}-${M}-${D}`;
+            } else {
+              // Clicked "Do Later" chip!
+              dateInput.value = "";
+            }
           });
         });
 
         dateInput.addEventListener("change", () => {
           dateChips.forEach(c => c.classList.remove("active"));
+          const val = dateInput.value;
+          if (val) {
+            const todayStr = new Date().toISOString().split("T")[0];
+            const tom = new Date(); tom.setDate(tom.getDate() + 1); const tomStr = tom.toISOString().split("T")[0];
+            const nW = new Date(); nW.setDate(nW.getDate() + 7); const nWStr = nW.toISOString().split("T")[0];
+
+            dateChips.forEach(c => {
+              const offsetStr = c.getAttribute("data-days");
+              if (offsetStr) {
+                const offset = parseInt(offsetStr);
+                if (offset === 0 && val === todayStr) c.classList.add("active");
+                if (offset === 1 && val === tomStr) c.classList.add("active");
+                if (offset === 7 && val === nWStr) c.classList.add("active");
+              }
+            });
+          } else {
+            const doLater = document.getElementById("chip_do_later");
+            if (doLater) doLater.classList.add("active");
+          }
         });
       }
 
@@ -1779,7 +1805,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       // Reset displayed elements visibility states
       this.dashboardPanel.style.display = (active === "dashboard") ? "block" : "none";
-      this.taskSection.style.display = (["all", "today", "tomorrow", "upcoming", "overdue", "completed"].includes(active)) ? "block" : "none";
+      this.taskSection.style.display = (["all", "today", "tomorrow", "upcoming", "overdue", "completed", "later"].includes(active)) ? "block" : "none";
       this.routinePanel.style.display = (active === "routine") ? "block" : "none";
       this.consistencyPanel.style.display = (active === "consistency") ? "block" : "none";
       this.consistencyHistoryPanel.style.display = (active === "consistency_history") ? "block" : "none";
@@ -1805,7 +1831,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         tomorrow: "Tomorrow's Focus",
         upcoming: "Upcoming Tasks",
         overdue: "Overdue Tasks",
-        completed: "Completed Tasks"
+        completed: "Completed Tasks",
+        later: "Do It Later"
       };
 
       if (viewTitles[active]) {
@@ -1813,7 +1840,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
 
       // Show/hide view count badge
-      if (["all", "today", "tomorrow", "upcoming", "overdue", "completed"].includes(active)) {
+      if (["all", "today", "tomorrow", "upcoming", "overdue", "completed", "later"].includes(active)) {
         this.viewCount.style.display = "inline-block";
       } else {
         this.viewCount.style.display = "none";
@@ -3173,7 +3200,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         tomorrow: "Focus Tomorrow",
         upcoming: "Upcoming Tasks",
         overdue: "Overdue Alerts",
-        completed: "Done Achievements"
+        completed: "Done Achievements",
+        later: "Do It Later"
       };
       this.viewTitle.textContent = titles[view] || "My Tasks";
 
@@ -3199,10 +3227,79 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
 
       this.taskListContainer.innerHTML = "";
-      filtered.forEach(task => {
-        const card = this.createTaskCardDOM(task);
-        this.taskListContainer.appendChild(card);
-      });
+
+      if (view === "completed") {
+        // Group completed tasks by completion date (or fallback to dueDate)
+        const groups = {};
+        filtered.forEach(task => {
+          let dateKey = "No Date";
+          if (task.completedDate) {
+            dateKey = task.completedDate.split("T")[0];
+          } else if (task.dueDate) {
+            dateKey = task.dueDate;
+          }
+          if (!groups[dateKey]) groups[dateKey] = [];
+          groups[dateKey].push(task);
+        });
+
+        const sortedDates = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+
+        const getFriendlyDateLabel = (dateStr) => {
+          if (dateStr === "No Date") return "Completed (Unscheduled)";
+          const todayStr = new Date().toISOString().split("T")[0];
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          const yesterdayStr = yesterday.toISOString().split("T")[0];
+
+          if (dateStr === todayStr) return "Today";
+          if (dateStr === yesterdayStr) return "Yesterday";
+          
+          const d = new Date(dateStr + "T12:00:00");
+          return d.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        };
+
+        sortedDates.forEach((dateStr, idx) => {
+          const groupTasks = groups[dateStr];
+          const label = getFriendlyDateLabel(dateStr);
+          const isCollapsed = idx > 0; // Collapse older than today/newest group by default
+
+          const section = document.createElement("div");
+          section.className = `completed_group_section ${isCollapsed ? "collapsed" : ""}`;
+          section.setAttribute("data-date", dateStr);
+
+          section.innerHTML = `
+            <div class="completed_group_header">
+              <div class="completed_group_title">
+                <svg class="chevron_icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="6 9 12 15 18 9"></polyline>
+                </svg>
+                <h3>${label}</h3>
+                <span class="count_badge">${groupTasks.length} ${groupTasks.length === 1 ? 'task' : 'tasks'}</span>
+              </div>
+            </div>
+            <div class="completed_group_content"></div>
+          `;
+
+          const contentArea = section.querySelector(".completed_group_content");
+          groupTasks.forEach(task => {
+            const card = this.createTaskCardDOM(task);
+            contentArea.appendChild(card);
+          });
+
+          const header = section.querySelector(".completed_group_header");
+          header.addEventListener("click", () => {
+            section.classList.toggle("collapsed");
+          });
+
+          this.taskListContainer.appendChild(section);
+        });
+      } else {
+        // Standard active/pending lists
+        filtered.forEach(task => {
+          const card = this.createTaskCardDOM(task);
+          this.taskListContainer.appendChild(card);
+        });
+      }
     }
 
     getFilteredTasks(view) {
@@ -3215,19 +3312,29 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       if (view === "completed") {
         list = list.filter(t => t.completed);
+      } else if (view === "later") {
+        list = list.filter(t => !t.completed && t.isLater);
       } else {
-        list = list.filter(t => !t.completed);
+        list = list.filter(t => !t.completed && !t.isLater);
         if (view === "today") list = list.filter(t => t.dueDate <= nowStr);
         else if (view === "tomorrow") list = list.filter(t => t.dueDate === tomorrowStr);
         else if (view === "upcoming") list = list.filter(t => t.dueDate > nowStr && t.dueDate <= this.getNDaysFromNow(7));
         else if (view === "overdue") list = list.filter(t => t.dueDate < nowStr);
       }
 
-      const weights = { High: 3, Medium: 2, Low: 1 };
-      list.sort((a, b) => {
-        if (a.dueDate !== b.dueDate) return a.dueDate.localeCompare(b.dueDate);
-        return weights[b.priority] - weights[a.priority];
-      });
+      if (view === "completed") {
+        list.sort((a, b) => {
+          const ad = a.completedDate || "";
+          const bd = b.completedDate || "";
+          return bd.localeCompare(ad); // Newest completed first!
+        });
+      } else {
+        const weights = { High: 3, Medium: 2, Low: 1 };
+        list.sort((a, b) => {
+          if (a.dueDate !== b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+          return weights[b.priority] - weights[a.priority];
+        });
+      }
 
       const search = this.store.filters.search.toLowerCase().trim();
       const priority = this.store.filters.priority;
@@ -3257,15 +3364,19 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       let remainingBadge = "";
       if (!task.completed) {
-        const now = new Date();
-        const due = new Date(task.dueDate + "T23:59:59");
-        const diffMs = due - now;
-        const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+        if (task.isLater) {
+          remainingBadge = `<span class="badge later">Flexible</span>`;
+        } else {
+          const now = new Date();
+          const due = new Date(task.dueDate + "T23:59:59");
+          const diffMs = due - now;
+          const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
-        if (diffDays < 0) remainingBadge = `<span class="badge overdue">Overdue by ${Math.abs(diffDays)}d</span>`;
-        else if (diffDays === 0) remainingBadge = `<span class="badge today">Due Today</span>`;
-        else if (diffDays === 1) remainingBadge = `<span class="badge tomorrow">Due Tomorrow</span>`;
-        else remainingBadge = `<span class="badge upcoming">In ${diffDays} days</span>`;
+          if (diffDays < 0) remainingBadge = `<span class="badge overdue">Overdue by ${Math.abs(diffDays)}d</span>`;
+          else if (diffDays === 0) remainingBadge = `<span class="badge today">Due Today</span>`;
+          else if (diffDays === 1) remainingBadge = `<span class="badge tomorrow">Due Tomorrow</span>`;
+          else remainingBadge = `<span class="badge upcoming">In ${diffDays} days</span>`;
+        }
       }
 
       const hasSub = task.subtasks && task.subtasks.length > 0;
@@ -3312,7 +3423,7 @@ document.addEventListener("DOMContentLoaded", async function () {
                 <line x1="8" y1="2" x2="8" y2="6"></line>
                 <line x1="3" y1="10" x2="21" y2="10"></line>
               </svg>
-              ${task.dueDate}
+              ${task.isLater ? "Someday / Later" : task.dueDate}
             </span>
             ${remainingBadge}
             ${task.estimatedDuration ? `<span class="meta_item duration_badge"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>${task.estimatedDuration}m</span>` : ""}
@@ -3360,6 +3471,13 @@ document.addEventListener("DOMContentLoaded", async function () {
                   </svg>
                   Focus
                 </button>
+                <button class="action_btn later_btn" aria-label="${task.isLater ? 'Activate' : 'Do Later'}">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                  </svg>
+                  ${task.isLater ? "Activate" : "Do Later"}
+                </button>
               ` : ""}
               <button class="action_btn delete_btn_manual" aria-label="Delete Task">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
@@ -3389,6 +3507,18 @@ document.addEventListener("DOMContentLoaded", async function () {
         playBtn.addEventListener("click", () => {
           this.store.setView("timer");
           this.store.startTimer(task.id);
+        });
+      }
+
+      const laterBtn = card.querySelector(".later_btn");
+      if (laterBtn) {
+        laterBtn.addEventListener("click", () => {
+          if (task.isLater) {
+            const todayStr = new Date().toISOString().split("T")[0];
+            this.store.updateTask(task.id, { isLater: false, dueDate: todayStr });
+          } else {
+            this.store.updateTask(task.id, { isLater: true });
+          }
         });
       }
 
@@ -3505,7 +3635,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         document.getElementById("task_title").value = task.title;
         document.getElementById("task_desc").value = task.description || "";
-        document.getElementById("task_due_date").value = task.dueDate;
+        document.getElementById("task_due_date").value = task.isLater ? "" : task.dueDate;
         document.getElementById("task_priority").value = task.priority;
         document.getElementById("task_category").value = task.category || "Inbox";
         document.getElementById("task_duration").value = task.estimatedDuration || 25;
@@ -3517,10 +3647,15 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         dateChips.forEach(c => {
           c.classList.remove("active");
-          const offset = parseInt(c.getAttribute("data-days"));
-          if (offset === 0 && task.dueDate === todayStr) c.classList.add("active");
-          if (offset === 1 && task.dueDate === tomStr) c.classList.add("active");
-          if (offset === 7 && task.dueDate === nWStr) c.classList.add("active");
+          const offsetStr = c.getAttribute("data-days");
+          if (offsetStr) {
+            const offset = parseInt(offsetStr);
+            if (offset === 0 && task.dueDate === todayStr && !task.isLater) c.classList.add("active");
+            if (offset === 1 && task.dueDate === tomStr && !task.isLater) c.classList.add("active");
+            if (offset === 7 && task.dueDate === nWStr && !task.isLater) c.classList.add("active");
+          } else if (task.isLater && c.id === "chip_do_later") {
+            c.classList.add("active");
+          }
         });
       } else {
         this.activeEditingTaskId = null;
@@ -3553,7 +3688,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     handleFormSubmission() {
       const title = document.getElementById("task_title").value.trim();
       const description = document.getElementById("task_desc").value.trim();
-      const dueDate = document.getElementById("task_due_date").value;
+      let dueDate = document.getElementById("task_due_date").value;
       const priority = document.getElementById("task_priority").value;
       const category = document.getElementById("task_category").value;
       const estimatedDuration = parseInt(document.getElementById("task_duration").value) || 25;
@@ -3561,7 +3696,14 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       if (!title) return;
 
-      const formData = { title, description, dueDate, priority, category, estimatedDuration, recurring };
+      const doLaterChip = this.sheetForm.querySelector("#chip_do_later");
+      const isLater = (doLaterChip && doLaterChip.classList.contains("active")) || !dueDate;
+
+      if (isLater && !dueDate) {
+        dueDate = new Date().toISOString().split("T")[0]; // default safe date fallback
+      }
+
+      const formData = { title, description, dueDate, priority, category, estimatedDuration, recurring, isLater };
 
       if (this.activeEditingTaskId !== null) {
         this.store.updateTask(this.activeEditingTaskId, formData);
@@ -3572,7 +3714,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         if (newTask) {
           // If we are not currently in a task list view, redirect to "all" (Inbox Archive) so we can see the task
-          if (!["all", "today", "tomorrow", "upcoming", "overdue"].includes(this.store.currentView)) {
+          if (!["all", "today", "tomorrow", "upcoming", "overdue", "later"].includes(this.store.currentView)) {
             this.store.setView("all");
           }
           // Highlight the newly created task card with celebration particles
@@ -4414,10 +4556,10 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
 
       try {
-        // Request a compact square 150x150px window (30% smaller than 220x180)
+        // Request a compact rectangular 220x90px window (more premium than 150x150 square)
         const pipWindow = await window.documentPictureInPicture.requestWindow({
-          width: 150,
-          height: 150
+          width: 220,
+          height: 90
         });
 
         this.pipWindow = pipWindow;
@@ -4442,12 +4584,12 @@ document.addEventListener("DOMContentLoaded", async function () {
           }
         }
 
-        // Custom styles for a perfectly circular popup widget
+        // Custom styles for a premium rectangular horizontal widget
         const style = pipWindow.document.createElement('style');
         style.textContent = `
           body {
             margin: 0;
-            padding: 0;
+            padding: 4px;
             background-color: var(--bg-primary, #0d1117) !important;
             color: var(--text-primary, #e6edf3) !important;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
@@ -4461,47 +4603,53 @@ document.addEventListener("DOMContentLoaded", async function () {
           }
           .pip_timer_container {
             display: flex;
-            flex-direction: column;
+            flex-direction: row; /* Horizontal alignment */
             align-items: center;
-            justify-content: center;
-            width: 140px;
-            height: 140px;
+            justify-content: space-between;
+            width: 100%;
+            height: 100%;
             background-color: var(--bg-secondary, #161b22) !important;
             border: 1px solid var(--border-color, #30363d) !important;
-            border-radius: 50% !important; /* Perfect circle shape */
+            border-radius: 12px !important; /* Premium rounded rectangle shape */
             box-shadow: var(--shadow-lg);
-            text-align: center;
             box-sizing: border-box;
-            padding: 8px;
+            padding: 12px 16px;
             position: relative;
+            gap: 12px;
+          }
+          .pip_text_group {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: center;
           }
           .pip_timer_text {
-            font-size: 24px;
+            font-size: 26px;
             font-weight: 800;
             letter-spacing: -0.5px;
             color: var(--text-primary, #e6edf3) !important;
-            line-height: 1.1;
-            margin-top: 4px;
+            line-height: 1;
           }
           .pip_timer_sub {
-            font-size: 8.5px;
-            font-weight: 800;
+            font-size: 9px;
+            font-weight: 700;
             color: var(--text-muted, #7d8590) !important;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            margin-top: 2px;
           }
           .pip_controls {
             display: flex;
-            gap: 8px;
-            margin-top: 8px;
+            gap: 6px;
+            align-items: center;
           }
           .pip_btn {
             background-color: var(--bg-primary, #0d1117) !important;
             border: 1px solid var(--border-color, #30363d) !important;
             color: var(--text-primary, #e6edf3) !important;
-            border-radius: 50%;
-            width: 26px;
-            height: 26px;
+            border-radius: 8px; /* Clean rectangular rounding */
+            width: 28px;
+            height: 28px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -4519,18 +4667,20 @@ document.addEventListener("DOMContentLoaded", async function () {
         `;
         pipWindow.document.head.appendChild(style);
 
-        // Render Pip container
+        // Render Pip container (Horizontal arrangement)
         const container = pipWindow.document.createElement('div');
         container.className = 'pip_timer_container';
         container.innerHTML = `
-          <div class="pip_timer_text" id="pip_time">25:00</div>
-          <div class="pip_timer_sub" id="pip_sub">Focus</div>
+          <div class="pip_text_group">
+            <div class="pip_timer_text" id="pip_time">25:00</div>
+            <div class="pip_timer_sub" id="pip_sub">Focus</div>
+          </div>
           <div class="pip_controls">
             <button class="pip_btn" id="pip_play_pause" title="Play/Pause">
-              <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             </button>
             <button class="pip_btn" id="pip_stop" title="Stop">
-              <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+              <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
             </button>
           </div>
         `;
@@ -4554,11 +4704,11 @@ document.addEventListener("DOMContentLoaded", async function () {
           if (pipPlayPause) {
             if (t.isRunning) {
               pipPlayPause.innerHTML = `
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><rect x="4" y="4" width="4" height="16" rx="1"></rect><rect x="16" y="4" width="4" height="16" rx="1"></rect></svg>
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><rect x="4" y="4" width="4" height="16" rx="1"></rect><rect x="16" y="4" width="4" height="16" rx="1"></rect></svg>
               `;
             } else {
               pipPlayPause.innerHTML = `
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
               `;
             }
           }

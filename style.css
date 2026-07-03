@@ -4504,4 +4504,78 @@ body[data-style="neo-brutalism"] textarea:hover:not(:focus) {
   box-shadow: 4px 4px 0px 0px var(--text-primary) !important;
 }
 
+/* --- COMPLETED TASK COLLAPSIBLE DATE GROUPS --- */
+.completed_group_section {
+  margin-bottom: 20px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.completed_group_header {
+  padding: 16px 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+  background-color: rgba(255, 255, 255, 0.01);
+  transition: background-color 0.2s, border-bottom 0.2s;
+}
+
+.completed_group_header:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.completed_group_title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.completed_group_title h3 {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.completed_group_title .count_badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  background-color: var(--border-color);
+  padding: 2px 10px;
+  border-radius: 20px;
+}
+
+.completed_group_title .chevron_icon {
+  color: var(--text-muted);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.completed_group_section.collapsed .chevron_icon {
+  transform: rotate(-90deg);
+}
+
+.completed_group_content {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border-top: 1px solid var(--border-color);
+}
+
+.completed_group_section.collapsed .completed_group_content {
+  display: none;
+}
+
+/* Custom "later" badge color */
+.badge.later {
+  background-color: rgba(139, 92, 246, 0.08);
+  color: #a78bfa;
+}
+
 
