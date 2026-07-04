@@ -852,6 +852,14 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.emit("timerStateChanged", this.timer);
     }
 
+    restartTimer() {
+      this.stopAlarm();
+      this.timer.isRunning = false;
+      if (this.timerInterval) clearInterval(this.timerInterval);
+      this.setTimerDuration();
+      this.startTimer(this.timer.activeTaskId);
+    }
+
     setTimerDuration() {
       if (this.timer.type === "pomodoro") this.timer.duration = 25 * 60;
       else if (this.timer.type === "shortBreak") this.timer.duration = 5 * 60;
@@ -1524,21 +1532,37 @@ document.addEventListener("DOMContentLoaded", async function () {
       // -------------------------------------------------------------------------
       // POMODORO TIMER EVENT BINDINGS
       // -------------------------------------------------------------------------
-      const startPauseBtn = document.getElementById("timer_start_pause_btn");
-      if (startPauseBtn) {
-        startPauseBtn.addEventListener("click", () => {
-          if (this.store.timer.isRunning) {
-            this.store.pauseTimer();
-          } else {
-            this.store.startTimer();
+      const playBtn = document.getElementById("timer_play_btn");
+      if (playBtn) {
+        playBtn.addEventListener("click", () => {
+          this.store.startTimer();
+          // Auto-open PiP when starting a focus session
+          if (!this.pipWindow && 'documentPictureInPicture' in window) {
+            this.openDocumentPiP();
           }
         });
       }
 
-      const resetBtn = document.getElementById("timer_reset_btn");
-      if (resetBtn) {
-        resetBtn.addEventListener("click", () => {
+      const pauseBtn = document.getElementById("timer_pause_btn");
+      if (pauseBtn) {
+        pauseBtn.addEventListener("click", () => {
+          this.store.pauseTimer();
+        });
+      }
+
+      const stopBtn = document.getElementById("timer_stop_btn");
+      if (stopBtn) {
+        stopBtn.addEventListener("click", () => {
           this.store.resetTimer();
+          // Auto-close PiP when stopping
+          this.closeDocumentPiP();
+        });
+      }
+
+      const restartBtn = document.getElementById("timer_restart_btn");
+      if (restartBtn) {
+        restartBtn.addEventListener("click", () => {
+          this.store.restartTimer();
         });
       }
 
@@ -3759,18 +3783,21 @@ document.addEventListener("DOMContentLoaded", async function () {
       document.getElementById("timer_long_btn").className = `pomo_type_tab ${t.type === "longBreak" ? "active" : ""}`;
       document.getElementById("timer_stopwatch_btn").className = `pomo_type_tab ${t.type === "stopwatch" ? "active" : ""}`;
 
-      const playIcon = document.getElementById("timer_play_icon");
-      const pauseIcon = document.getElementById("timer_pause_icon");
-      const startPauseBtn = document.getElementById("timer_start_pause_btn");
+      const playBtn = document.getElementById("timer_play_btn");
+      const pauseBtn = document.getElementById("timer_pause_btn");
 
-      if (t.isRunning) {
-        playIcon.style.display = "none";
-        pauseIcon.style.display = "block";
-        startPauseBtn.className = "timer_control_main pause";
-      } else {
-        playIcon.style.display = "block";
-        pauseIcon.style.display = "none";
-        startPauseBtn.className = "timer_control_main play";
+      if (playBtn && pauseBtn) {
+        if (t.isRunning) {
+          playBtn.disabled = true;
+          playBtn.classList.add("disabled");
+          pauseBtn.disabled = false;
+          pauseBtn.classList.remove("disabled");
+        } else {
+          playBtn.disabled = false;
+          playBtn.classList.remove("disabled");
+          pauseBtn.disabled = true;
+          pauseBtn.classList.add("disabled");
+        }
       }
     }
 
@@ -3784,6 +3811,18 @@ document.addEventListener("DOMContentLoaded", async function () {
       display.textContent = formatted;
 
       document.title = t.isRunning ? `(${formatted}) Focused Work` : "Aurora Companion";
+
+      // Rectangular horizontal progress bar fill
+      const progressBar = document.getElementById("timer_progress_bar");
+      if (progressBar) {
+        let percentage = 100;
+        if (t.type !== "stopwatch" && t.totalDuration > 0) {
+          percentage = (t.duration / t.totalDuration) * 100;
+        } else if (t.type === "stopwatch") {
+          percentage = ((t.duration % 60) / 60) * 100;
+        }
+        progressBar.style.width = `${percentage}%`;
+      }
 
       const ring = document.getElementById("timer_progress_ring_circle");
       if (ring) {
@@ -4556,35 +4595,27 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
 
       try {
-        // Request a compact, ultra-sleek rectangular status dock
+        // Request absolute minimum dimensions. Chromium enforces ~160×160 minimum,
+        // but content is designed as a slim 50px toolbar strip to feel ultra-compact.
         const pipWindow = await window.documentPictureInPicture.requestWindow({
-          width: 260,
-          height: 60
+          width: 320,
+          height: 50
         });
 
         this.pipWindow = pipWindow;
 
-        // Copy only computed CSS variables from main body to avoid loading heavy stylesheets and triggering asynchronous layout resize jumps
+        // Copy computed CSS variables from main body
         const rootStyles = getComputedStyle(document.body);
         const variables = [
-          '--bg-primary',
-          '--bg-secondary',
-          '--card-bg',
-          '--text-primary',
-          '--text-secondary',
-          '--text-muted',
-          '--border-color',
-          '--accent-primary',
-          '--shadow-sm',
-          '--shadow-md',
-          '--shadow-lg'
+          '--bg-primary', '--bg-secondary', '--card-bg',
+          '--text-primary', '--text-secondary', '--text-muted',
+          '--border-color', '--accent-primary',
+          '--shadow-sm', '--shadow-md', '--shadow-lg'
         ];
         let variablesCSS = ':root {\n';
         for (const varName of variables) {
           const val = rootStyles.getPropertyValue(varName);
-          if (val) {
-            variablesCSS += `  ${varName}: ${val.trim()};\n`;
-          }
+          if (val) variablesCSS += `  ${varName}: ${val.trim()};\n`;
         }
         variablesCSS += '}\n';
 
@@ -4592,129 +4623,144 @@ document.addEventListener("DOMContentLoaded", async function () {
         varStyle.textContent = variablesCSS;
         pipWindow.document.head.appendChild(varStyle);
 
-        // Custom styles for an ultra-compact single-row horizontal widget
+        // Ultra-compact slim toolbar styles — content hugs top, zero wasted space
         const style = pipWindow.document.createElement('style');
         style.textContent = `
+          *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
           body {
-            margin: 0;
-            padding: 0;
-            background-color: var(--bg-primary, #0d1117) !important;
-            color: var(--text-primary, #e6edf3) !important;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
+            margin: 0; padding: 0;
+            background: var(--bg-primary, #0d1117);
+            color: var(--text-primary, #e6edf3);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
             overflow: hidden;
             user-select: none;
-            box-sizing: border-box;
           }
-          .pip_timer_container {
+          .pip_strip {
             display: flex;
-            flex-direction: row; /* Horizontal line layout */
             align-items: center;
             justify-content: space-between;
             width: 100%;
-            height: 100%;
-            background-color: var(--bg-secondary, #161b22) !important;
-            border: 1px solid var(--border-color, #30363d) !important;
-            box-shadow: var(--shadow-lg);
-            box-sizing: border-box;
-            padding: 0 12px;
+            height: 50px;
+            padding: 0 10px;
+            background: var(--bg-secondary, #161b22);
+            border-bottom: 2px solid var(--accent-primary, #6366f1);
             position: relative;
-            gap: 12px;
-          }
-          .pip_text_group {
-            display: flex;
-            flex-direction: row; /* Single line text details */
-            align-items: center;
-            gap: 8px;
           }
           .pip_timer_text {
-            font-size: 18px;
+            font-size: 22px;
             font-weight: 800;
             letter-spacing: -0.5px;
-            color: var(--text-primary, #e6edf3) !important;
-            line-height: 1;
+            color: var(--text-primary, #e6edf3);
             font-variant-numeric: tabular-nums;
+            line-height: 1;
           }
-          .pip_controls {
-            display: flex;
-            gap: 4px;
-            align-items: center;
+          .pip_label {
+            font-size: 8px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted, #8b949e);
+            margin-top: 1px;
           }
+          .pip_left { display: flex; align-items: center; gap: 10px; }
+          .pip_text_col { display: flex; flex-direction: column; }
+          .pip_controls { display: flex; gap: 3px; align-items: center; }
           .pip_btn {
-            background-color: var(--bg-primary, #0d1117) !important;
-            border: 1px solid var(--border-color, #30363d) !important;
-            color: var(--text-primary, #e6edf3) !important;
-            border-radius: 4px; /* Blocky rounding matches minimalist vibe */
-            width: 24px;
-            height: 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            background: var(--bg-primary, #0d1117);
+            border: 1px solid var(--border-color, #30363d);
+            color: var(--text-primary, #e6edf3);
+            border-radius: 4px;
+            width: 26px; height: 26px;
+            display: flex; align-items: center; justify-content: center;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.15s;
             padding: 0;
-            box-shadow: var(--shadow-sm);
           }
           .pip_btn:hover {
-            background-color: var(--accent-primary, #1f6feb) !important;
-            border-color: var(--accent-primary, #1f6feb) !important;
-            color: white !important;
+            background: var(--accent-primary, #6366f1);
+            border-color: var(--accent-primary, #6366f1);
+            color: #fff;
+          }
+          .pip_btn.restart_accent {
+            border-color: var(--accent-primary, #6366f1);
+            color: var(--accent-primary, #6366f1);
+          }
+          .pip_btn.restart_accent:hover {
+            background: var(--accent-primary, #6366f1);
+            color: #fff;
+          }
+          .pip_progress {
+            position: absolute;
+            bottom: 0; left: 0;
+            height: 2px;
+            background: var(--accent-primary, #6366f1);
+            transition: width 1s linear;
           }
         `;
         pipWindow.document.head.appendChild(style);
 
-        // Render Pip container (Single Horizontal Line arrangement)
-        const container = pipWindow.document.createElement('div');
-        container.className = 'pip_timer_container';
-        container.innerHTML = `
-          <div class="pip_text_group">
-            <div class="pip_timer_text" id="pip_time">25:00</div>
+        // Build the ultra-slim toolbar strip
+        const strip = pipWindow.document.createElement('div');
+        strip.className = 'pip_strip';
+        strip.innerHTML = `
+          <div class="pip_left">
+            <div class="pip_text_col">
+              <div class="pip_timer_text" id="pip_time">25:00</div>
+              <div class="pip_label" id="pip_label">FOCUS</div>
+            </div>
           </div>
           <div class="pip_controls">
             <button class="pip_btn" id="pip_play_pause" title="Play/Pause">
-              <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             </button>
             <button class="pip_btn" id="pip_stop" title="Stop">
-              <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+              <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+            </button>
+            <button class="pip_btn restart_accent" id="pip_restart" title="Reset & Start Again">
+              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
             </button>
           </div>
+          <div class="pip_progress" id="pip_progress"></div>
         `;
-        pipWindow.document.body.appendChild(container);
+        pipWindow.document.body.appendChild(strip);
 
+        // Grab PiP DOM refs
         const pipTime = pipWindow.document.getElementById('pip_time');
+        const pipLabel = pipWindow.document.getElementById('pip_label');
         const pipPlayPause = pipWindow.document.getElementById('pip_play_pause');
         const pipStop = pipWindow.document.getElementById('pip_stop');
+        const pipRestart = pipWindow.document.getElementById('pip_restart');
+        const pipProgress = pipWindow.document.getElementById('pip_progress');
+
+        const typeLabels = { pomodoro: 'FOCUS', shortBreak: 'SHORT BREAK', longBreak: 'LONG BREAK', stopwatch: 'STOPWATCH' };
 
         const updatePiPUI = (t) => {
           const mins = Math.floor(Math.abs(t.duration) / 60);
           const secs = Math.abs(t.duration) % 60;
           if (pipTime) pipTime.textContent = `${mins}:${secs.toString().padStart(2, "0")}`;
+          if (pipLabel) pipLabel.textContent = typeLabels[t.type] || 'FOCUS';
 
+          // Progress bar width
+          if (pipProgress) {
+            let pct = 100;
+            if (t.type !== 'stopwatch' && t.totalDuration > 0) pct = (t.duration / t.totalDuration) * 100;
+            else if (t.type === 'stopwatch') pct = ((t.duration % 60) / 60) * 100;
+            pipProgress.style.width = `${pct}%`;
+          }
+
+          // Toggle play/pause icon
           if (pipPlayPause) {
-            if (t.isRunning) {
-              pipPlayPause.innerHTML = `
-                <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><rect x="4" y="4" width="4" height="16" rx="1"></rect><rect x="16" y="4" width="4" height="16" rx="1"></rect></svg>
-              `;
-            } else {
-              pipPlayPause.innerHTML = `
-                <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-              `;
-            }
+            pipPlayPause.innerHTML = t.isRunning
+              ? `<svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><rect x="4" y="4" width="4" height="16" rx="1"/><rect x="16" y="4" width="4" height="16" rx="1"/></svg>`
+              : `<svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
           }
         };
 
         updatePiPUI(this.store.timer);
 
-        // Bind quick controls inside PiP sandbox window!
+        // Bind controls
         pipPlayPause.addEventListener('click', () => {
-          if (this.store.timer.isRunning) {
-            this.store.pauseTimer();
-          } else {
-            this.store.startTimer();
-          }
+          this.store.timer.isRunning ? this.store.pauseTimer() : this.store.startTimer();
         });
 
         pipStop.addEventListener('click', () => {
@@ -4722,10 +4768,13 @@ document.addEventListener("DOMContentLoaded", async function () {
           this.closeDocumentPiP();
         });
 
-        // Ticks event subscriptions
+        pipRestart.addEventListener('click', () => {
+          this.store.restartTimer();
+        });
+
+        // Subscribe to ticks
         const onTick = (t) => updatePiPUI(t);
         const onStateChange = (t) => updatePiPUI(t);
-
         this.store.subscribe('timerTick', onTick);
         this.store.subscribe('timerStateChanged', onStateChange);
 
