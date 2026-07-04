@@ -4556,40 +4556,48 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
 
       try {
-        // Request a compact rectangular 220x90px window (more premium than 150x150 square)
+        // Request a compact, ultra-sleek rectangular status dock
         const pipWindow = await window.documentPictureInPicture.requestWindow({
-          width: 220,
-          height: 90
+          width: 260,
+          height: 60
         });
 
         this.pipWindow = pipWindow;
 
-        // Copy styles
-        const stylesheets = Array.from(document.styleSheets);
-        for (const sheet of stylesheets) {
-          try {
-            if (sheet.href) {
-              const link = pipWindow.document.createElement('link');
-              link.rel = 'stylesheet';
-              link.href = sheet.href;
-              pipWindow.document.head.appendChild(link);
-            } else {
-              const cssRules = Array.from(sheet.cssRules).map(rule => rule.cssText).join('');
-              const style = pipWindow.document.createElement('style');
-              style.textContent = cssRules;
-              pipWindow.document.head.appendChild(style);
-            }
-          } catch (e) {
-            console.warn("Failed to copy styles:", e);
+        // Copy only computed CSS variables from main body to avoid loading heavy stylesheets and triggering asynchronous layout resize jumps
+        const rootStyles = getComputedStyle(document.body);
+        const variables = [
+          '--bg-primary',
+          '--bg-secondary',
+          '--card-bg',
+          '--text-primary',
+          '--text-secondary',
+          '--text-muted',
+          '--border-color',
+          '--accent-primary',
+          '--shadow-sm',
+          '--shadow-md',
+          '--shadow-lg'
+        ];
+        let variablesCSS = ':root {\n';
+        for (const varName of variables) {
+          const val = rootStyles.getPropertyValue(varName);
+          if (val) {
+            variablesCSS += `  ${varName}: ${val.trim()};\n`;
           }
         }
+        variablesCSS += '}\n';
 
-        // Custom styles for a premium rectangular horizontal widget
+        const varStyle = pipWindow.document.createElement('style');
+        varStyle.textContent = variablesCSS;
+        pipWindow.document.head.appendChild(varStyle);
+
+        // Custom styles for an ultra-compact single-row horizontal widget
         const style = pipWindow.document.createElement('style');
         style.textContent = `
           body {
             margin: 0;
-            padding: 4px;
+            padding: 0;
             background-color: var(--bg-primary, #0d1117) !important;
             color: var(--text-primary, #e6edf3) !important;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
@@ -4603,53 +4611,45 @@ document.addEventListener("DOMContentLoaded", async function () {
           }
           .pip_timer_container {
             display: flex;
-            flex-direction: row; /* Horizontal alignment */
+            flex-direction: row; /* Horizontal line layout */
             align-items: center;
             justify-content: space-between;
             width: 100%;
             height: 100%;
             background-color: var(--bg-secondary, #161b22) !important;
             border: 1px solid var(--border-color, #30363d) !important;
-            border-radius: 12px !important; /* Premium rounded rectangle shape */
             box-shadow: var(--shadow-lg);
             box-sizing: border-box;
-            padding: 12px 16px;
+            padding: 0 12px;
             position: relative;
             gap: 12px;
           }
           .pip_text_group {
             display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            justify-content: center;
+            flex-direction: row; /* Single line text details */
+            align-items: center;
+            gap: 8px;
           }
           .pip_timer_text {
-            font-size: 26px;
+            font-size: 18px;
             font-weight: 800;
             letter-spacing: -0.5px;
             color: var(--text-primary, #e6edf3) !important;
             line-height: 1;
-          }
-          .pip_timer_sub {
-            font-size: 9px;
-            font-weight: 700;
-            color: var(--text-muted, #7d8590) !important;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-top: 2px;
+            font-variant-numeric: tabular-nums;
           }
           .pip_controls {
             display: flex;
-            gap: 6px;
+            gap: 4px;
             align-items: center;
           }
           .pip_btn {
             background-color: var(--bg-primary, #0d1117) !important;
             border: 1px solid var(--border-color, #30363d) !important;
             color: var(--text-primary, #e6edf3) !important;
-            border-radius: 8px; /* Clean rectangular rounding */
-            width: 28px;
-            height: 28px;
+            border-radius: 4px; /* Blocky rounding matches minimalist vibe */
+            width: 24px;
+            height: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -4662,32 +4662,29 @@ document.addEventListener("DOMContentLoaded", async function () {
             background-color: var(--accent-primary, #1f6feb) !important;
             border-color: var(--accent-primary, #1f6feb) !important;
             color: white !important;
-            transform: scale(1.1);
           }
         `;
         pipWindow.document.head.appendChild(style);
 
-        // Render Pip container (Horizontal arrangement)
+        // Render Pip container (Single Horizontal Line arrangement)
         const container = pipWindow.document.createElement('div');
         container.className = 'pip_timer_container';
         container.innerHTML = `
           <div class="pip_text_group">
             <div class="pip_timer_text" id="pip_time">25:00</div>
-            <div class="pip_timer_sub" id="pip_sub">Focus</div>
           </div>
           <div class="pip_controls">
             <button class="pip_btn" id="pip_play_pause" title="Play/Pause">
-              <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             </button>
             <button class="pip_btn" id="pip_stop" title="Stop">
-              <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+              <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
             </button>
           </div>
         `;
         pipWindow.document.body.appendChild(container);
 
         const pipTime = pipWindow.document.getElementById('pip_time');
-        const pipSub = pipWindow.document.getElementById('pip_sub');
         const pipPlayPause = pipWindow.document.getElementById('pip_play_pause');
         const pipStop = pipWindow.document.getElementById('pip_stop');
 
@@ -4695,20 +4692,15 @@ document.addEventListener("DOMContentLoaded", async function () {
           const mins = Math.floor(Math.abs(t.duration) / 60);
           const secs = Math.abs(t.duration) % 60;
           if (pipTime) pipTime.textContent = `${mins}:${secs.toString().padStart(2, "0")}`;
-          
-          if (pipSub) {
-            const subLabels = { pomodoro: "Focus Block", shortBreak: "Short Break", longBreak: "Long Break", stopwatch: "Stopwatch" };
-            pipSub.textContent = subLabels[t.type] || "Focus Session";
-          }
 
           if (pipPlayPause) {
             if (t.isRunning) {
               pipPlayPause.innerHTML = `
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><rect x="4" y="4" width="4" height="16" rx="1"></rect><rect x="16" y="4" width="4" height="16" rx="1"></rect></svg>
+                <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><rect x="4" y="4" width="4" height="16" rx="1"></rect><rect x="16" y="4" width="4" height="16" rx="1"></rect></svg>
               `;
             } else {
               pipPlayPause.innerHTML = `
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <svg viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
               `;
             }
           }
