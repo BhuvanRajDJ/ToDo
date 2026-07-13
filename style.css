@@ -762,6 +762,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .task_card {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 100px;
   position: relative;
   background-color: var(--card-bg);
   border-radius: var(--border-radius-lg);
@@ -4512,6 +4514,8 @@ body[data-style="neo-brutalism"] textarea:hover:not(:focus) {
 
 /* --- COMPLETED TASK COLLAPSIBLE DATE GROUPS --- */
 .completed_group_section {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 200px;
   margin-bottom: 20px;
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
@@ -4609,6 +4613,122 @@ body[data-style="neo-brutalism"] button.timer_btn_new:hover:not(.disabled) {
 body[data-style="neo-brutalism"] button.timer_btn_new:active:not(.disabled) {
   transform: translate(0, 0) !important;
   box-shadow: var(--shadow-sm-token) !important;
+}
+
+/* --- PRIORITY TASK COLLAPSIBLE GROUPS --- */
+.priority_group_section {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 200px;
+  margin-bottom: 20px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.priority_group_section.priority-high {
+  border-left: 4px solid #ef4444;
+}
+.priority_group_section.priority-medium {
+  border-left: 4px solid #f59e0b;
+}
+.priority_group_section.priority-low {
+  border-left: 4px solid #3b82f6;
+}
+
+.priority_group_header {
+  padding: 16px 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  user-select: none;
+  background-color: rgba(255, 255, 255, 0.01);
+  transition: background-color 0.2s, border-bottom 0.2s;
+}
+
+.priority_group_header:hover {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.priority_group_title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.priority_group_title h3 {
+  font-size: 14.5px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.priority-high .priority_group_title h3 {
+  color: #ef4444;
+}
+.priority-medium .priority_group_title h3 {
+  color: #f59e0b;
+}
+.priority-low .priority_group_title h3 {
+  color: #3b82f6;
+}
+
+.priority_group_title .count_badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 20px;
+}
+
+.priority-high .priority_group_title .count_badge {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+}
+.priority-medium .priority_group_title .count_badge {
+  background-color: rgba(245, 158, 11, 0.1);
+  color: #f59e0b;
+}
+.priority-low .priority_group_title .count_badge {
+  background-color: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+}
+
+.priority_group_title .chevron_icon {
+  color: var(--text-muted);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.priority_group_section.collapsed .chevron_icon {
+  transform: rotate(-90deg);
+}
+
+.priority_group_content {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  border-top: 1px solid var(--border-color);
+}
+
+.priority_group_section.collapsed .priority_group_content {
+  display: none;
+}
+
+/* Neo-Brutalism Overrides for Priority Groups */
+body[data-style="neo-brutalism"] .priority_group_section {
+  border: var(--border-width) var(--border-style) var(--border-color-token) !important;
+  border-radius: var(--border-radius-lg-token) !important;
+  box-shadow: var(--shadow-md-token) !important;
+}
+body[data-style="neo-brutalism"] .priority_group_section.priority-high {
+  border-left: 8px solid #ef4444 !important;
+}
+body[data-style="neo-brutalism"] .priority_group_section.priority-medium {
+  border-left: 8px solid #f59e0b !important;
+}
+body[data-style="neo-brutalism"] .priority_group_section.priority-low {
+  border-left: 8px solid #3b82f6 !important;
 }
 
 

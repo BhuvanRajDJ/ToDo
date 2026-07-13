@@ -370,7 +370,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         sidebarCollapsed,
         notificationsEnabled,
         bannerDismissed,
-        uiStyle
+        uiStyle,
+        alarmSound
       ] = await Promise.all([
         StorageService.getAllItems("tasks"),
         StorageService.getAllItems("routines"),
@@ -383,7 +384,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         StorageService.getPreference("sidebar_collapsed", false),
         StorageService.getPreference("notifications_enabled", true),
         StorageService.getPreference("banner_dismissed", false),
-        StorageService.getPreference("ui_style", "neo-brutalism")
+        StorageService.getPreference("ui_style", "neo-brutalism"),
+        StorageService.getPreference("alarm_sound", "default_beeps")
       ]);
 
       const journal = {};
@@ -405,7 +407,8 @@ document.addEventListener("DOMContentLoaded", async function () {
           sidebarCollapsed,
           notificationsEnabled,
           bannerDismissed,
-          uiStyle
+          uiStyle,
+          alarmSound
         }
       };
     }
@@ -430,6 +433,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.accent = dbData.preferences.accent;
       this.uiStyle = dbData.preferences.uiStyle || "neo-brutalism";
       this.sidebarCollapsed = dbData.preferences.sidebarCollapsed;
+      this.alarmSound = dbData.preferences.alarmSound || "default_beeps";
       console.log("State Store Loaded Visual Vibe Style:", this.uiStyle);
 
       this.timer = {
@@ -983,6 +987,27 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.isAlarmActive = true;
       this.emit("alarmStateChanged", true);
 
+      if (this.alarmSound === "steady_ascent") {
+        try {
+          if (!this.alarmAudio) {
+            this.alarmAudio = new Audio("A_Steady_Ascent.mp3");
+            this.alarmAudio.loop = true;
+          }
+          this.alarmAudio.currentTime = 0;
+          this.alarmAudio.play().catch(err => {
+            console.warn("Audio play failed, falling back to beeps:", err);
+            this.playDefaultBeeps();
+          });
+        } catch (e) {
+          console.warn("Audio element creation failed, falling back to beeps:", e);
+          this.playDefaultBeeps();
+        }
+      } else {
+        this.playDefaultBeeps();
+      }
+    }
+
+    playDefaultBeeps() {
       try {
         this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         
@@ -1042,6 +1067,14 @@ document.addEventListener("DOMContentLoaded", async function () {
         }
         this.audioCtx = null;
       }
+      if (this.alarmAudio) {
+        try {
+          this.alarmAudio.pause();
+          this.alarmAudio.currentTime = 0;
+        } catch (e) {
+          console.warn("Error pausing alarm audio:", e);
+        }
+      }
       this.emit("alarmStateChanged", false);
     }
 
@@ -1070,6 +1103,12 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.accent = accent;
       StorageService.savePreference("accent", accent);
       this.emit("preferenceChanged", { accent });
+    }
+
+    setAlarmSound(sound) {
+      this.alarmSound = sound;
+      StorageService.savePreference("alarm_sound", sound);
+      this.emit("preferenceChanged", { alarmSound: sound });
     }
 
     setSidebarCollapsed(collapsed) {
@@ -1122,6 +1161,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.activeEditingTaskId = null;
       this.activeEditingRoutineId = null;
       this.activeEditingHabitId = null;
+      this.isSubmitting = false;
       this.selectedRoutineDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date().getDay()];
       this.routineLayoutMode = "timeline";
       this.cachedQuote = null;
@@ -1662,10 +1702,15 @@ document.addEventListener("DOMContentLoaded", async function () {
       if (this.habitForm) {
         this.habitForm.addEventListener("submit", (e) => {
           e.preventDefault();
+          if (this.isSubmitting) return;
           const title = document.getElementById("habit_title").value.trim();
           const cat = document.getElementById("habit_category").value;
           const color = document.getElementById("habit_color").value;
           if (title) {
+            this.isSubmitting = true;
+            const habitSubmitBtn = this.habitForm.querySelector("button[type='submit']");
+            if (habitSubmitBtn) habitSubmitBtn.disabled = true;
+
             if (this.activeEditingHabitId !== null) {
               this.store.updateHabit(this.activeEditingHabitId, { title, category: cat, color });
             } else {
@@ -2384,6 +2429,9 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.routineSheetOverlay.classList.remove("visible");
       document.body.classList.remove("modal-open");
       this.activeEditingRoutineId = null;
+      this.isSubmitting = false;
+      const routineSubmitBtn = document.getElementById("routine_sheet_submit");
+      if (routineSubmitBtn) routineSubmitBtn.disabled = false;
     }
 
     openHabitSheet() {
@@ -2399,9 +2447,13 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.habitSheet.classList.remove("visible");
       this.habitSheetOverlay.classList.remove("visible");
       document.body.classList.remove("modal-open");
+      this.isSubmitting = false;
+      const habitSubmitBtn = this.habitForm.querySelector("button[type='submit']");
+      if (habitSubmitBtn) habitSubmitBtn.disabled = false;
     }
 
     handleRoutineFormSubmission() {
+      if (this.isSubmitting) return;
       const title = document.getElementById("routine_title").value.trim();
       const startTime = document.getElementById("routine_start_time").value;
       const endTime = document.getElementById("routine_end_time").value;
@@ -2425,6 +2477,10 @@ document.addEventListener("DOMContentLoaded", async function () {
         alert("Routine start time must precede the scheduled completion time!");
         return;
       }
+
+      this.isSubmitting = true;
+      const routineSubmitBtn = document.getElementById("routine_sheet_submit");
+      if (routineSubmitBtn) routineSubmitBtn.disabled = true;
 
       // Check soft overlaps
       const overlaps = this.store.checkRoutineOverlap(startTime, endTime, days, this.activeEditingRoutineId);
@@ -3282,6 +3338,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           return d.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
         };
 
+        const fragment = document.createDocumentFragment();
         sortedDates.forEach((dateStr, idx) => {
           const groupTasks = groups[dateStr];
           const label = getFriendlyDateLabel(dateStr);
@@ -3315,14 +3372,62 @@ document.addEventListener("DOMContentLoaded", async function () {
             section.classList.toggle("collapsed");
           });
 
-          this.taskListContainer.appendChild(section);
+          fragment.appendChild(section);
         });
+        this.taskListContainer.appendChild(fragment);
       } else {
-        // Standard active/pending lists
+        // Group pending/active tasks by priority (High, Medium, Low)
+        const priorityGroups = {
+          High: [],
+          Medium: [],
+          Low: []
+        };
+        
         filtered.forEach(task => {
-          const card = this.createTaskCardDOM(task);
-          this.taskListContainer.appendChild(card);
+          const p = task.priority || "Medium";
+          if (priorityGroups[p]) {
+            priorityGroups[p].push(task);
+          } else {
+            priorityGroups["Medium"].push(task);
+          }
         });
+
+        const fragment = document.createDocumentFragment();
+        ["High", "Medium", "Low"].forEach(pKey => {
+          const groupTasks = priorityGroups[pKey];
+          if (groupTasks.length > 0) {
+            const section = document.createElement("div");
+            section.className = `priority_group_section priority-${pKey.toLowerCase()}`;
+            section.setAttribute("data-priority", pKey);
+            
+            section.innerHTML = `
+              <div class="priority_group_header">
+                <div class="priority_group_title">
+                  <svg class="chevron_icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                  <h3>${pKey} Priority</h3>
+                  <span class="count_badge">${groupTasks.length} ${groupTasks.length === 1 ? 'task' : 'tasks'}</span>
+                </div>
+              </div>
+              <div class="priority_group_content"></div>
+            `;
+            
+            const contentArea = section.querySelector(".priority_group_content");
+            groupTasks.forEach(task => {
+              const card = this.createTaskCardDOM(task);
+              contentArea.appendChild(card);
+            });
+            
+            const header = section.querySelector(".priority_group_header");
+            header.addEventListener("click", () => {
+              section.classList.toggle("collapsed");
+            });
+            
+            fragment.appendChild(section);
+          }
+        });
+        this.taskListContainer.appendChild(fragment);
       }
     }
 
@@ -3353,10 +3458,10 @@ document.addEventListener("DOMContentLoaded", async function () {
           return bd.localeCompare(ad); // Newest completed first!
         });
       } else {
-        const weights = { High: 3, Medium: 2, Low: 1 };
         list.sort((a, b) => {
-          if (a.dueDate !== b.dueDate) return a.dueDate.localeCompare(b.dueDate);
-          return weights[b.priority] - weights[a.priority];
+          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : a.id;
+          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : b.id;
+          return timeB - timeA;
         });
       }
 
@@ -3707,9 +3812,13 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.bottomSheetOverlay.classList.remove("visible");
       document.body.classList.remove("modal-open");
       this.activeEditingTaskId = null;
+      this.isSubmitting = false;
+      if (this.sheetSubmitBtn) this.sheetSubmitBtn.disabled = false;
     }
 
     handleFormSubmission() {
+      if (this.isSubmitting) return;
+
       const title = document.getElementById("task_title").value.trim();
       const description = document.getElementById("task_desc").value.trim();
       let dueDate = document.getElementById("task_due_date").value;
@@ -3719,6 +3828,9 @@ document.addEventListener("DOMContentLoaded", async function () {
       const recurring = document.getElementById("task_recurring").value;
 
       if (!title) return;
+
+      this.isSubmitting = true;
+      if (this.sheetSubmitBtn) this.sheetSubmitBtn.disabled = true;
 
       const doLaterChip = this.sheetForm.querySelector("#chip_do_later");
       const isLater = (doLaterChip && doLaterChip.classList.contains("active")) || !dueDate;
@@ -3826,8 +3938,11 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       const ring = document.getElementById("timer_progress_ring_circle");
       if (ring) {
-        const radius = ring.r.baseVal.value;
-        const circ = 2 * Math.PI * radius;
+        if (!this._timerCirc) {
+          const radius = ring.r.baseVal.value || 45;
+          this._timerCirc = 2 * Math.PI * radius;
+        }
+        const circ = this._timerCirc;
         
         let percentage = 1;
         if (t.type !== "stopwatch" && t.totalDuration > 0) percentage = t.duration / t.totalDuration;
@@ -4077,6 +4192,69 @@ document.addEventListener("DOMContentLoaded", async function () {
       `;
     }
 
+    previewAlarmSound(sound) {
+      if (this.previewAudio) {
+        try { this.previewAudio.pause(); } catch(e){}
+        this.previewAudio = null;
+      }
+      if (this.previewOscillators) {
+        this.previewOscillators.forEach(o => { try{ o.stop(); }catch(e){} });
+        this.previewOscillators = [];
+      }
+      if (this.previewCtx) {
+        try { this.previewCtx.close(); } catch(e){}
+        this.previewCtx = null;
+      }
+      if (this.previewTimeout) {
+        clearTimeout(this.previewTimeout);
+        this.previewTimeout = null;
+      }
+
+      if (sound === "steady_ascent") {
+        try {
+          this.previewAudio = new Audio("A_Steady_Ascent.mp3");
+          this.previewAudio.play().catch(e => console.warn(e));
+          this.previewTimeout = setTimeout(() => {
+            if (this.previewAudio) this.previewAudio.pause();
+          }, 2500);
+        } catch(e) {
+          console.warn(e);
+        }
+      } else {
+        try {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          this.previewCtx = ctx;
+          this.previewOscillators = [];
+          const now = ctx.currentTime;
+          
+          const playTone = (freq, startTime, duration) => {
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(freq, startTime);
+            gain.gain.setValueAtTime(0, startTime);
+            gain.gain.linearRampToValueAtTime(0.15, startTime + 0.05);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+            osc.start(startTime);
+            osc.stop(startTime + duration);
+            this.previewOscillators.push(osc);
+          };
+          
+          playTone(880, now, 0.15);
+          playTone(880, now + 0.25, 0.15);
+          
+          this.previewTimeout = setTimeout(() => {
+            ctx.close();
+            this.previewCtx = null;
+          }, 2000);
+        } catch(e) {
+          console.warn(e);
+        }
+      }
+    }
+
     // -------------------------------------------------------------------------
     // PERSONALIZATION SETTINGS VIEW (WAKING TIMES INPUTS)
     // -------------------------------------------------------------------------
@@ -4141,6 +4319,13 @@ document.addEventListener("DOMContentLoaded", async function () {
             </div>
           </div>
           <div class="setting_row">
+            <span class="setting_label">Alarm Sound</span>
+            <div class="theme_toggle_pills" id="settings_alarm_sound_toggle">
+              <button class="pill_btn ${this.store.alarmSound === "default_beeps" ? "active" : ""}" data-sound="default_beeps">Default Beeps</button>
+              <button class="pill_btn ${this.store.alarmSound === "steady_ascent" ? "active" : ""}" data-sound="steady_ascent">A Steady Ascent</button>
+            </div>
+          </div>
+          <div class="setting_row">
             <span class="setting_label">Backup Archive</span>
             <button class="setting_secondary_btn danger" id="btn_clear_data">Wipe Local Storage</button>
           </div>
@@ -4195,6 +4380,15 @@ document.addEventListener("DOMContentLoaded", async function () {
           StorageService.savePreference("banner_dismissed", true);
           if (val) await NotificationService.requestPermission();
           this.renderSettingsUI();
+        });
+      });
+
+      this.settingsSection.querySelectorAll("#settings_alarm_sound_toggle button").forEach(btn => {
+        btn.addEventListener("click", () => {
+          const sound = btn.getAttribute("data-sound");
+          this.store.setAlarmSound(sound);
+          this.renderSettingsUI();
+          this.previewAlarmSound(sound);
         });
       });
 
