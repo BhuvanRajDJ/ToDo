@@ -375,58 +375,142 @@
         </section>
 
         <!-- =====================================================================
-             E. PANEL: POMODORO TIMER WORKSPACE
+             E. PANEL: POMODORO FOCUS TIMER — FUTURISTIC IMMERSIVE WORKSPACE
              ===================================================================== -->
         <section id="timer_panel" class="app_panel" style="display: none;">
-            <div class="timer_pills_container">
-                <button id="timer_pomo_btn" class="pomo_type_tab active">Focus Block (25m)</button>
-                <button id="timer_short_btn" class="pomo_type_tab">Short Break (5m)</button>
-                <button id="timer_long_btn" class="pomo_type_tab">Long Break (15m)</button>
-                <button id="timer_stopwatch_btn" class="pomo_type_tab">Stopwatch</button>
+            
+            <!-- Ambient Glow Orb Background -->
+            <div class="timer_ambient_glow" id="timer_ambient_glow"></div>
+
+            <!-- Mode Selector Pills -->
+            <div class="timer_mode_selector">
+                <button id="timer_pomo_btn" class="timer_mode_pill active">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <span>Focus</span>
+                    <small>25m</small>
+                </button>
+                <button id="timer_short_btn" class="timer_mode_pill">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                    <span>Break</span>
+                    <small>5m</small>
+                </button>
+                <button id="timer_long_btn" class="timer_mode_pill">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.657 6.343A8 8 0 1 0 6.343 17.657"/><path d="M12 2v4"/><path d="M12 18v4"/><path d="M2 12h4"/><path d="M18 12h4"/></svg>
+                    <span>Long Break</span>
+                    <small>15m</small>
+                </button>
+                <button id="timer_stopwatch_btn" class="timer_mode_pill">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5"/><path d="M10 2h4"/><path d="M12 2v2"/></svg>
+                    <span>Free</span>
+                    <small>&infin;</small>
+                </button>
             </div>
 
-            <div class="timer_rectangular_block">
-                <div class="timer_left_content">
-                    <span id="timer_countdown_text">25:00</span>
-                    <span class="timer_sub_msg">Focus Flow Ticking</span>
-                </div>
+            <!-- Central Circular Timer Display -->
+            <div class="timer_ring_stage">
+                <svg class="timer_ring_svg" viewBox="0 0 300 300">
+                    <defs>
+                        <linearGradient id="ringGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#6366f1"/>
+                            <stop offset="50%" stop-color="#8b5cf6"/>
+                            <stop offset="100%" stop-color="#a855f7"/>
+                        </linearGradient>
+                        <linearGradient id="ringGradientUrgent" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#ef4444"/>
+                            <stop offset="50%" stop-color="#f43f5e"/>
+                            <stop offset="100%" stop-color="#e11d48"/>
+                        </linearGradient>
+                        <filter id="ringGlow">
+                            <feGaussianBlur stdDeviation="4" result="blur"/>
+                            <feMerge>
+                                <feMergeNode in="blur"/>
+                                <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                        </filter>
+                    </defs>
+                    <!-- Track ring -->
+                    <circle cx="150" cy="150" r="125" fill="none" stroke="var(--border-color)" stroke-width="6" opacity="0.3"/>
+                    <!-- Progress ring -->
+                    <circle id="timer_ring_progress" cx="150" cy="150" r="125" fill="none" stroke="url(#ringGradient)" stroke-width="6" stroke-linecap="round"
+                        stroke-dasharray="785" stroke-dashoffset="0"
+                        filter="url(#ringGlow)"
+                        transform="rotate(-90 150 150)"/>
+                    <!-- Tick markers -->
+                    <g id="timer_ring_ticks" opacity="0.15"></g>
+                </svg>
                 
-                <div class="timer_right_controls">
-                    <!-- Play Button -->
-                    <button id="timer_play_btn" class="timer_btn_new" aria-label="Play Timer" title="Start Timer">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                    </button>
-                    <!-- Pause Button -->
-                    <button id="timer_pause_btn" class="timer_btn_new" aria-label="Pause Timer" title="Pause Timer">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"></rect><rect x="14" y="4" width="4" height="16" rx="1"></rect></svg>
-                    </button>
-                    <!-- Stop Button -->
-                    <button id="timer_stop_btn" class="timer_btn_new" aria-label="Stop Timer" title="Stop & Reset Session">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
-                    </button>
-                    <!-- Reset & Start Again (Restart) Button -->
-                    <button id="timer_restart_btn" class="timer_btn_new restart_btn" aria-label="Restart Timer" title="Reset and Start Again">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-                    </button>
-                    <!-- Skip Button -->
-                    <button id="timer_skip_btn" class="timer_btn_new" aria-label="Skip Session" title="Skip Session">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19"></line></svg>
-                    </button>
-                </div>
-                
-                <!-- Sleek horizontal progress bar tracker at the bottom of the card -->
-                <div class="timer_progress_bar_wrapper">
-                    <div id="timer_progress_bar" class="timer_progress_bar_fill"></div>
+                <!-- Center Content Stack -->
+                <div class="timer_ring_center">
+                    <span id="timer_countdown_text" class="timer_mega_display">25:00</span>
+                    <span id="timer_sub_msg" class="timer_state_label">Ready</span>
+                    
+                    <!-- Session Cycle Mini Dots -->
+                    <div class="timer_mini_cycle" id="timer_mini_cycle">
+                        <span class="mini_dot active" data-s="1"></span>
+                        <span class="mini_dot" data-s="2"></span>
+                        <span class="mini_dot" data-s="3"></span>
+                        <span class="mini_dot" data-s="4"></span>
+                    </div>
+                    <span class="timer_cycle_text" id="cycle_counter_text">Focus 1/4</span>
                 </div>
             </div>
 
-            <!-- Focus Time Adjuster Controls -->
-            <div class="timer_adjuster_row" id="timer_adjuster">
-                <button class="adjust_btn" id="btn_timer_dec" title="Decrease time">- 5m</button>
-                <span class="adjust_label">Adjust Duration</span>
-                <button class="adjust_btn" id="btn_timer_inc" title="Increase time">+ 5m</button>
+            <!-- Primary Action Button -->
+            <div class="timer_primary_action">
+                <button id="timer_play_btn" class="timer_play_pause_btn" aria-label="Start Timer" title="Start (Space)">
+                    <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+                </button>
+                <button id="timer_pause_btn" class="timer_play_pause_btn" aria-label="Pause Timer" title="Pause (Space)" style="display:none;">
+                    <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><rect x="5" y="3" width="5" height="18" rx="1.5"/><rect x="14" y="3" width="5" height="18" rx="1.5"/></svg>
+                </button>
             </div>
 
+            <!-- Secondary Controls Row -->
+            <div class="timer_secondary_controls">
+                <button id="timer_restart_btn" class="timer_sec_btn" aria-label="Restart" title="Restart (R)">
+                    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                </button>
+                <button id="timer_stop_btn" class="timer_sec_btn danger" aria-label="Stop" title="Stop (Esc)">
+                    <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+                </button>
+                <button id="timer_skip_btn" class="timer_sec_btn" aria-label="Skip" title="Skip Session">
+                    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+                </button>
+            </div>
+
+            <!-- Duration Adjuster -->
+            <div class="timer_duration_control" id="timer_adjuster">
+                <button class="timer_dur_btn" id="btn_timer_dec">-5</button>
+                <span class="timer_dur_label">min</span>
+                <button class="timer_dur_btn" id="btn_timer_inc">+5</button>
+            </div>
+
+            <!-- Alarm Dismiss Card -->
+            <div id="timer_alarm_dismiss" class="timer_alarm_banner" style="display:none;">
+                <div class="timer_alarm_body">
+                    <div class="timer_alarm_icon_wrap">
+                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                    </div>
+                    <div>
+                        <h4 id="alarm_dismiss_title">Session Complete!</h4>
+                        <p id="alarm_dismiss_desc">Great work! Time for a break.</p>
+                    </div>
+                </div>
+                <div class="timer_alarm_actions">
+                    <button id="timer_dismiss_alarm_btn" class="timer_alarm_btn primary">Dismiss</button>
+                    <button id="timer_start_next_btn" class="timer_alarm_btn secondary" style="display:none;">Start Next</button>
+                </div>
+            </div>
+
+            <!-- Keyboard Shortcuts -->
+            <div class="timer_kbd_hints">
+                <span><kbd>Space</kbd> Play/Pause</span>
+                <span><kbd>R</kbd> Restart</span>
+                <span><kbd>Esc</kbd> Stop</span>
+                <span><kbd>Click</kbd> Timer to set custom</span>
+            </div>
+
+            <!-- Task Detail -->
             <div id="timer_task_details" class="timer_task_detail_container"></div>
         </section>
 
@@ -814,4 +898,4 @@
 
 <script src="script.js"></script>
 </body>
-</html></html>
+</html>

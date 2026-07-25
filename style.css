@@ -883,6 +883,11 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--accent-primary);
 }
 
+.focus_badge {
+  background-color: rgba(245, 158, 11, 0.08);
+  color: #f59e0b;
+}
+
 .badge {
   font-size: 10px;
   font-weight: 800;
@@ -1547,119 +1552,446 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 6px 16px var(--accent-glow);
 }
 
-/* --- 11. POMODORO TIMER WORKSPACE --- */
+/* =========================================================================
+   11. FUTURISTIC POMODORO FOCUS TIMER — IMMERSIVE WORKSPACE
+   ========================================================================= */
+
 #timer_panel {
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 30px;
-  padding: 40px 10px;
-  height: 100%;
+  justify-content: flex-start;
+  gap: 20px;
+  padding: 30px 16px 60px;
+  overflow-y: auto;
+  position: relative;
 }
 
-.timer_pills_container {
+/* --- AMBIENT BACKGROUND GLOW ORB --- */
+.timer_ambient_glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 360px;
+  height: 360px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.4;
+  transition: opacity 0.6s ease, width 0.6s ease, height 0.6s ease;
+}
+
+#timer_panel.ticking .timer_ambient_glow {
+  opacity: 0.8;
+  width: 420px;
+  height: 420px;
+  animation: glowBreathe 3s ease-in-out infinite;
+}
+
+#timer_panel.urgent .timer_ambient_glow {
+  background: radial-gradient(circle, rgba(239,68,68,0.15) 0%, transparent 70%);
+}
+
+@keyframes glowBreathe {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.6; }
+  50% { transform: translate(-50%, -50%) scale(1.15); opacity: 0.9; }
+}
+
+/* --- MODE SELECTOR PILLS --- */
+.timer_mode_selector {
   display: flex;
-  flex-shrink: 0; /* Prevent container from shrinking vertically on smaller screens */
-  background-color: var(--bg-secondary);
+  background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   padding: 4px;
-  border-radius: 40px;
+  border-radius: 20px;
+  gap: 2px;
+  z-index: 1;
+  width: fit-content;
   max-width: 100%;
   overflow-x: auto;
   scrollbar-width: none;
-}
-
-.timer_pills_container::-webkit-scrollbar { display: none; }
-
-.pomo_type_tab {
-  height: 36px;
-  padding: 0 16px;
-  border-radius: 30px;
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  transition: var(--transition-smooth);
-}
-
-.pomo_type_tab.active {
-  background-color: var(--accent-primary);
-  color: #ffffff;
-}
-
-/* --- RECTANGULAR FOCUS BLOCK --- */
-.timer_rectangular_block {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  max-width: 480px;
-  background-color: var(--card-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 20px 24px;
-  margin: 28px auto;
-  position: relative;
-  overflow: hidden;
-  box-shadow: var(--shadow-md);
-  box-sizing: border-box;
-}
-
-.timer_left_content {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
   flex-shrink: 0;
 }
+.timer_mode_selector::-webkit-scrollbar { display: none; }
 
-#timer_countdown_text {
-  font-size: 48px;
+.timer_mode_pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 15px;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  transition: all 0.22s ease;
+  cursor: pointer;
+  border: 1px solid transparent;
+  background: transparent;
+  flex-shrink: 0;
+}
+.timer_mode_pill svg {
+  flex-shrink: 0;
+  opacity: 0.55;
+  transition: opacity 0.22s;
+  width: 17px;
+  height: 17px;
+}
+.timer_mode_pill small {
+  font-size: 10px;
+  opacity: 0.55;
+  font-weight: 500;
+  color: inherit;
+}
+
+.timer_mode_pill:hover {
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border-color: var(--border-color);
+}
+.timer_mode_pill:hover svg { opacity: 1; }
+.timer_mode_pill:hover small { opacity: 0.8; }
+
+.timer_mode_pill.active {
+  background: var(--accent-primary);
+  color: #ffffff;
+  border-color: var(--accent-primary);
+  box-shadow: 0 4px 14px var(--accent-glow);
+}
+.timer_mode_pill.active svg {
+  opacity: 1;
+  color: #ffffff;
+}
+.timer_mode_pill.active small {
+  opacity: 0.85;
+  color: rgba(255,255,255,0.85);
+}
+
+/* --- CENTRAL CIRCULAR TIMER RING --- */
+.timer_ring_stage {
+  position: relative;
+  width: 280px;
+  height: 280px;
+  z-index: 1;
+  flex-shrink: 0;
+  margin: 10px 0;
+}
+
+.timer_ring_svg {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  filter: drop-shadow(0 0 20px rgba(99,102,241,0.15));
+}
+
+.timer_ring_center {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.timer_mega_display {
+  font-size: 56px;
   font-weight: 800;
-  letter-spacing: -1.5px;
+  letter-spacing: -2px;
   color: var(--text-primary);
   line-height: 1;
   font-variant-numeric: tabular-nums;
+  transition: color 0.3s ease;
+  cursor: pointer;
+  user-select: none;
 }
 
-.timer_sub_msg {
+.timer_state_label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  transition: color 0.3s;
+}
+
+/* Mini session cycle dots inside ring */
+.timer_mini_cycle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.mini_dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border-color);
+  transition: all 0.3s ease;
+}
+.mini_dot.completed { background: var(--accent-secondary); }
+.mini_dot.active { background: var(--accent-primary); box-shadow: 0 0 8px var(--accent-primary); animation: dotPulse 1.5s ease-in-out infinite; }
+
+@keyframes dotPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.6); }
+}
+
+.timer_cycle_text {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* Urgent state overrides */
+#timer_panel.urgent .timer_mega_display {
+  color: #ef4444;
+  animation: urgentShakePulse 0.5s ease-in-out infinite;
+}
+#timer_panel.urgent .timer_ring_svg {
+  filter: drop-shadow(0 0 24px rgba(239,68,68,0.3));
+}
+
+@keyframes urgentShakePulse {
+  0%, 100% { transform: scale(1); }
+  25% { transform: scale(1.03); }
+  75% { transform: scale(1.03); }
+}
+
+/* --- PRIMARY PLAY/PAUSE BUTTON --- */
+.timer_primary_action {
+  z-index: 2;
+}
+
+.timer_play_pause_btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 8px 28px var(--accent-glow);
+  transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.timer_play_pause_btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 12px 36px var(--accent-glow);
+}
+.timer_play_pause_btn:active {
+  transform: scale(0.93);
+}
+.timer_play_pause_btn.disabled {
+  opacity: 0.4;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+/* --- SECONDARY CONTROLS --- */
+.timer_secondary_controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 1;
+}
+
+.timer_sec_btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.22s ease;
+}
+.timer_sec_btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+  background: var(--accent-glow);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+.timer_sec_btn:active { transform: translateY(0); }
+.timer_sec_btn.danger:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+  background: rgba(239,68,68,0.1);
+  box-shadow: 0 4px 12px rgba(239,68,68,0.15);
+}
+.timer_sec_btn.disabled {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* --- DURATION ADJUSTER --- */
+.timer_duration_control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  padding: 4px;
+  border-radius: 20px;
+  z-index: 1;
+}
+
+.timer_dur_btn {
+  width: 32px;
+  height: 28px;
+  border-radius: 14px;
+  border: none;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.timer_dur_btn:hover {
+  background: var(--accent-primary);
+  color: #ffffff;
+}
+
+.timer_dur_label {
   font-size: 10px;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 1px;
   color: var(--text-muted);
-  margin-top: 6px;
+  user-select: none;
 }
 
-/* Horizontal Progress Bar at bottom of card */
-.timer_progress_bar_wrapper {
-  position: absolute;
-  bottom: 0;
-  left: 0;
+/* --- ALARM BANNER --- */
+.timer_alarm_banner {
   width: 100%;
-  height: 4px;
-  background-color: var(--border-color);
+  max-width: 400px;
+  background: linear-gradient(135deg, var(--card-bg), rgba(99,102,241,0.06));
+  border: 1px solid var(--accent-primary);
+  border-radius: 14px;
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: alarmSlideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  z-index: 2;
 }
 
-.timer_progress_bar_fill {
-  height: 100%;
-  width: 100%;
-  background-color: var(--accent-primary);
-  transition: width 1s linear;
+@keyframes alarmSlideIn {
+  from { transform: translateY(-16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
 }
 
+.timer_alarm_body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.timer_alarm_icon_wrap {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--accent-glow);
+  color: var(--accent-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: alarmRingShake 0.5s infinite;
+  flex-shrink: 0;
+}
+
+.timer_alarm_body h4 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+.timer_alarm_body p {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.timer_alarm_actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.timer_alarm_btn {
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+.timer_alarm_btn.primary {
+  background: var(--accent-primary);
+  color: #ffffff;
+}
+.timer_alarm_btn.primary:hover { background: var(--accent-secondary); }
+.timer_alarm_btn.secondary {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+.timer_alarm_btn.secondary:hover {
+  background: var(--border-color);
+  color: var(--text-primary);
+}
+
+/* --- KEYBOARD HINTS --- */
+.timer_kbd_hints {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  font-size: 10px;
+  color: var(--text-muted);
+  opacity: 0.5;
+  transition: opacity 0.3s;
+  z-index: 1;
+}
+.timer_kbd_hints:hover { opacity: 0.8; }
+.timer_kbd_hints kbd {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* --- TASK DETAIL CARD --- */
 .timer_task_detail_container {
   width: 100%;
-  max-width: 320px;
-  text-align: center;
+  max-width: 400px;
+  z-index: 1;
 }
 
 .active_focus_task {
   background-color: var(--card-bg);
   border: 1px solid var(--border-color);
-  padding: 16px;
-  border-radius: var(--border-radius-md);
+  padding: 14px 16px;
+  border-radius: 12px;
   box-shadow: var(--shadow-sm);
+  text-align: center;
 }
 
 .focus_tag {
@@ -1668,10 +2000,10 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 800;
   background-color: var(--accent-glow);
   color: var(--accent-primary);
-  padding: 3px 8px;
+  padding: 3px 10px;
   border-radius: 30px;
   text-transform: uppercase;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .active_focus_task h3 {
@@ -1686,71 +2018,44 @@ h1, h2, h3, h4, h5, h6 {
   margin-top: 4px;
 }
 
+.active_focus_task_none {
+  text-align: center;
+}
 .active_focus_task_none h3 {
   font-size: 14px;
   font-weight: 700;
   color: var(--text-muted);
 }
-
 .active_focus_task_none p {
   font-size: 11.5px;
   color: var(--text-muted);
   margin-top: 4px;
 }
 
-.timer_controls_row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+/* --- RESPONSIVE ADJUSTMENTS --- */
+@media (max-width: 480px) {
+  .timer_ring_stage {
+    width: 240px;
+    height: 240px;
+  }
+  .timer_mega_display {
+    font-size: 44px;
+  }
+  .timer_mode_pill {
+    padding: 6px 10px;
+    font-size: 11px;
+  }
+  .timer_mode_pill small { display: none; }
 }
 
-.timer_btn_new {
-  width: 44px;
-  height: 44px;
-  border-radius: 8px;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: var(--transition-smooth);
-}
-
-.timer_btn_new svg {
-  display: block;
-}
-
-.timer_btn_new:hover:not(.disabled) {
-  border-color: var(--accent-primary);
-  background-color: var(--accent-glow);
-  color: var(--accent-primary);
-  box-shadow: 0 4px 12px var(--accent-glow);
-  transform: translateY(-2px);
-}
-
-.timer_btn_new:active:not(.disabled) {
-  transform: translateY(0);
-}
-
-.timer_btn_new.disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
-/* Specific styling for Restart button */
-.timer_btn_new.restart_btn {
-  background-color: var(--accent-glow);
-  color: var(--accent-primary);
-  border-color: rgba(99, 102, 241, 0.3);
-}
-
-.timer_btn_new.restart_btn:hover:not(.disabled) {
-  background-color: var(--accent-primary);
-  color: #ffffff;
-  border-color: var(--accent-primary);
+@media (min-width: 768px) {
+  .timer_ring_stage {
+    width: 320px;
+    height: 320px;
+  }
+  .timer_mega_display {
+    font-size: 64px;
+  }
 }
 
 /* --- 12. ADVANCED HISTORICAL ANALYTICS --- */
@@ -2292,7 +2597,7 @@ svg text { font-family: var(--font-stack); }
 }
 .app_panel { animation: panelEntry 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
-.nav_tab:active, .fab_action_trigger:active, .checkbox_btn:active, .sub_check_btn:active, .date_chip:active, .action_btn:active, .timer_control_sec:active, .timer_control_main:active, .pill_btn:active, .accent_pill:active, .sheet_primary_commit:active, .shutdown_checkbox:active, .mood_btn:active, .journal_save_trigger_btn:active {
+.nav_tab:active, .fab_action_trigger:active, .checkbox_btn:active, .sub_check_btn:active, .date_chip:active, .action_btn:active, .timer_sec_btn:active, .timer_play_pause_btn:active, .pill_btn:active, .accent_pill:active, .sheet_primary_commit:active, .shutdown_checkbox:active, .mood_btn:active, .journal_save_trigger_btn:active {
   transform: scale(0.95) !important;
   transition: transform 0.08s cubic-bezier(0.175, 0.885, 0.32, 1.25) !important;
 }
@@ -2302,7 +2607,6 @@ svg text { font-family: var(--font-stack); }
   50% { transform: scale(1.025); filter: drop-shadow(0 0 10px var(--accent-glow)); }
   100% { transform: scale(1); filter: drop-shadow(0 0 0 transparent); }
 }
-#timer_panel.ticking #timer_countdown_text { animation: breathePulse 2s ease-in-out infinite; }
 
 *:focus-visible {
   outline: 1.5px solid var(--accent-primary) !important;
@@ -2330,7 +2634,7 @@ svg text { font-family: var(--font-stack); }
     transition-delay: 0s !important;
   }
   .bottom_sheet_drawer, .card_actions_expanded { transition: none !important; }
-  #timer_panel.ticking #timer_countdown_text { animation: none !important; }
+  #timer_panel.ticking .timer_ambient_glow { animation: none !important; }
   .app_panel { animation: none !important; }
 }
 
@@ -3195,70 +3499,7 @@ svg text { font-family: var(--font-stack); }
   transform: scale(1.1);
 }
 
-/* --- COMPACT GRID TAB LAYOUT FOR MOBILE SCENE TIMER TABS --- */
-@media (max-width: 480px) {
-  .timer_pills_container {
-    display: grid !important;
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 6px !important;
-    border-radius: 12px !important;
-    width: 100% !important;
-    padding: 6px !important;
-    max-width: 320px !important; /* Fits perfectly on narrow screens */
-    margin: 0 auto !important;
-  }
-  .pomo_type_tab {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    border-radius: 8px !important;
-    text-align: center !important;
-    height: 34px !important;
-    padding: 0 4px !important;
-    font-size: 11px !important;
-  }
-}
 
-/* --- FOCUS TIMER DURATION ADJUSTER CONTROLS --- */
-.timer_adjuster_row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  padding: 6px 12px;
-  border-radius: 20px;
-  max-width: 240px;
-  width: 100%;
-  margin: 12px auto 0 auto;
-}
-
-.timer_adjuster_row .adjust_btn {
-  background-color: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
-  font-size: 11px;
-  font-weight: 800;
-  padding: 4px 10px;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.timer_adjuster_row .adjust_btn:hover {
-  background-color: var(--accent-primary);
-  border-color: var(--accent-primary);
-  color: #ffffff;
-}
-
-.timer_adjuster_row .adjust_label {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
 
 /* --- HABIT TEMPLATE CHIPS & COMPACT DELETION --- */
 .habit_templates_chips {
@@ -4080,9 +4321,9 @@ body[data-style="neo-brutalism"] button.journal_save_trigger_btn,
 body[data-style="neo-brutalism"] button.journal_action_btn,
 body[data-style="neo-brutalism"] button.journal_tab_btn,
 body[data-style="neo-brutalism"] button.journal_submit_btn,
-body[data-style="neo-brutalism"] button.timer_control_main,
-body[data-style="neo-brutalism"] button.timer_control_sec,
-body[data-style="neo-brutalism"] button.adjust_btn,
+body[data-style="neo-brutalism"] button.timer_play_pause_btn,
+body[data-style="neo-brutalism"] button.timer_sec_btn,
+body[data-style="neo-brutalism"] button.timer_dur_btn,
 body[data-style="neo-brutalism"] button.floating_ctrl_btn,
 body[data-style="neo-brutalism"] button.journal_nav_item,
 body[data-style="neo-brutalism"] button.mood_pill,
@@ -4119,9 +4360,9 @@ body[data-style="neo-brutalism"] button.journal_save_trigger_btn:hover,
 body[data-style="neo-brutalism"] button.journal_action_btn:hover,
 body[data-style="neo-brutalism"] button.journal_tab_btn:hover,
 body[data-style="neo-brutalism"] button.journal_submit_btn:hover,
-body[data-style="neo-brutalism"] button.timer_control_main:hover,
-body[data-style="neo-brutalism"] button.timer_control_sec:hover,
-body[data-style="neo-brutalism"] button.adjust_btn:hover,
+body[data-style="neo-brutalism"] button.timer_play_pause_btn:hover,
+body[data-style="neo-brutalism"] button.timer_sec_btn:hover,
+body[data-style="neo-brutalism"] button.timer_dur_btn:hover,
 body[data-style="neo-brutalism"] button.floating_ctrl_btn:hover,
 body[data-style="neo-brutalism"] button.journal_nav_item:hover,
 body[data-style="neo-brutalism"] button.mood_pill:hover,
@@ -4154,9 +4395,9 @@ body[data-style="neo-brutalism"] button.journal_save_trigger_btn:active,
 body[data-style="neo-brutalism"] button.journal_action_btn:active,
 body[data-style="neo-brutalism"] button.journal_tab_btn:active,
 body[data-style="neo-brutalism"] button.journal_submit_btn:active,
-body[data-style="neo-brutalism"] button.timer_control_main:active,
-body[data-style="neo-brutalism"] button.timer_control_sec:active,
-body[data-style="neo-brutalism"] button.adjust_btn:active,
+body[data-style="neo-brutalism"] button.timer_play_pause_btn:active,
+body[data-style="neo-brutalism"] button.timer_sec_btn:active,
+body[data-style="neo-brutalism"] button.timer_dur_btn:active,
 body[data-style="neo-brutalism"] button.floating_ctrl_btn:active,
 body[data-style="neo-brutalism"] button.journal_nav_item:active,
 body[data-style="neo-brutalism"] button.mood_pill:active,
@@ -4391,7 +4632,7 @@ body[data-style="neo-brutalism"] .nav_tab.active:hover {
 
 /* Primary Action & Commit Buttons */
 body[data-style="neo-brutalism"] button.sheet_primary_commit:hover,
-body[data-style="neo-brutalism"] button.timer_control_main:hover,
+body[data-style="neo-brutalism"] button.timer_play_pause_btn:hover,
 body[data-style="neo-brutalism"] button.modal_primary_btn:hover,
 body[data-style="neo-brutalism"] button.nudge_focus_btn:hover,
 body[data-style="neo-brutalism"] button.journal_submit_btn:hover,
@@ -4408,7 +4649,7 @@ body[data-style="neo-brutalism"] button.banner_btn.secondary:hover,
 body[data-style="neo-brutalism"] button.sidebar_collapse_btn:hover,
 body[data-style="neo-brutalism"] button.mobile_hamburger_btn:hover,
 body[data-style="neo-brutalism"] button.setting_secondary_btn:hover:not(.danger),
-body[data-style="neo-brutalism"] button.adjust_btn:hover,
+body[data-style="neo-brutalism"] button.timer_dur_btn:hover,
 body[data-style="neo-brutalism"] button.floating_ctrl_btn:hover,
 body[data-style="neo-brutalism"] button.journal_nav_item:hover:not(.active),
 body[data-style="neo-brutalism"] button.journal_tab_btn:hover:not(.active),
@@ -4589,31 +4830,62 @@ body[data-style="neo-brutalism"] textarea:hover:not(:focus) {
 }
 
 /* Neo-Brutalism Overrides for Rectangular Timer */
-body[data-style="neo-brutalism"] .timer_rectangular_block {
+/* --- NEO-BRUTALISM: FUTURISTIC TIMER OVERRIDES --- */
+body[data-style="neo-brutalism"] .timer_mode_selector {
   border: var(--border-width) var(--border-style) var(--border-color-token) !important;
-  border-radius: var(--border-radius-lg-token) !important;
-  box-shadow: var(--shadow-md-token) !important;
-  background-color: var(--card-bg) !important;
-}
-
-body[data-style="neo-brutalism"] button.timer_btn_new {
-  border: var(--border-width) var(--border-style) var(--border-color-token) !important;
-  border-radius: var(--border-radius-sm-token) !important;
+  border-radius: 0px !important;
   box-shadow: var(--shadow-sm-token) !important;
-  text-transform: uppercase !important;
-  font-weight: 800 !important;
-  transition: transform 0.08s ease, box-shadow 0.08s ease, background-color 0.08s ease !important;
 }
 
-body[data-style="neo-brutalism"] button.timer_btn_new:hover:not(.disabled) {
+body[data-style="neo-brutalism"] .timer_mode_pill.active {
+  box-shadow: var(--shadow-md-token) !important;
+  border-radius: 0px !important;
+}
+
+body[data-style="neo-brutalism"] .timer_ring_svg circle {
+  transition: none !important;
+}
+
+body[data-style="neo-brutalism"] .timer_play_pause_btn {
+  border-radius: 0px !important;
+  box-shadow: var(--shadow-md-token) !important;
+  width: 72px; height: 72px;
+}
+
+body[data-style="neo-brutalism"] .timer_play_pause_btn:hover {
+  transform: translate(-3px, -3px) !important;
+  box-shadow: var(--shadow-lg-token) !important;
+}
+
+body[data-style="neo-brutalism"] .timer_play_pause_btn:active {
+  transform: translate(2px, 2px) !important;
+  box-shadow: var(--shadow-sm-token) !important;
+}
+
+body[data-style="neo-brutalism"] .timer_sec_btn {
+  border: var(--border-width) var(--border-style) var(--border-color-token) !important;
+  border-radius: 0px !important;
+  box-shadow: var(--shadow-sm-token) !important;
+}
+
+body[data-style="neo-brutalism"] .timer_sec_btn:hover {
   transform: translate(-2px, -2px) !important;
   box-shadow: var(--shadow-md-token) !important;
 }
 
-body[data-style="neo-brutalism"] button.timer_btn_new:active:not(.disabled) {
-  transform: translate(0, 0) !important;
+body[data-style="neo-brutalism"] .timer_duration_control {
+  border: var(--border-width) var(--border-style) var(--border-color-token) !important;
+  border-radius: 0px !important;
   box-shadow: var(--shadow-sm-token) !important;
 }
+
+body[data-style="neo-brutalism"] .timer_alarm_banner {
+  border: var(--border-width) var(--border-style) var(--border-color-token) !important;
+  border-radius: 0px !important;
+  box-shadow: var(--shadow-md-token) !important;
+}
+
+
 
 /* --- PRIORITY TASK COLLAPSIBLE GROUPS --- */
 .priority_group_section {

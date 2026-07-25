@@ -737,6 +737,24 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.emit("habitsUpdated", this.habits);
     }
 
+    updateHabit(id, data) {
+      const idx = this.habits.findIndex(h => h.id === id);
+      if (idx !== -1) {
+        this.habits[idx] = {
+          ...this.habits[idx],
+          title: data.title.trim(),
+          category: data.category || "Routine",
+          color: data.color || "indigo"
+        };
+
+        // Async Background Persist
+        StorageService.putItem("habits", this.habits[idx]);
+
+        this.emit("habitsUpdated", this.habits);
+        this.emit("notification", { message: `Habit "${data.title}" updated!`, type: "success" });
+      }
+    }
+
     toggleHabitCompletion(id, dateStr) {
       const habit = this.habits.find(h => h.id === id);
       if (habit) {
@@ -1509,10 +1527,38 @@ document.addEventListener("DOMContentLoaded", async function () {
             if (this.store.currentView === "routine") this.openRoutineSheet();
             else this.openBottomSheet();
           }
+
+          // Timer keyboard shortcuts (always active globally when timer is visible)
+          if (this.store.currentView === "timer") {
+            if (e.key === " " || e.code === "Space") {
+              e.preventDefault();
+              if (this.store.timer.isRunning) {
+                this.store.pauseTimer();
+              } else {
+                this.store.startTimer();
+              }
+            } else if (e.key === "r" || e.key === "R") {
+              e.preventDefault();
+              this.store.restartTimer();
+            }
+          }
         }
 
-        // "Escape" dismisses active drawers safely
+        // "Escape" - dismiss sheets, close mobile sidebar, stop timer alarm, exit DF mode
         if (e.key === "Escape") {
+          // If alarm is active, dismiss alarm first
+          if (this.store.isAlarmActive) {
+            this.dismissTimerAlarm();
+            return;
+          }
+
+          // If timer is running in stopwatch/pomodoro, stop it
+          if (this.store.currentView === "timer" && this.store.timer.isRunning) {
+            this.store.resetTimer();
+            this.closeDocumentPiP();
+            return;
+          }
+
           this.closeBottomSheet();
           this.closeRoutineSheet();
           this.desktopSidebar.classList.remove("mobile_reveal");
@@ -1690,6 +1736,20 @@ document.addEventListener("DOMContentLoaded", async function () {
           this.store.timer.totalDuration = seconds;
           this.updateTimerCountdown(this.store.timer);
           this.showToast(`Timer duration set to ${mins} minutes!`, "success");
+        });
+      }
+
+      // Alarm Dismiss Button Bindings
+      const dismissAlarmBtn = document.getElementById("timer_dismiss_alarm_btn");
+      if (dismissAlarmBtn) {
+        dismissAlarmBtn.addEventListener("click", () => this.dismissTimerAlarm());
+      }
+
+      const startNextBtn = document.getElementById("timer_start_next_btn");
+      if (startNextBtn) {
+        startNextBtn.addEventListener("click", () => {
+          this.dismissTimerAlarm();
+          this.store.startTimer();
         });
       }
 
@@ -2001,42 +2061,99 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
 
       const focusNudgeBox = document.getElementById("dash_focus_nudge_area");
-      const highPriorityTask = pendingTasks.find(t => t.priority === "High") || pendingTasks[0];
-      
-      if (highPriorityTask) {
+
+      // If timer is actively running, show live session status
+      if (this.store.timer.isRunning) {
+        const activeTask = this.store.timer.activeTaskId
+          ? this.store.tasks.find(tk => tk.id === this.store.timer.activeTaskId)
+          : null;
+        const mins = Math.floor(Math.abs(this.store.timer.duration) / 60);
+        const secs = Math.abs(this.store.timer.duration) % 60;
+        const timeLeft = `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+
         focusNudgeBox.innerHTML = `
           <div class="dash_nudge_prompt_card">
             <div class="nudge_text">
-              <span>RECOMMENDED ATOMIC TARGET</span>
-              <h3>${this.escapeHTML(highPriorityTask.title)}</h3>
-              <p>${highPriorityTask.description ? this.escapeHTML(highPriorityTask.description) : 'Locked focus block'}</p>
+              <span>🔴 FOCUS SESSION ACTIVE</span>
+              <h3>${activeTask ? this.escapeHTML(activeTask.title) : 'Deep Work'}</h3>
+              <p>${timeLeft} remaining · ${this.store.timer.type === 'pomodoro' ? 'Focus Block' : this.store.timer.type === 'shortBreak' ? 'Short Break' : this.store.timer.type === 'longBreak' ? 'Long Break' : 'Stopwatch'}</p>
             </div>
-            <button class="nudge_focus_btn" id="btn_nudge_launch_focus">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                <polygon points="5 3 19 12 5 21 5 3"></polygon>
-              </svg>
-              Focus (25m)
-            </button>
+            <div style="display: flex; gap: 8px;">
+              <button class="nudge_focus_btn" id="btn_nudge_goto_timer">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                View Timer
+              </button>
+              <button class="nudge_focus_btn secondary" id="btn_nudge_stop_focus" style="background-color: rgba(239,68,68,0.15); color: #ef4444; box-shadow: none;">
+                Stop
+              </button>
+            </div>
           </div>
         `;
 
-        document.getElementById("btn_nudge_launch_focus").addEventListener("click", () => {
+        document.getElementById("btn_nudge_goto_timer").addEventListener("click", () => {
           this.store.setView("timer");
-          this.store.startTimer(highPriorityTask.id);
+        });
+        document.getElementById("btn_nudge_stop_focus").addEventListener("click", () => {
+          this.store.resetTimer();
         });
       } else {
-        focusNudgeBox.innerHTML = `
-          <div class="dash_nudge_prompt_card clean_slate">
-            <div class="nudge_text">
-              <span>SYSTEM COMPANION</span>
-              <h3>All actions accomplished!</h3>
-              <p>Consider reading, stretching, or scheduling upcoming objectives.</p>
-            </div>
-            <button class="nudge_focus_btn secondary" id="btn_nudge_quick_add">+ Capture Goal</button>
-          </div>
-        `;
+        // Show today's focus summary
+        const todayStr = new Date().toISOString().split("T")[0];
+        let todayFocusMin = 0;
+        let todaySessions = 0;
+        this.store.tasks.forEach(t => {
+          if (t.focusSessions) {
+            t.focusSessions.forEach(fs => {
+              const fsDate = fs.startTime ? fs.startTime.split("T")[0] : null;
+              if (fsDate === todayStr) {
+                todayFocusMin += fs.duration || 0;
+                todaySessions++;
+              }
+            });
+          }
+        });
 
-        document.getElementById("btn_nudge_quick_add").addEventListener("click", () => this.openBottomSheet());
+        const focusSummaryText = todaySessions > 0
+          ? `${todaySessions} session${todaySessions > 1 ? 's' : ''} · ${(todayFocusMin / 60).toFixed(1)}h focused today`
+          : "No focus sessions today yet";
+
+        const highPriorityTask = pendingTasks.find(t => t.priority === "High") || pendingTasks[0];
+
+        if (highPriorityTask) {
+          focusNudgeBox.innerHTML = `
+            <div class="dash_nudge_prompt_card">
+              <div class="nudge_text">
+                <span>RECOMMENDED ATOMIC TARGET · ${focusSummaryText}</span>
+                <h3>${this.escapeHTML(highPriorityTask.title)}</h3>
+                <p>${highPriorityTask.description ? this.escapeHTML(highPriorityTask.description) : 'Locked focus block'}</p>
+              </div>
+              <button class="nudge_focus_btn" id="btn_nudge_launch_focus">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+                Focus (${highPriorityTask.estimatedDuration || 25}m)
+              </button>
+            </div>
+          `;
+
+          document.getElementById("btn_nudge_launch_focus").addEventListener("click", () => {
+            this.store.setView("timer");
+            this.store.startTimer(highPriorityTask.id);
+          });
+        } else {
+          focusNudgeBox.innerHTML = `
+            <div class="dash_nudge_prompt_card clean_slate">
+              <div class="nudge_text">
+                <span>SYSTEM COMPANION · ${focusSummaryText}</span>
+                <h3>All actions accomplished!</h3>
+                <p>Consider reading, stretching, or scheduling upcoming objectives.</p>
+              </div>
+              <button class="nudge_focus_btn secondary" id="btn_nudge_quick_add">+ Capture Goal</button>
+            </div>
+          `;
+
+          document.getElementById("btn_nudge_quick_add").addEventListener("click", () => this.openBottomSheet());
+        }
       }
 
       const completedTodayCount = this.getCompletedTodayCount();
@@ -2434,12 +2551,29 @@ document.addEventListener("DOMContentLoaded", async function () {
       if (routineSubmitBtn) routineSubmitBtn.disabled = false;
     }
 
-    openHabitSheet() {
+    openHabitSheet(habit = null) {
       this.habitSheet.classList.add("visible");
       this.habitSheetOverlay.classList.add("visible");
       document.body.classList.add("modal-open");
 
-      this.habitForm.reset();
+      const formTitle = document.getElementById("habit_sheet_title");
+      const submitBtn = this.habitForm.querySelector("button[type='submit']");
+
+      if (habit) {
+        this.activeEditingHabitId = habit.id;
+        if (formTitle) formTitle.textContent = "Edit Habit";
+        if (submitBtn) submitBtn.textContent = "Save Changes";
+
+        document.getElementById("habit_title").value = habit.title;
+        document.getElementById("habit_category").value = habit.category || "Routine";
+        document.getElementById("habit_color").value = habit.color || "indigo";
+      } else {
+        this.activeEditingHabitId = null;
+        if (formTitle) formTitle.textContent = "Create Atomic Habit";
+        if (submitBtn) submitBtn.textContent = "Save Habit";
+        this.habitForm.reset();
+      }
+
       setTimeout(() => document.getElementById("habit_title").focus(), 200);
     }
 
@@ -3257,7 +3391,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         shutdownCheckbox.addEventListener("change", () => {
           triggerAutosave();
           if (shutdownCheckbox.checked) {
-            this.emit("celebrate", { elementId: "btn_j_shutdown_trigger" });
+            this.store.emit("celebrate", { elementId: "btn_j_shutdown_trigger" });
           }
         });
       }
@@ -3556,6 +3690,7 @@ document.addEventListener("DOMContentLoaded", async function () {
             </span>
             ${remainingBadge}
             ${task.estimatedDuration ? `<span class="meta_item duration_badge"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>${task.estimatedDuration}m</span>` : ""}
+            ${task.focusSessions && task.focusSessions.length > 0 ? `<span class="meta_item focus_badge"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 4px;"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2z"></path></svg>${task.focusSessions.reduce((s, fs) => s + (fs.duration || 0), 0)}m focused</span>` : ""}
             <span class="meta_item xp_badge"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>+${(task.estimatedDuration || 25) * 4} XP</span>
           </div>
 
@@ -3888,29 +4023,106 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       this.updateTimerCountdown(t);
 
+      // Update timer state label
+      const subMsg = document.getElementById("timer_sub_msg");
+      if (subMsg) {
+        const labels = {
+          pomodoro: "Deep Focus",
+          shortBreak: "Micro Break",
+          longBreak: "Restoration",
+          stopwatch: "Free Flow"
+        };
+        subMsg.textContent = labels[t.type] || "Ready";
+      }
+
       document.getElementById("timer_panel").classList.toggle("ticking", t.isRunning);
 
-      document.getElementById("timer_pomo_btn").className = `pomo_type_tab ${t.type === "pomodoro" ? "active" : ""}`;
-      document.getElementById("timer_short_btn").className = `pomo_type_tab ${t.type === "shortBreak" ? "active" : ""}`;
-      document.getElementById("timer_long_btn").className = `pomo_type_tab ${t.type === "longBreak" ? "active" : ""}`;
-      document.getElementById("timer_stopwatch_btn").className = `pomo_type_tab ${t.type === "stopwatch" ? "active" : ""}`;
+      // Update mode pills
+      document.getElementById("timer_pomo_btn").className = `timer_mode_pill ${t.type === "pomodoro" ? "active" : ""}`;
+      document.getElementById("timer_short_btn").className = `timer_mode_pill ${t.type === "shortBreak" ? "active" : ""}`;
+      document.getElementById("timer_long_btn").className = `timer_mode_pill ${t.type === "longBreak" ? "active" : ""}`;
+      document.getElementById("timer_stopwatch_btn").className = `timer_mode_pill ${t.type === "stopwatch" ? "active" : ""}`;
 
+      // Update session cycle dots
+      this.updateSessionCycle(t);
+
+      // Toggle play/pause button visibility
       const playBtn = document.getElementById("timer_play_btn");
       const pauseBtn = document.getElementById("timer_pause_btn");
 
       if (playBtn && pauseBtn) {
         if (t.isRunning) {
-          playBtn.disabled = true;
-          playBtn.classList.add("disabled");
-          pauseBtn.disabled = false;
-          pauseBtn.classList.remove("disabled");
+          playBtn.style.display = "none";
+          pauseBtn.style.display = "flex";
         } else {
-          playBtn.disabled = false;
-          playBtn.classList.remove("disabled");
-          pauseBtn.disabled = true;
-          pauseBtn.classList.add("disabled");
+          playBtn.style.display = "flex";
+          pauseBtn.style.display = "none";
         }
       }
+
+      // Show/hide alarm dismiss card
+      this.renderAlarmUI();
+    }
+
+    updateSessionCycle(t) {
+      const sessionCount = t.completedSessions || 0;
+      const dots = document.querySelectorAll("#timer_mini_cycle .mini_dot");
+      const counter = document.getElementById("cycle_counter_text");
+
+      dots.forEach((dot, idx) => {
+        dot.classList.remove("active", "completed");
+        if (idx < sessionCount) dot.classList.add("completed");
+        if (idx === sessionCount && (t.type === "pomodoro" || t.type === "shortBreak")) dot.classList.add("active");
+      });
+
+      if (counter) {
+        if (!t.isRunning && sessionCount === 0 && t.type !== "pomodoro") {
+          counter.textContent = "Ready to focus";
+        } else if (t.type === "pomodoro") {
+          counter.textContent = `Focus ${sessionCount + 1}/4 · ${sessionCount >= 4 ? 'Long break earned!' : 'Keep pushing'}`;
+        } else if (t.type === "shortBreak") {
+          counter.textContent = `Break · Session ${sessionCount} done`;
+        } else if (t.type === "longBreak") {
+          counter.textContent = "Full restoration break";
+        } else {
+          counter.textContent = "Free timing mode";
+        }
+      }
+    }
+
+    renderAlarmUI() {
+      const alarmCard = document.getElementById("timer_alarm_dismiss");
+      const alarmTitle = document.getElementById("alarm_dismiss_title");
+      const alarmDesc = document.getElementById("alarm_dismiss_desc");
+      const startNextBtn = document.getElementById("timer_start_next_btn");
+
+      if (!alarmCard) return;
+
+      if (this.store.isAlarmActive) {
+        const t = this.store.timer;
+        const nextType = t.type;
+        const nextLabels = {
+          pomodoro: "Ready for another focus session?",
+          shortBreak: "Break time! Rest your mind.",
+          longBreak: "Long break! You've earned it."
+        };
+
+        alarmCard.style.display = "flex";
+        if (alarmTitle) alarmTitle.textContent = "Session Complete!";
+        if (alarmDesc) alarmDesc.textContent = nextLabels[nextType] || "Take a moment to recharge.";
+        if (startNextBtn) {
+          startNextBtn.style.display = "inline-block";
+          startNextBtn.textContent = "Start " + (nextType === "pomodoro" ? "Focus" : "Break");
+        }
+      } else {
+        alarmCard.style.display = "none";
+      }
+    }
+
+    dismissTimerAlarm() {
+      this.store.stopAlarm();
+      const alarmCard = document.getElementById("timer_alarm_dismiss");
+      if (alarmCard) alarmCard.style.display = "none";
     }
 
     updateTimerCountdown(t) {
@@ -3924,33 +4136,39 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       document.title = t.isRunning ? `(${formatted}) Focused Work` : "Aurora Companion";
 
-      // Rectangular horizontal progress bar fill
-      const progressBar = document.getElementById("timer_progress_bar");
-      if (progressBar) {
-        let percentage = 100;
-        if (t.type !== "stopwatch" && t.totalDuration > 0) {
-          percentage = (t.duration / t.totalDuration) * 100;
-        } else if (t.type === "stopwatch") {
-          percentage = ((t.duration % 60) / 60) * 100;
-        }
-        progressBar.style.width = `${percentage}%`;
+      // Urgent pulse in last 60 seconds for pomodoro/breaks
+      const timerPanel = document.getElementById("timer_panel");
+      if (timerPanel) {
+        const isUrgent = t.isRunning && t.type !== "stopwatch" && t.duration <= 60 && t.duration > 0;
+        timerPanel.classList.toggle("urgent", isUrgent);
       }
 
-      const ring = document.getElementById("timer_progress_ring_circle");
+      // Update SVG ring progress
+      const ring = document.getElementById("timer_ring_progress");
       if (ring) {
-        if (!this._timerCirc) {
-          const radius = ring.r.baseVal.value || 45;
-          this._timerCirc = 2 * Math.PI * radius;
+        if (!this._newRingCirc) {
+          const radius = ring.r.baseVal.value || 125;
+          this._newRingCirc = 2 * Math.PI * radius;
         }
-        const circ = this._timerCirc;
-        
-        let percentage = 1;
-        if (t.type !== "stopwatch" && t.totalDuration > 0) percentage = t.duration / t.totalDuration;
-        else if (t.type === "stopwatch") percentage = (t.duration % 60) / 60;
+        const circ = this._newRingCirc;
 
-        const offset = circ - (percentage * circ);
+        let percentage = 1;
+        if (t.type !== "stopwatch" && t.totalDuration > 0) {
+          percentage = t.duration / t.totalDuration;
+        } else if (t.type === "stopwatch") {
+          percentage = 0;
+        }
+
+        const offset = circ * (1 - percentage);
         ring.style.strokeDasharray = `${circ} ${circ}`;
         ring.style.strokeDashoffset = offset;
+
+        // Switch to red gradient when urgent
+        if (t.isRunning && t.type !== "stopwatch" && t.duration <= 60 && t.duration > 0) {
+          ring.setAttribute("stroke", "url(#ringGradientUrgent)");
+        } else {
+          ring.setAttribute("stroke", "url(#ringGradient)");
+        }
       }
     }
 
@@ -3963,21 +4181,87 @@ document.addEventListener("DOMContentLoaded", async function () {
       const total = this.store.tasks.filter(t => t.id !== "general_focus").length;
       const completionRate = total > 0 ? Math.round((completed.length / total) * 100) : 0;
 
+      const todayStr = new Date().toISOString().split("T")[0];
       let totalFocusMin = 0;
+      let todayFocusMin = 0;
+      let totalSessions = 0;
+      let todaySessions = 0;
+
       this.store.tasks.forEach(t => {
         if (t.focusSessions) {
-          t.focusSessions.forEach(fs => totalFocusMin += fs.duration || 0);
+          t.focusSessions.forEach(fs => {
+            totalFocusMin += fs.duration || 0;
+            totalSessions++;
+            const fsDate = fs.startTime ? fs.startTime.split("T")[0] : null;
+            if (fsDate === todayStr) {
+              todayFocusMin += fs.duration || 0;
+              todaySessions++;
+            }
+          });
         }
       });
 
       document.getElementById("stat_completed_today").textContent = this.getCompletedTodayCount();
-      document.getElementById("stat_total_focus_hours").textContent = `${(totalFocusMin / 60).toFixed(1)}h`;
+      document.getElementById("stat_total_focus_hours").textContent = `${(todayFocusMin / 60).toFixed(1)}h`;
       document.getElementById("stat_weekly_completion_pct").textContent = `${completionRate}%`;
-      document.getElementById("stat_total_active_streak").textContent = `${this.store.streak || 0}d`;
+      const maxStreak = this.store.habits.reduce((max, h) => Math.max(max, h.streak || 0), 0);
+      document.getElementById("stat_total_active_streak").textContent = `${maxStreak}d`;
+
+      // Update stat labels to be more descriptive
+      const focusLabel = document.querySelector("#stat_total_focus_hours").previousElementSibling;
+      if (focusLabel) focusLabel.textContent = `Focus Hrs Today (${todaySessions} sessions)`;
 
       this.renderCompletionLineChart(completed);
       this.renderFocusTimeBarChart();
       this.renderCategoryDonutChart(completed, pending);
+
+      // Render focus sessions table
+      this.renderFocusSessionsTable();
+    }
+
+    renderFocusSessionsTable() {
+      const wrapper = document.getElementById("chart_focus_distribution");
+      if (!wrapper) return;
+
+      const todayStr = new Date().toISOString().split("T")[0];
+      const tasksWithFocusToday = this.store.tasks
+        .filter(t => t.focusSessions && t.focusSessions.some(fs => fs.startTime && fs.startTime.startsWith(todayStr)))
+        .sort((a, b) => {
+          const aMin = a.focusSessions.reduce((s, fs) => s + (fs.duration || 0), 0);
+          const bMin = b.focusSessions.reduce((s, fs) => s + (fs.duration || 0), 0);
+          return bMin - aMin;
+        });
+
+      if (tasksWithFocusToday.length === 0) {
+        wrapper.innerHTML = `<div class="empty_state_text" style="text-align: center; padding: 30px 10px; color: var(--text-muted);">No focus sessions logged today. Start the timer!</div>`;
+        return;
+      }
+
+      wrapper.innerHTML = `
+        <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px;">
+          <thead>
+            <tr style="border-bottom: 1px solid var(--border-color);">
+              <th style="text-align: left; padding: 8px 4px; color: var(--text-muted); font-size: 11px; font-weight: 800;">Task</th>
+              <th style="text-align: right; padding: 8px 4px; color: var(--text-muted); font-size: 11px; font-weight: 800;">Sessions</th>
+              <th style="text-align: right; padding: 8px 4px; color: var(--text-muted); font-size: 11px; font-weight: 800;">Time</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tasksWithFocusToday.map(t => {
+              const todaySessions = t.focusSessions.filter(fs => fs.startTime && fs.startTime.startsWith(todayStr));
+              const sessions = todaySessions.length;
+              const totalMin = todaySessions.reduce((s, fs) => s + (fs.duration || 0), 0);
+              return `
+                <tr style="border-bottom: 1px solid var(--border-color);">
+                  <td style="padding: 10px 4px; color: var(--text-primary); font-weight: 600;">${this.escapeHTML(t.title)}</td>
+                  <td style="padding: 10px 4px; text-align: right; color: var(--accent-primary); font-weight: 700;">${sessions}</td>
+                  <td style="padding: 10px 4px; text-align: right; color: var(--text-secondary); font-weight: 600;">${totalMin}m</td>
+                </tr>
+              `;
+            }).join("")}
+          </tbody>
+        </table>
+      `;
     }
 
     getCompletedTodayCount() {
@@ -4490,6 +4774,14 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
 
     toggleAlarmUI(active) {
+      // Only show floating alarm banner when NOT on the timer page
+      // The timer page has its own in-panel alarm card (renderAlarmUI)
+      if (this.store.currentView === "timer") {
+        // Defer to renderAlarmUI for timer page
+        this.renderAlarmUI();
+        return;
+      }
+
       let banner = document.getElementById("floating_alarm_banner");
       if (active) {
         if (!banner) {
@@ -4753,6 +5045,12 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     syncFloatingTimerTick(t) {
       if (!this.floatingTimerWidget) return;
+
+      // Update sub label based on timer type
+      if (this.floatingTimerSub) {
+        const subLabels = { pomodoro: "Focus", shortBreak: "Break", longBreak: "Rest", stopwatch: "Free" };
+        this.floatingTimerSub.textContent = subLabels[t.type] || "Focus";
+      }
 
       const mins = Math.floor(Math.abs(t.duration) / 60);
       const secs = Math.abs(t.duration) % 60;
