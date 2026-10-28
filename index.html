@@ -406,6 +406,9 @@
                 </button>
             </div>
 
+            <!-- Task Detail / Session Context Pill -->
+            <div id="timer_task_details" class="timer_task_detail_container"></div>
+
             <!-- Central Circular Timer Display -->
             <div class="timer_ring_stage">
                 <svg class="timer_ring_svg" viewBox="0 0 300 300">
@@ -455,34 +458,27 @@
                 </div>
             </div>
 
-            <!-- Primary Action Button -->
-            <div class="timer_primary_action">
-                <button id="timer_play_btn" class="timer_play_pause_btn" aria-label="Start Timer" title="Start (Space)">
-                    <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
-                </button>
-                <button id="timer_pause_btn" class="timer_play_pause_btn" aria-label="Pause Timer" title="Pause (Space)" style="display:none;">
-                    <svg viewBox="0 0 24 24" width="28" height="28" fill="currentColor"><rect x="5" y="3" width="5" height="18" rx="1.5"/><rect x="14" y="3" width="5" height="18" rx="1.5"/></svg>
-                </button>
-            </div>
-
-            <!-- Secondary Controls Row -->
-            <div class="timer_secondary_controls">
+            <!-- Controls Deck: Unified Interactive Action Hub -->
+            <div class="timer_controls_deck" id="timer_adjuster">
+                <button class="timer_dur_btn" id="btn_timer_dec" title="Decrease 5 minutes (min 5m)">-5m</button>
                 <button id="timer_restart_btn" class="timer_sec_btn" aria-label="Restart" title="Restart (R)">
-                    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                </button>
+                <div class="timer_primary_action">
+                    <button id="timer_play_btn" class="timer_play_pause_btn" aria-label="Start Timer" title="Start (Space)">
+                        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+                    </button>
+                    <button id="timer_pause_btn" class="timer_play_pause_btn" aria-label="Pause Timer" title="Pause (Space)" style="display:none;">
+                        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><rect x="5" y="3" width="5" height="18" rx="1.5"/><rect x="14" y="3" width="5" height="18" rx="1.5"/></svg>
+                    </button>
+                </div>
+                <button id="timer_skip_btn" class="timer_sec_btn" aria-label="Skip" title="Skip Session">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
                 </button>
                 <button id="timer_stop_btn" class="timer_sec_btn danger" aria-label="Stop" title="Stop (Esc)">
-                    <svg viewBox="0 0 24 24" width="17" height="17" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
                 </button>
-                <button id="timer_skip_btn" class="timer_sec_btn" aria-label="Skip" title="Skip Session">
-                    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
-                </button>
-            </div>
-
-            <!-- Duration Adjuster -->
-            <div class="timer_duration_control" id="timer_adjuster">
-                <button class="timer_dur_btn" id="btn_timer_dec">-5</button>
-                <span class="timer_dur_label">min</span>
-                <button class="timer_dur_btn" id="btn_timer_inc">+5</button>
+                <button class="timer_dur_btn" id="btn_timer_inc" title="Increase 5 minutes (max 120m)">+5m</button>
             </div>
 
             <!-- Alarm Dismiss Card -->
@@ -507,11 +503,8 @@
                 <span><kbd>Space</kbd> Play/Pause</span>
                 <span><kbd>R</kbd> Restart</span>
                 <span><kbd>Esc</kbd> Stop</span>
-                <span><kbd>Click</kbd> Timer to set custom</span>
+                <span><kbd>Click</kbd> Set custom</span>
             </div>
-
-            <!-- Task Detail -->
-            <div id="timer_task_details" class="timer_task_detail_container"></div>
         </section>
 
         <!-- =====================================================================

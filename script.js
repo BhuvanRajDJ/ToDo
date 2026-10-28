@@ -1939,6 +1939,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.consistencyPanel.style.display = (active === "consistency") ? "block" : "none";
       this.consistencyHistoryPanel.style.display = (active === "consistency_history") ? "block" : "none";
       this.timerSection.style.display = (active === "timer") ? "flex" : "none";
+      document.body.classList.toggle("view-timer-active", active === "timer");
       this.insightsSection.style.display = (active === "insights") ? "block" : "none";
       this.journalPanel.style.display = (active === "journal") ? "block" : "none";
       this.settingsSection.style.display = (active === "settings") ? "block" : "none";
