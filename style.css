@@ -1,10 +1,12 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
 /* =========================================================================
    AURORA COMPANION - PREMIUM PSYCHOLOGY-DRIVEN PRODUCTION STYLESHEETS
    ========================================================================= */
 
 /* --- 1. CORE VARIABLES & DESIGN TOKENS --- */
 :root {
-  --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  --font-stack: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
   --transition-smooth: 0.22s cubic-bezier(0.16, 1, 0.3, 1);
   --transition-spring: 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.15);
   
@@ -1224,7 +1226,402 @@ h1, h2, h3, h4, h5, h6 {
   box-shadow: 0 4px 10px var(--accent-glow);
 }
 
-/* --- 9. CONSISTENCY VIEW (GRID MATRICES & HEATMAPS) --- */
+/* --- 9. CONSISTENCY VIEW (MOTIVATION, SPONTANEOUS ADD, GRID MATRICES, HEATMAPS & AI COACH) --- */
+
+/* 1. Habit Motivation & Daily Momentum Deck */
+.habit_motivation_card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-sm);
+}
+
+.habit_motivation_stats_row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.habit_stat_item {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.habit_stat_label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+.habit_stat_val_row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.habit_stat_val {
+  font-size: 24px;
+  font-weight: 900;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.habit_stat_badge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 12px;
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--accent-primary);
+}
+
+.habit_stat_badge.accent {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+
+.habit_stat_badge.flame {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+
+.habit_stat_sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.habit_progress_bar_track {
+  width: 100%;
+  height: 8px;
+  background-color: var(--border-color);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 2px;
+}
+
+.habit_progress_bar_fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent-primary), #10b981);
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.habit_motivation_quote_box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(16, 185, 129, 0.06) 100%);
+  border: 1px dashed var(--accent-primary);
+  border-radius: var(--border-radius);
+  padding: 12px 16px;
+}
+
+.habit_quote_icon {
+  font-size: 18px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+#habit_motivation_quote {
+  font-size: 12px;
+  font-weight: 600;
+  font-style: italic;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* 2. Spontaneous Quick-Add Deck & Presets */
+.habit_spontaneous_deck {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-sm);
+}
+
+.habit_quick_form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.habit_quick_input_wrap {
+  flex: 1;
+  min-width: 220px;
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.habit_quick_icon {
+  position: absolute;
+  left: 12px;
+  font-size: 14px;
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.habit_quick_input {
+  width: 100%;
+  height: 42px;
+  padding: 0 14px 0 36px;
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--border-radius);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.habit_quick_input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.habit_quick_cat_select {
+  height: 42px;
+  padding: 0 12px;
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--border-radius);
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.habit_quick_submit_btn {
+  height: 42px;
+  padding: 0 18px;
+  background-color: var(--accent-primary);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--border-radius);
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.1s ease, filter 0.15s ease;
+}
+
+.habit_quick_submit_btn:hover {
+  filter: brightness(1.1);
+}
+
+.habit_custom_dialog_btn {
+  height: 42px;
+  padding: 0 14px;
+  background: var(--bg-secondary);
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--border-radius);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.habit_custom_dialog_btn:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+.habit_presets_row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.presets_hint {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.presets_scroll_area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.presets_scroll_area::-webkit-scrollbar { display: none; }
+
+.habit_preset_chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.habit_preset_chip:hover {
+  background: var(--accent-primary);
+  color: #ffffff;
+  border-color: var(--accent-primary);
+  transform: translateY(-1px);
+}
+
+/* 3. AI Health Alert / Intervention Banner */
+.habit_ai_advisory_card {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.12) 0%, rgba(239, 68, 68, 0.08) 100%);
+  border: 1.5px solid #f59e0b;
+  border-radius: var(--border-radius-lg);
+  padding: 18px 20px;
+  margin-bottom: 20px;
+  animation: slideDownFade 0.3s ease-out;
+}
+
+@keyframes slideDownFade {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ai_advisory_header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.ai_advisory_badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #f59e0b;
+  color: #000000;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-radius: 20px;
+}
+
+.ai_advisory_close {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  font-size: 14px;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.ai_advisory_body h4 {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.ai_advisory_body p {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.ai_advisory_alt_box {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-left: 4px solid #10b981;
+  border-radius: var(--border-radius);
+  padding: 10px 14px;
+  margin-bottom: 14px;
+}
+
+.ai_advisory_alt_box .alt_label {
+  display: block;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #10b981;
+  margin-bottom: 2px;
+}
+
+.ai_advisory_alt_box strong {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.ai_advisory_alt_box .alt_tip {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin: 4px 0 0 0;
+  font-style: italic;
+}
+
+.ai_advisory_actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ai_action_btn {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: var(--border-radius);
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ai_action_btn.primary {
+  background-color: #10b981;
+  color: #ffffff;
+  border: none;
+}
+.ai_action_btn.primary:hover {
+  filter: brightness(1.1);
+}
+
+.ai_action_btn.secondary {
+  background-color: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+}
+.ai_action_btn.secondary:hover {
+  color: var(--text-primary);
+  border-color: var(--text-muted);
+}
+
+/* 4. Weekly Habit Checklist Matrix Card */
 .consistency_matrix_card {
   background-color: var(--card-bg);
   border: 1px solid var(--border-color);
@@ -1239,6 +1636,16 @@ h1, h2, h3, h4, h5, h6 {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.matrix_title_with_date {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+  flex-wrap: wrap;
 }
 
 .matrix_header_row h3 {
@@ -1249,6 +1656,60 @@ h1, h2, h3, h4, h5, h6 {
 .matrix_header_row p {
   font-size: 11px;
   color: var(--text-muted);
+}
+
+.habit_date_range_pill {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--accent-primary);
+}
+
+.matrix_week_navigator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.habit_nav_arrow_btn {
+  height: 32px;
+  padding: 0 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.habit_nav_arrow_btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.habit_nav_today_btn {
+  height: 32px;
+  padding: 0 12px;
+  background: var(--accent-primary);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--border-radius);
+  font-size: 11.5px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.habit_nav_today_btn:hover {
+  opacity: 0.9;
 }
 
 .matrix_addition_btn {
@@ -1281,7 +1742,7 @@ h1, h2, h3, h4, h5, h6 {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-muted);
-  padding: 12px 10px;
+  padding: 10px 8px;
   border-bottom: 1.5px solid var(--border-color);
   text-align: center;
 }
@@ -1289,7 +1750,7 @@ h1, h2, h3, h4, h5, h6 {
 .matrix_table th:first-child { text-align: left; }
 
 .matrix_table td {
-  padding: 14px 10px;
+  padding: 12px 8px;
   border-bottom: 1px solid var(--border-color);
   vertical-align: middle;
   text-align: center;
@@ -1297,8 +1758,73 @@ h1, h2, h3, h4, h5, h6 {
 
 .matrix_table td:first-child { text-align: left; }
 
+/* Dynamic Table Header Day/Date Blocks */
+.matrix_th_content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.matrix_th_day {
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+.matrix_th_date {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+
+.matrix_th_month {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.matrix_today_indicator {
+  font-size: 8px;
+  font-weight: 900;
+  background: var(--accent-primary);
+  color: #ffffff;
+  padding: 1px 4px;
+  border-radius: 4px;
+  margin-top: 2px;
+  letter-spacing: 0.5px;
+}
+
+.matrix_table th.active_today {
+  background: rgba(99, 102, 241, 0.08);
+  border-bottom: 2px solid var(--accent-primary);
+}
+
+.matrix_table th.active_today .matrix_th_day,
+.matrix_table th.active_today .matrix_th_date {
+  color: var(--accent-primary);
+}
+
+.matrix_table td.active_today {
+  background: rgba(99, 102, 241, 0.04);
+}
+
+.habit_cat_pill {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+}
+
 .habit_row_title_cell {
-  min-width: 160px;
+  min-width: 170px;
 }
 
 .habit_row_title {
@@ -1327,7 +1853,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Tactile circular checklist matrix checkbox pills */
 .habit_matrix_check_pill {
-  width: 26px; height: 26px;
+  width: 28px; height: 28px;
   border-radius: 50%;
   border: 1.5px dashed var(--text-muted);
   display: inline-flex;
@@ -1336,6 +1862,7 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 12px;
   font-weight: 800;
   transition: var(--transition-spring);
+  cursor: pointer;
 }
 
 .habit_matrix_check_pill.completed {
@@ -1350,48 +1877,200 @@ h1, h2, h3, h4, h5, h6 {
 .habit_matrix_check_pill.completed.bg-rose { background-color: #f43f5e !important; }
 .habit_matrix_check_pill.completed.bg-amber { background-color: #f59e0b !important; }
 
-/* Active today grid highlights */
-.matrix_table td.active_today {
-  background-color: rgba(255, 255, 255, 0.01);
+.habit_matrix_check_pill.future_pill {
+  opacity: 0.35;
+  cursor: not-allowed;
+  border-style: dotted;
 }
 
-/* GitHub Contribution heatmap layout */
+/* 5 & 6. Bottom Deck Grid: Compact 1/4th Heatmap + 3/4th AI Coach */
+.consistency_deck_grid {
+  display: grid;
+  grid-template-columns: 310px 1fr;
+  gap: 20px;
+  align-items: stretch;
+  margin-top: 24px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 980px) {
+  .consistency_deck_grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* 5. Compact Calendar Monthly Heatmap Card (Occupies ~1/4th Space) */
 .consistency_heatmap_card {
   background-color: var(--card-bg);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius-lg);
-  padding: 20px;
+  padding: 16px;
   box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  margin-bottom: 0;
 }
 
-.consistency_heatmap_card h3 {
-  font-size: 15px;
+.heatmap_header_row.compact {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+  gap: 6px;
+}
+
+.heatmap_title_stack {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.heatmap_title_stack h3 {
+  font-size: 13.5px;
   font-weight: 800;
+  margin: 0;
 }
 
 .heatmap_sub {
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--text-muted);
-  margin-bottom: 14px;
+  margin: 0 0 10px 0;
+}
+
+.matrix_week_navigator.mini {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.habit_nav_arrow_btn.mini {
+  height: 26px;
+  width: 26px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--border-radius);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.habit_nav_arrow_btn.mini:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.habit_nav_today_btn.mini {
+  height: 26px;
+  padding: 0 8px;
+  font-size: 10px;
+  font-weight: 800;
+  border-radius: var(--border-radius);
+  background: var(--accent-primary);
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
 }
 
 .heatmap_box {
   width: 100%;
 }
 
-.heatmap_shades_legend {
+.cal_heatmap_grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  width: 100%;
+}
+
+.cal_th {
+  font-size: 9.5px;
+  font-weight: 800;
+  color: var(--text-muted);
+  text-align: center;
+  padding-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.cal_cell {
+  aspect-ratio: 1;
+  border-radius: 4px;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
-  font-size: 10px;
+  justify-content: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: transform 0.12s ease, filter 0.12s ease;
+  user-select: none;
+}
+
+.cal_cell.empty {
+  visibility: hidden;
+}
+
+.cal_cell.density-0 {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+}
+
+.cal_cell.density-1 {
+  background-color: rgba(16, 185, 129, 0.22);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #10b981;
+}
+
+.cal_cell.density-2 {
+  background-color: rgba(16, 185, 129, 0.6);
+  border: 1px solid #10b981;
+  color: #ffffff;
+}
+
+.cal_cell.density-3 {
+  background-color: #10b981;
+  border: 1px solid #059669;
+  color: #ffffff;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.25);
+}
+
+.cal_cell.active_today {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 1px;
+}
+
+.cal_cell:hover:not(.empty) {
+  transform: scale(1.15);
+  z-index: 2;
+  filter: brightness(1.2);
+}
+
+.heatmap_shades_legend.compact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 9.5px;
   color: var(--text-muted);
   font-weight: 700;
   margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border-color);
+}
+
+.shades_swatches {
+  display: flex;
+  align-items: center;
+  gap: 3px;
 }
 
 .shade_box {
-  width: 10px; height: 10px;
+  width: 9px; height: 9px;
   border-radius: 2px;
 }
 
@@ -1399,6 +2078,274 @@ h1, h2, h3, h4, h5, h6 {
 .shade_box.shade-1 { background-color: rgba(16, 185, 129, 0.25); }
 .shade_box.shade-2 { background-color: rgba(16, 185, 129, 0.6); }
 .shade_box.shade-3 { background-color: var(--accent-secondary); }
+
+/* 6. Gemini AI Habit Coach Deck (Occupies 3/4th width next to Heatmap) */
+.consistency_ai_card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+  padding: 20px;
+  margin: 0;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.ai_coach_header_row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.ai_coach_title_group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ai_coach_icon_orb {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+  flex-shrink: 0;
+}
+
+.ai_coach_title_group h3 {
+  font-size: 16px;
+  font-weight: 800;
+  margin: 0;
+}
+
+.ai_coach_title_group p {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin: 2px 0 0 0;
+}
+
+.ai_coach_trigger_btn {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 30px;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: #ffffff;
+  border: none;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+}
+
+.ai_coach_trigger_btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.35);
+}
+
+.ai_coach_results_box {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 16px;
+  min-height: 80px;
+  flex: 1;
+}
+
+.ai_coach_placeholder p {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin: 0 0 12px 0;
+  line-height: 1.5;
+}
+
+.ai_prompt_suggestion_chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ai_prompt_chip {
+  padding: 6px 12px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ai_prompt_chip:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.ai_coach_loading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.ai_coach_spinner {
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid var(--border-color);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.ai_coach_content_rendered h4 {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--accent-primary);
+  margin: 14px 0 6px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ai_coach_content_rendered h4:first-child {
+  margin-top: 0;
+}
+
+.ai_coach_content_rendered p {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+}
+
+.ai_coach_content_rendered ul {
+  padding-left: 18px;
+  margin-bottom: 12px;
+}
+
+.ai_coach_content_rendered li {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+/* =========================================================================
+   STRICT INTER FONT FAMILY ENFORCEMENT ACROSS HABIT TRACKER
+   ========================================================================= */
+#consistency_panel,
+#consistency_panel *,
+#consistency_panel button,
+#consistency_panel input,
+#consistency_panel select,
+#consistency_panel textarea,
+#consistency_panel h1,
+#consistency_panel h2,
+#consistency_panel h3,
+#consistency_panel h4,
+#consistency_panel p,
+#consistency_panel span,
+#consistency_panel td,
+#consistency_panel th,
+#consistency_panel div,
+#consistency_panel strong,
+.cal_th,
+.cal_cell,
+.cal_day_num,
+.consistency_heatmap_card,
+.consistency_ai_card,
+.habit_motivation_card,
+.habit_spontaneous_deck,
+.habit_ai_advisory_card,
+.consistency_matrix_card {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+}
+
+/* Neo-Brutalism Overrides for Consistency & Habit Tracker */
+body[data-style="neo-brutalism"] .habit_motivation_card,
+body[data-style="neo-brutalism"] .habit_spontaneous_deck,
+body[data-style="neo-brutalism"] .consistency_matrix_card,
+body[data-style="neo-brutalism"] .consistency_heatmap_card,
+body[data-style="neo-brutalism"] .consistency_ai_card {
+  border: var(--border-width) solid var(--border-color-token) !important;
+  box-shadow: 4px 4px 0px 0px var(--border-color-token) !important;
+  border-radius: 0px !important;
+}
+
+body[data-style="neo-brutalism"] .cal_cell {
+  border-radius: 0px !important;
+  border: 1.5px solid var(--border-color-token) !important;
+}
+
+body[data-style="neo-brutalism"] .cal_cell.density-0 {
+  background-color: var(--bg-secondary) !important;
+}
+
+body[data-style="neo-brutalism"] .cal_cell.density-3 {
+  background-color: var(--accent-secondary) !important;
+  box-shadow: 1px 1px 0px 0px var(--border-color-token) !important;
+}
+
+body[data-style="neo-brutalism"] .cal_cell.active_today {
+  outline: 2px solid var(--border-color-token) !important;
+  font-weight: 900 !important;
+}
+
+body[data-style="neo-brutalism"] .habit_stat_item,
+body[data-style="neo-brutalism"] .habit_ai_advisory_card,
+body[data-style="neo-brutalism"] .ai_advisory_alt_box,
+body[data-style="neo-brutalism"] .ai_coach_results_box {
+  border: var(--border-width) solid var(--border-color-token) !important;
+  border-radius: 0px !important;
+  box-shadow: 2px 2px 0px 0px var(--border-color-token) !important;
+}
+
+body[data-style="neo-brutalism"] .habit_quick_input,
+body[data-style="neo-brutalism"] .habit_quick_cat_select {
+  border: var(--border-width) solid var(--border-color-token) !important;
+  border-radius: 0px !important;
+}
+
+body[data-style="neo-brutalism"] .habit_quick_submit_btn,
+body[data-style="neo-brutalism"] .habit_custom_dialog_btn,
+body[data-style="neo-brutalism"] .habit_preset_chip,
+body[data-style="neo-brutalism"] .habit_nav_arrow_btn,
+body[data-style="neo-brutalism"] .habit_nav_today_btn,
+body[data-style="neo-brutalism"] .ai_action_btn,
+body[data-style="neo-brutalism"] .ai_coach_trigger_btn,
+body[data-style="neo-brutalism"] .ai_prompt_chip {
+  border: var(--border-width) solid var(--border-color-token) !important;
+  border-radius: 0px !important;
+  box-shadow: 2px 2px 0px 0px var(--border-color-token) !important;
+}
+
+body[data-style="neo-brutalism"] .habit_preset_chip:hover,
+body[data-style="neo-brutalism"] .habit_quick_submit_btn:hover,
+body[data-style="neo-brutalism"] .ai_coach_trigger_btn:hover {
+  transform: translate(-1px, -1px) !important;
+  box-shadow: 3px 3px 0px 0px var(--border-color-token) !important;
+}
 
 /* --- 10. REFLECTIVE BULLET JOURNALS --- */
 .journal_header_row {

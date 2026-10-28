@@ -726,6 +726,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       this.emit("habitsUpdated", this.habits);
       this.emit("notification", { message: `New atomic habit "${habit.title}" active!`, type: "success" });
+      return habit;
     }
 
     deleteHabit(id) {
@@ -1185,6 +1186,10 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.cachedQuote = null;
       this.lastQuoteFetchTime = 0;
       this.selectedJournalDate = new Date().toISOString().split("T")[0];
+      this.habitWeekOffset = 0;
+      this.habitHeatmapMonthOffset = 0;
+      this.geminiApiKey = localStorage.getItem("aurora_gemini_api_key") || "";
+      this.pendingUnhealthyHabit = null;
 
       // Touch coordinates for swipe-to-complete
       this.touchStartX = 0;
@@ -1773,13 +1778,17 @@ document.addEventListener("DOMContentLoaded", async function () {
 
             if (this.activeEditingHabitId !== null) {
               this.store.updateHabit(this.activeEditingHabitId, { title, category: cat, color });
+              this.evaluateHabitWithAI(title, this.activeEditingHabitId);
             } else {
-              this.store.addHabit(title, cat, color);
+              const newHabit = this.store.addHabit(title, cat, color);
+              if (newHabit) this.evaluateHabitWithAI(title, newHabit.id);
             }
             this.closeHabitSheet();
           }
         });
       }
+
+      this.bindConsistencyInteractions();
 
       // -------------------------------------------------------------------------
       // WEEKDAY TABS & ROUTINE VIEW TOGGLE BINDINGS
@@ -2638,108 +2647,386 @@ document.addEventListener("DOMContentLoaded", async function () {
     // -------------------------------------------------------------------------
     // 3. CONSISTENCY VIEW (GRID MATRICES & HEATMAPS)
     // -------------------------------------------------------------------------
+    bindConsistencyInteractions() {
+      // Week Navigation
+      const prevWeekBtn = document.getElementById("btn_habit_prev_week");
+      const thisWeekBtn = document.getElementById("btn_habit_this_week");
+      const nextWeekBtn = document.getElementById("btn_habit_next_week");
+
+      if (prevWeekBtn && !prevWeekBtn.dataset.bound) {
+        prevWeekBtn.dataset.bound = "true";
+        prevWeekBtn.addEventListener("click", () => {
+          this.habitWeekOffset -= 1;
+          this.renderConsistencyUI();
+        });
+      }
+
+      if (thisWeekBtn && !thisWeekBtn.dataset.bound) {
+        thisWeekBtn.dataset.bound = "true";
+        thisWeekBtn.addEventListener("click", () => {
+          this.habitWeekOffset = 0;
+          this.renderConsistencyUI();
+        });
+      }
+
+      if (nextWeekBtn && !nextWeekBtn.dataset.bound) {
+        nextWeekBtn.dataset.bound = "true";
+        nextWeekBtn.addEventListener("click", () => {
+          this.habitWeekOffset += 1;
+          this.renderConsistencyUI();
+        });
+      }
+
+      // Heatmap Month Navigation
+      const prevMonthBtn = document.getElementById("btn_heatmap_prev_month");
+      const thisMonthBtn = document.getElementById("btn_heatmap_this_month");
+      const nextMonthBtn = document.getElementById("btn_heatmap_next_month");
+
+      if (prevMonthBtn && !prevMonthBtn.dataset.bound) {
+        prevMonthBtn.dataset.bound = "true";
+        prevMonthBtn.addEventListener("click", () => {
+          this.habitHeatmapMonthOffset -= 1;
+          this.renderMonthlyHeatmapSVG();
+        });
+      }
+
+      if (thisMonthBtn && !thisMonthBtn.dataset.bound) {
+        thisMonthBtn.dataset.bound = "true";
+        thisMonthBtn.addEventListener("click", () => {
+          this.habitHeatmapMonthOffset = 0;
+          this.renderMonthlyHeatmapSVG();
+        });
+      }
+
+      if (nextMonthBtn && !nextMonthBtn.dataset.bound) {
+        nextMonthBtn.dataset.bound = "true";
+        nextMonthBtn.addEventListener("click", () => {
+          this.habitHeatmapMonthOffset += 1;
+          this.renderMonthlyHeatmapSVG();
+        });
+      }
+
+      // Spontaneous Quick Add Form
+      const quickForm = document.getElementById("habit_quick_add_form");
+      if (quickForm && !quickForm.dataset.bound) {
+        quickForm.dataset.bound = "true";
+        quickForm.addEventListener("submit", (e) => {
+          e.preventDefault();
+          const input = document.getElementById("habit_quick_input");
+          const catSelect = document.getElementById("habit_quick_cat");
+          const title = input ? input.value.trim() : "";
+          const cat = catSelect ? catSelect.value : "Routine";
+          if (!title) return;
+
+          const newHabit = this.store.addHabit(title, cat, "indigo");
+          if (input) input.value = "";
+          if (newHabit) {
+            this.evaluateHabitWithAI(title, newHabit.id);
+          }
+        });
+      }
+
+      // Spontaneous 1-Click Preset Chips
+      document.querySelectorAll(".habit_preset_chip").forEach(chip => {
+        if (!chip.dataset.bound) {
+          chip.dataset.bound = "true";
+          chip.addEventListener("click", () => {
+            const title = chip.dataset.title;
+            const cat = chip.dataset.cat || "Routine";
+            const color = chip.dataset.color || "indigo";
+            if (!title) return;
+
+            const newHabit = this.store.addHabit(title, cat, color);
+            if (newHabit) {
+              this.evaluateHabitWithAI(title, newHabit.id);
+            }
+          });
+        }
+      });
+
+      // Custom Detailed Dialog Trigger
+      const customBtn = document.getElementById("btn_consistency_add_habit");
+      if (customBtn && !customBtn.dataset.bound) {
+        customBtn.dataset.bound = "true";
+        customBtn.addEventListener("click", () => this.openHabitSheet());
+      }
+
+      // AI Health Advisory Alert Card Actions
+      const dismissAdvisoryBtn = document.getElementById("btn_dismiss_ai_advisory");
+      const keepHabitBtn = document.getElementById("btn_ai_keep_habit");
+      const adoptAltBtn = document.getElementById("btn_ai_adopt_alternative");
+      const advisoryCard = document.getElementById("habit_ai_advisory_card");
+
+      if (dismissAdvisoryBtn && !dismissAdvisoryBtn.dataset.bound) {
+        dismissAdvisoryBtn.dataset.bound = "true";
+        dismissAdvisoryBtn.addEventListener("click", () => {
+          if (advisoryCard) advisoryCard.style.display = "none";
+          this.pendingUnhealthyHabit = null;
+        });
+      }
+
+      if (keepHabitBtn && !keepHabitBtn.dataset.bound) {
+        keepHabitBtn.dataset.bound = "true";
+        keepHabitBtn.addEventListener("click", () => {
+          if (advisoryCard) advisoryCard.style.display = "none";
+          this.pendingUnhealthyHabit = null;
+        });
+      }
+
+      if (adoptAltBtn && !adoptAltBtn.dataset.bound) {
+        adoptAltBtn.dataset.bound = "true";
+        adoptAltBtn.addEventListener("click", () => {
+          if (this.pendingUnhealthyHabit) {
+            const { id, alternativeTitle, category } = this.pendingUnhealthyHabit;
+            this.store.updateHabit(id, {
+              title: alternativeTitle,
+              category: category || "Health",
+              color: "emerald"
+            });
+            if (advisoryCard) advisoryCard.style.display = "none";
+            this.showToast(`Switched to "${alternativeTitle}"!`, "success");
+            this.pendingUnhealthyHabit = null;
+          }
+        });
+      }
+
+      // Gemini AI Habit Coach Trigger
+      const coachBtn = document.getElementById("btn_ai_analyze_habits");
+      if (coachBtn && !coachBtn.dataset.bound) {
+        coachBtn.dataset.bound = "true";
+        coachBtn.addEventListener("click", () => this.analyzeHabitsWithAI());
+      }
+
+      // Gemini AI Prompt Chips
+      document.querySelectorAll(".ai_prompt_chip").forEach(chip => {
+        if (!chip.dataset.bound) {
+          chip.dataset.bound = "true";
+          chip.addEventListener("click", () => {
+            this.analyzeHabitsWithAI(chip.dataset.prompt);
+          });
+        }
+      });
+    }
+
     renderConsistencyUI() {
       const matrixBox = document.getElementById("habit_matrix_tbody");
       if (!matrixBox) return;
 
       const today = new Date();
-      const dayOfWeekIdx = today.getDay();
-      const startOfWeek = new Date(today);
-      startOfWeek.setDate(today.getDate() - (dayOfWeekIdx === 0 ? 6 : dayOfWeekIdx - 1));
+      const todayISO = today.toISOString().split("T")[0];
 
-      const weekdayDates = [];
+      // Calculate Monday of target week factoring in this.habitWeekOffset
+      const dayOfWeekIdx = today.getDay(); // 0 is Sun, 1 is Mon
+      const diffToMon = dayOfWeekIdx === 0 ? -6 : 1 - dayOfWeekIdx;
+      const startOfWeek = new Date(today);
+      startOfWeek.setDate(today.getDate() + diffToMon + (this.habitWeekOffset * 7));
+
+      const weekdays = [];
       const weekdaysShort = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-      
+      const monthsShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const monthsFull = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
       for (let i = 0; i < 7; i++) {
         const d = new Date(startOfWeek);
         d.setDate(startOfWeek.getDate() + i);
-        weekdayDates.push(d.toISOString().split("T")[0]);
+        const iso = d.toISOString().split("T")[0];
+        weekdays.push({
+          iso,
+          dayName: weekdaysShort[i],
+          dateNum: d.getDate(),
+          monthShort: monthsShort[d.getMonth()],
+          monthFull: monthsFull[d.getMonth()],
+          year: d.getFullYear(),
+          isToday: iso === todayISO,
+          isFuture: iso > todayISO
+        });
       }
 
-      let matrixHtml = "";
-      this.store.habits.forEach(habit => {
-        let cellsHtml = "";
-        
-        weekdaysShort.forEach((dayLabel, idx) => {
-          const dateStr = weekdayDates[idx];
-          const isCompleted = habit.history && habit.history[dateStr] === true;
-          const isToday = dateStr === today.toISOString().split("T")[0];
+      // Update Week Range Badge (#habit_week_range_badge)
+      const weekBadge = document.getElementById("habit_week_range_badge");
+      if (weekBadge) {
+        const startDay = weekdays[0];
+        const endDay = weekdays[6];
+        let offsetTag = "";
+        if (this.habitWeekOffset === 0) offsetTag = " · This Week";
+        else if (this.habitWeekOffset === -1) offsetTag = " · Last Week";
+        else if (this.habitWeekOffset < -1) offsetTag = ` · ${Math.abs(this.habitWeekOffset)}w Ago`;
+        else if (this.habitWeekOffset === 1) offsetTag = " · Next Week";
+        else offsetTag = ` · In ${this.habitWeekOffset}w`;
 
-          cellsHtml += `
-            <td class="${isToday ? "active_today" : ""}">
-              <button class="habit_matrix_check_pill bg-${habit.color} ${isCompleted ? "completed" : ""}" 
-                id="habit_checkbox_${habit.id}_${dateStr}"
-                data-id="${habit.id}" data-date="${dateStr}"
-                aria-label="Toggle ${habit.title} on ${dayLabel}">
-                ${isCompleted ? "✓" : "•"}
-              </button>
+        let rangeText = "";
+        if (startDay.monthShort === endDay.monthShort && startDay.year === endDay.year) {
+          rangeText = `${startDay.monthShort} ${startDay.dateNum} – ${endDay.dateNum}, ${startDay.year}${offsetTag}`;
+        } else if (startDay.year === endDay.year) {
+          rangeText = `${startDay.monthShort} ${startDay.dateNum} – ${endDay.monthShort} ${endDay.dateNum}, ${startDay.year}${offsetTag}`;
+        } else {
+          rangeText = `${startDay.monthShort} ${startDay.dateNum}, ${startDay.year} – ${endDay.monthShort} ${endDay.dateNum}, ${endDay.year}${offsetTag}`;
+        }
+        weekBadge.textContent = rangeText;
+      }
+
+      // Render Dynamic thead row (#habit_matrix_thead_row)
+      const theadRow = document.getElementById("habit_matrix_thead_row");
+      if (theadRow) {
+        let thHtml = `<th style="text-align: left;">Atomic Habit</th>`;
+        weekdays.forEach(w => {
+          thHtml += `
+            <th class="${w.isToday ? "active_today" : ""}">
+              <div class="matrix_th_content">
+                <span class="matrix_th_day">${w.dayName}</span>
+                <span class="matrix_th_date">${w.dateNum}</span>
+                <span class="matrix_th_month">${w.monthShort}</span>
+                ${w.isToday ? `<span class="matrix_today_indicator">TODAY</span>` : ""}
+              </div>
+            </th>
+          `;
+        });
+        theadRow.innerHTML = thHtml;
+      }
+
+      // Calculate Motivation Deck Metrics
+      const totalHabits = this.store.habits.length;
+      let completedToday = 0;
+      let actual7DayCompletions = 0;
+      let maxActiveStreak = 0;
+
+      // Last 7 calendar dates ending today
+      const past7Dates = [];
+      for (let j = 0; j < 7; j++) {
+        const pd = new Date(today);
+        pd.setDate(today.getDate() - j);
+        past7Dates.push(pd.toISOString().split("T")[0]);
+      }
+
+      this.store.habits.forEach(h => {
+        if (h.history && h.history[todayISO] === true) completedToday++;
+        if ((h.streak || 0) > maxActiveStreak) maxActiveStreak = h.streak || 0;
+        if (h.history) {
+          past7Dates.forEach(d => {
+            if (h.history[d] === true) actual7DayCompletions++;
+          });
+        }
+      });
+
+      const todayPct = totalHabits > 0 ? Math.round((completedToday / totalHabits) * 100) : 0;
+      const totalPossible7 = totalHabits * 7;
+      const weeklyRatePct = totalPossible7 > 0 ? Math.round((actual7DayCompletions / totalPossible7) * 100) : 0;
+
+      const todayScoreEl = document.getElementById("habit_today_score");
+      const todayPctEl = document.getElementById("habit_today_pct");
+      const progressBarEl = document.getElementById("habit_today_progress_bar");
+      const weeklyRateEl = document.getElementById("habit_weekly_rate");
+      const topStreakEl = document.getElementById("habit_top_streak");
+      const motivationQuoteEl = document.getElementById("habit_motivation_quote");
+
+      if (todayScoreEl) todayScoreEl.textContent = `${completedToday} / ${totalHabits}`;
+      if (todayPctEl) todayPctEl.textContent = `${todayPct}%`;
+      if (progressBarEl) progressBarEl.style.width = `${todayPct}%`;
+      if (weeklyRateEl) weeklyRateEl.textContent = `${weeklyRatePct}%`;
+      if (topStreakEl) topStreakEl.textContent = `${maxActiveStreak}d`;
+
+      if (motivationQuoteEl) {
+        if (totalHabits === 0) {
+          motivationQuoteEl.textContent = '"Build the identity you want. Add your first atomic habit below to start compounding."';
+        } else if (todayPct === 100) {
+          motivationQuoteEl.textContent = '"Flawless execution! You checked off every habit for today. Consistency is an unstoppable flywheel."';
+        } else if (todayPct >= 50) {
+          motivationQuoteEl.textContent = `"${completedToday} down, ${totalHabits - completedToday} remaining today. Finish strong to protect your momentum!"`;
+        } else if (completedToday > 0) {
+          motivationQuoteEl.textContent = '"Strong start today. Check off your next atomic habit to keep your streak burning."';
+        } else {
+          motivationQuoteEl.textContent = '"Small daily disciplines compound into massive life transformations. Tap 1 habit to ignite today\'s streak."';
+        }
+      }
+
+      // Render Matrix Table Body
+      if (this.store.habits.length === 0) {
+        matrixBox.innerHTML = `
+          <tr>
+            <td colspan="8" style="text-align: center; padding: 32px 16px; color: var(--text-muted);">
+              <div style="font-size: 28px; margin-bottom: 8px;">🌱</div>
+              <h4 style="font-size: 14px; font-weight: 800; color: var(--text-primary); margin-bottom: 4px;">No habits tracked yet</h4>
+              <p style="font-size: 12px; margin-bottom: 12px;">Type a habit in the quick-add bar above, or click any 1-Click Preset to begin.</p>
             </td>
+          </tr>
+        `;
+      } else {
+        let matrixHtml = "";
+        this.store.habits.forEach(habit => {
+          let cellsHtml = "";
+          
+          weekdays.forEach(w => {
+            const isCompleted = habit.history && habit.history[w.iso] === true;
+
+            cellsHtml += `
+              <td class="${w.isToday ? "active_today" : ""}">
+                <button class="habit_matrix_check_pill bg-${habit.color || "indigo"} ${isCompleted ? "completed" : ""} ${w.isFuture ? "future_pill" : ""}" 
+                  id="habit_checkbox_${habit.id}_${w.iso}"
+                  data-id="${habit.id}" data-date="${w.iso}"
+                  ${w.isFuture ? "disabled title=\"Cannot log habits for future dates\"" : `title="${w.dayName}, ${w.monthShort} ${w.dateNum}: ${isCompleted ? "Completed (Click to undo)" : "Click to complete"}"`}
+                  aria-label="Toggle ${habit.title} on ${w.dayName} ${w.monthShort} ${w.dateNum}">
+                  ${isCompleted ? "✓" : (w.isFuture ? "–" : "•")}
+                </button>
+              </td>
+            `;
+          });
+
+          matrixHtml += `
+            <tr>
+              <td class="habit_row_title_cell">
+                <div class="habit_row_title">
+                  <span class="habit_tag_indicator bg-${habit.color || "indigo"}"></span>
+                  <div style="flex: 1; display: flex; flex-direction: column;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                      <h4>${this.escapeHTML(habit.title)}</h4>
+                      <div style="display: flex; gap: 8px;">
+                        <button class="habit_edit_btn" data-id="${habit.id}" title="Edit Habit">Edit</button>
+                        <button class="habit_delete_btn" data-id="${habit.id}" title="Remove Habit">✕</button>
+                      </div>
+                    </div>
+                    <p>Streak: <span>${habit.streak || 0}d</span> (PB: ${habit.maxStreak || 0}d) · <span class="habit_cat_pill">${this.escapeHTML(habit.category || "Routine")}</span></p>
+                  </div>
+                </div>
+              </td>
+              ${cellsHtml}
+            </tr>
           `;
         });
 
-        matrixHtml += `
-          <tr>
-            <td class="habit_row_title_cell">
-              <div class="habit_row_title">
-                <span class="habit_tag_indicator bg-${habit.color}"></span>
-                <div style="flex: 1; display: flex; flex-direction: column;">
-                  <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                    <h4>${this.escapeHTML(habit.title)}</h4>
-                    <div style="display: flex; gap: 8px;">
-                      <button class="habit_edit_btn" data-id="${habit.id}" title="Edit Habit">Edit</button>
-                      <button class="habit_delete_btn" data-id="${habit.id}" title="Remove Habit">✕</button>
-                    </div>
-                  </div>
-                  <p>Streak: <span>${habit.streak || 0}d</span> (PB: ${habit.maxStreak || 0}d)</p>
-                </div>
-              </div>
-            </td>
-            ${cellsHtml}
-          </tr>
-        `;
-      });
+        matrixBox.innerHTML = matrixHtml;
 
-      matrixBox.innerHTML = matrixHtml;
-
-      matrixBox.querySelectorAll(".habit_matrix_check_pill").forEach(btn => {
-        btn.addEventListener("click", () => {
-          const id = btn.getAttribute("data-id");
-          const dStr = btn.getAttribute("data-date");
-          this.store.toggleHabitCompletion(id, dStr);
+        matrixBox.querySelectorAll(".habit_matrix_check_pill:not([disabled])").forEach(btn => {
+          btn.addEventListener("click", () => {
+            const id = btn.getAttribute("data-id");
+            const dStr = btn.getAttribute("data-date");
+            this.store.toggleHabitCompletion(id, dStr);
+          });
         });
-      });
 
-      matrixBox.querySelectorAll(".habit_edit_btn").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          const id = btn.getAttribute("data-id");
-          const h = this.store.habits.find(hb => hb.id === id);
-          if (h) {
-            this.openHabitSheet(h);
-          }
+        matrixBox.querySelectorAll(".habit_edit_btn").forEach(btn => {
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const id = btn.getAttribute("data-id");
+            const h = this.store.habits.find(hb => hb.id === id);
+            if (h) {
+              this.openHabitSheet(h);
+            }
+          });
         });
-      });
 
-      matrixBox.querySelectorAll(".habit_delete_btn").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          const id = btn.getAttribute("data-id");
-          const h = this.store.habits.find(hb => hb.id === id);
-          if (confirm(`Permanently delete the habit "${h ? h.title : 'habit'}" and all its historical consistency data?`)) {
-            this.store.deleteHabit(id);
-          }
-        });
-      });
-
-      this.renderMonthlyHeatmapSVG();
-
-      const addNewHabitBtn = document.getElementById("btn_consistency_add_habit");
-      if (addNewHabitBtn && !addNewHabitBtn.dataset.bound) {
-        addNewHabitBtn.dataset.bound = "true";
-        addNewHabitBtn.addEventListener("click", () => {
-          this.openHabitSheet();
+        matrixBox.querySelectorAll(".habit_delete_btn").forEach(btn => {
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            const id = btn.getAttribute("data-id");
+            const h = this.store.habits.find(hb => hb.id === id);
+            if (confirm(`Permanently delete the habit "${h ? h.title : "habit"}" and all its historical consistency data?`)) {
+              this.store.deleteHabit(id);
+            }
+          });
         });
       }
+
+      this.renderMonthlyHeatmapSVG();
     }
 
     renderMonthlyHeatmapSVG() {
@@ -2747,13 +3034,32 @@ document.addEventListener("DOMContentLoaded", async function () {
       if (!container) return;
 
       const today = new Date();
-      const year = today.getFullYear();
-      const month = today.getMonth();
+      const todayISO = today.toISOString().split("T")[0];
+      const targetDate = new Date(today.getFullYear(), today.getMonth() + this.habitHeatmapMonthOffset, 1);
+      const year = targetDate.getFullYear();
+      const month = targetDate.getMonth();
       const monthDaysCount = new Date(year, month + 1, 0).getDate();
 
-      const daysArray = [];
-      const habitCount = this.store.habits.length;
+      const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+      const monthBadge = document.getElementById("heatmap_month_badge");
+      if (monthBadge) {
+        const currentTag = this.habitHeatmapMonthOffset === 0 ? " (Current)" : "";
+        monthBadge.textContent = `${monthNames[month]} ${year}${currentTag}`;
+      }
 
+      const habitCount = this.store.habits.length;
+      const firstDayIdx = new Date(year, month, 1).getDay(); // 0 is Sun, 1 is Mon
+      const leadingEmptyDays = firstDayIdx === 0 ? 6 : firstDayIdx - 1; // Align to Mon-Sun
+
+      const weekdaysShort = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+      let headerCellsHtml = weekdaysShort.map(d => `<div class="cal_th">${d}</div>`).join("");
+
+      let emptyCellsHtml = "";
+      for (let i = 0; i < leadingEmptyDays; i++) {
+        emptyCellsHtml += `<div class="cal_cell empty"></div>`;
+      }
+
+      let dayCellsHtml = "";
       for (let dayNum = 1; dayNum <= monthDaysCount; dayNum++) {
         const dateStr = `${year}-${(month + 1).toString().padStart(2, "0")}-${dayNum.toString().padStart(2, "0")}`;
         
@@ -2770,48 +3076,227 @@ document.addEventListener("DOMContentLoaded", async function () {
           else density = 1;
         }
 
-        daysArray.push({ dayNum, dateStr, completions, density });
+        const isToday = dateStr === todayISO;
+        const dayFormatted = `${monthNames[month].slice(0, 3)} ${dayNum}, ${year}`;
+        const titleText = `${dayFormatted}: ${completions} of ${habitCount} habits completed${isToday ? " (Today)" : ""}`;
+
+        dayCellsHtml += `
+          <div class="cal_cell density-${density} ${isToday ? "active_today" : ""}" 
+               data-date="${dateStr}" 
+               data-count="${completions}" 
+               title="${titleText}">
+            <span class="cal_day_num">${dayNum}</span>
+          </div>
+        `;
       }
 
-      const firstDayIdx = new Date(year, month, 1).getDay();
-      const normalizedStartIdx = firstDayIdx === 0 ? 6 : firstDayIdx - 1;
+      container.innerHTML = `
+        <div class="cal_heatmap_grid">
+          ${headerCellsHtml}
+          ${emptyCellsHtml}
+          ${dayCellsHtml}
+        </div>
+      `;
+    }
 
-      const size = 12;
-      const gap = 4;
-      let cellsHtml = "";
+    async evaluateHabitWithAI(habitTitle, habitId) {
+      const advisoryCard = document.getElementById("habit_ai_advisory_card");
+      if (!advisoryCard) return;
 
-      daysArray.forEach((day, idx) => {
-        const gridIdx = normalizedStartIdx + idx;
-        const col = Math.floor(gridIdx / 7);
-        const row = gridIdx % 7;
+      const lower = habitTitle.toLowerCase();
+      const suspiciousTerms = ["smoke", "smoking", "cigarette", "vape", "vaping", "doomscroll", "junk food", "binge drink", "skip meal", "sleep past 3", "procrastinat", "gambling", "sugar binge"];
+      const containsSuspicious = suspiciousTerms.some(term => lower.includes(term));
 
-        const x = col * (size + gap) + 30;
-        const y = row * (size + gap) + 15;
+      if (!this.geminiApiKey) {
+        if (containsSuspicious) {
+          this.showAIAdvisoryCard(habitId, habitTitle, "This habit may negatively impact your physical health and focus.", "Take a 5-minute fresh air break or hydration.", "Substitute the craving with a positive cue.");
+        }
+        return;
+      }
 
-        let fill = "var(--border-color)";
-        if (day.density === 1) fill = "rgba(16, 185, 129, 0.25)";
-        else if (day.density === 2) fill = "rgba(16, 185, 129, 0.6)";
-        else if (day.density === 3) fill = "var(--accent-secondary)";
+      try {
+        const prompt = `You are a behavioral psychology and health expert. Analyze this habit: "${habitTitle}". Determine if this habit is UNHEALTHY, counterproductive, detrimental to health or productivity (e.g. smoking, doomscrolling, skipping meals, binge drinking, junk food binge, late sleeping). If healthy or neutral, isUnhealthy is false. Return ONLY valid JSON: {"isUnhealthy": boolean, "risk": "1-sentence risk explanation", "alternative": "constructive replacement habit", "tip": "atomic habit cue"}`;
 
-        cellsHtml += `
-          <rect x="${x}" y="${y}" width="${size}" height="${size}" rx="2.5" fill="${fill}" data-date="${day.dateStr}" data-count="${day.completions}">
-            <title>${day.dateStr}: ${day.completions} habits completed</title>
-          </rect>
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${this.geminiApiKey}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.1,
+              responseMimeType: "application/json"
+            }
+          })
+        });
+
+        if (!response.ok) {
+          if (containsSuspicious) {
+            this.showAIAdvisoryCard(habitId, habitTitle, "This habit may negatively impact your physical health and focus.", "Drink a glass of water and practice 5m mindful walking.", "Place your cue in a different room.");
+          }
+          return;
+        }
+
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) return;
+
+        const parsed = JSON.parse(text);
+        if (parsed.isUnhealthy) {
+          this.showAIAdvisoryCard(habitId, habitTitle, parsed.risk, parsed.alternative, parsed.tip);
+        } else {
+          advisoryCard.style.display = "none";
+        }
+      } catch (err) {
+        if (containsSuspicious) {
+          this.showAIAdvisoryCard(habitId, habitTitle, "This habit may negatively impact your physical health and focus.", "Take a 5-minute fresh air break or stretch.", "Substitute the craving with a positive cue.");
+        }
+      }
+    }
+
+    showAIAdvisoryCard(habitId, title, risk, alternative, tip) {
+      const advisoryCard = document.getElementById("habit_ai_advisory_card");
+      if (!advisoryCard) return;
+
+      this.pendingUnhealthyHabit = {
+        id: habitId,
+        oldTitle: title,
+        alternativeTitle: alternative,
+        category: "Health"
+      };
+
+      const titleEl = document.getElementById("ai_advisory_title");
+      const reasonEl = document.getElementById("ai_advisory_reason");
+      const altEl = document.getElementById("ai_advisory_alternative");
+      const tipEl = document.getElementById("ai_advisory_tip");
+
+      if (titleEl) titleEl.textContent = `Unhealthy Habit Detected: "${title}"`;
+      if (reasonEl) reasonEl.textContent = risk || "This habit may undermine your long-term focus or well-being.";
+      if (altEl) altEl.textContent = alternative || "5-minute mindful breathing or hydration";
+      if (tipEl) tipEl.textContent = tip ? `💡 Habit Loop Tip: ${tip}` : "";
+
+      advisoryCard.style.display = "block";
+      advisoryCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+
+    async analyzeHabitsWithAI(customPrompt = null) {
+      const resultsContainer = document.getElementById("habit_ai_coach_results");
+      if (!resultsContainer) return;
+
+      if (!this.geminiApiKey) {
+        resultsContainer.innerHTML = `
+          <div class="ai_coach_placeholder" style="border-left: 3px solid var(--accent-primary); padding-left: 14px;">
+            <p style="font-size: 13.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">Gemini API Key Required</p>
+            <p style="margin-bottom: 8px;">To activate consistency analysis, habit stacking strategies, and health alerts, add your free Google Gemini API key in Settings.</p>
+            <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 8px 12px; margin-bottom: 12px; font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 14px;">🔒</span>
+              <span><strong>Privacy Guarantee:</strong> Your key is stored 100% locally on this device in your browser's private storage. It is never sent to any external server or database.</span>
+            </div>
+            <button type="button" class="habit_quick_submit_btn" id="btn_goto_settings_key" style="height: 34px; font-size: 11.5px;">Configure Key in Settings</button>
+          </div>
         `;
+        const gotoBtn = document.getElementById("btn_goto_settings_key");
+        if (gotoBtn) {
+          gotoBtn.addEventListener("click", () => {
+            this.store.setView("settings");
+          });
+        }
+        return;
+      }
+
+      if (!this.store.habits || this.store.habits.length === 0) {
+        resultsContainer.innerHTML = `
+          <div class="ai_coach_placeholder">
+            <p><strong>No tracked habits yet!</strong> Add at least 1 atomic habit above to unlock personalized Gemini AI habit stacking and consistency coaching.</p>
+          </div>
+        `;
+        return;
+      }
+
+      resultsContainer.innerHTML = `
+        <div class="ai_coach_loading">
+          <div class="ai_coach_spinner"></div>
+          <span>Gemini AI is analyzing your consistency data and habit stacks...</span>
+        </div>
+      `;
+
+      const habitsData = this.store.habits.map(h => {
+        const hist = h.history || {};
+        const completedDates = Object.keys(hist).filter(d => hist[d] === true);
+        return {
+          title: h.title,
+          category: h.category,
+          currentStreak: h.streak || 0,
+          maxStreak: h.maxStreak || 0,
+          totalCompletions: completedDates.length
+        };
       });
 
-      const weekdaysShort = ["M", "W", "F", "S"];
-      const yOffsets = [15 + size/2 + 2, 15 + (size+gap)*2 + size/2 + 2, 15 + (size+gap)*4 + size/2 + 2, 15 + (size+gap)*5 + size/2 + 2];
-      const weekdayTexts = weekdaysShort.map((label, idx) => {
-        return `<text x="10" y="${yOffsets[idx]}" fill="var(--text-muted)" font-size="9" font-weight="700" text-anchor="middle">${label}</text>`;
-      }).join("");
+      const userGoal = customPrompt || "Analyze my habits consistency, diagnose potential friction points, give habit stacking advice, and give a 7-day challenge.";
 
-      container.innerHTML = `
-        <svg viewBox="0 0 320 130" width="100%" height="100%">
-          ${weekdayTexts}
-          ${cellsHtml}
-        </svg>
-      `;
+      const prompt = `You are a world-class habit formation coach grounded in James Clear's Atomic Habits.
+User tracked habits:
+${JSON.stringify(habitsData, null, 2)}
+
+User focus:
+"${userGoal}"
+
+Provide a structured, inspiring habit coaching plan. Return HTML markup (use <h4>, <p>, <ul>, <li>, <strong>) with:
+1. <h4>⚡ Consistency Diagnosis</h4>: Concise assessment of current momentum.
+2. <h4>🔗 Habit Stacking Blueprint</h4>: Practical 'After [Current Habit], I will [New Habit]' formulas using their habits.
+3. <h4>🎯 7-Day Momentum Challenge</h4>: One high-leverage atomic action to focus on this week.
+Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown backticks or html code blocks, return raw HTML tags only.`;
+
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${this.geminiApiKey}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.3
+            }
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error(`Gemini API returned status ${response.status}`);
+        }
+
+        const data = await response.json();
+        let content = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        content = content.replace(/^```html\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
+
+        resultsContainer.innerHTML = `
+          <div class="ai_coach_content_rendered">
+            ${content}
+            <div style="margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+              <span style="font-size: 11px; color: var(--text-muted);">✨ Powered by Gemini 3.5 Flash Lite</span>
+              <button type="button" class="ai_prompt_chip" id="btn_reask_ai_coach" style="font-size: 11px;">Ask Another Question</button>
+            </div>
+          </div>
+        `;
+
+        const reaskBtn = document.getElementById("btn_reask_ai_coach");
+        if (reaskBtn) {
+          reaskBtn.addEventListener("click", () => {
+            const newPrompt = prompt("Ask Gemini Habit Coach (e.g. 'How can I stay consistent while traveling?'):");
+            if (newPrompt && newPrompt.trim()) {
+              this.analyzeHabitsWithAI(newPrompt.trim());
+            }
+          });
+        }
+      } catch (err) {
+        resultsContainer.innerHTML = `
+          <div class="ai_coach_placeholder" style="color: #ef4444;">
+            <p><strong>AI Coach connection error:</strong> ${this.escapeHTML(err.message)}</p>
+            <button type="button" class="habit_quick_submit_btn" id="btn_retry_ai_coach" style="margin-top: 8px; font-size: 11.5px; height: 32px;">Retry Analysis</button>
+          </div>
+        `;
+        const retryBtn = document.getElementById("btn_retry_ai_coach");
+        if (retryBtn) {
+          retryBtn.addEventListener("click", () => this.analyzeHabitsWithAI(customPrompt));
+        }
+      }
     }
 
     // -------------------------------------------------------------------------
@@ -4590,6 +5075,71 @@ document.addEventListener("DOMContentLoaded", async function () {
           <div class="setting_row">
             <span class="setting_label">Bedtime Sleep Hour</span>
             <input type="time" id="set_sleep_time" class="settings_dropdown" value="${this.store.routinePrefs.sleepTime}">
+          </div>
+        </div>
+
+        <div class="settings_group">
+          <div class="settings_header_with_badge">
+            <div>
+              <h2>Gemini AI & Local Security</h2>
+              <p class="group_desc">Power your personalized Habit Coach and health checks with your own Google Gemini API key.</p>
+            </div>
+            <span class="badge_key_status ${this.geminiApiKey ? "active" : "inactive"}">
+              ${this.geminiApiKey ? "● Stored Locally on Device" : "○ No Key Configured"}
+            </span>
+          </div>
+
+          <!-- Strict Privacy & Trust Assurance Box -->
+          <div class="ai_security_guarantee_box">
+            <div class="security_badge_row">
+              <div class="security_icon_shield">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  <polyline points="9 12 11 14 15 10"/>
+                </svg>
+              </div>
+              <div class="security_text_col">
+                <strong>100% Private, Device-Local Storage Guarantee</strong>
+                <p>Your API key is saved solely inside this browser's private local storage (<code>localStorage</code>). It never leaves your device and is never sent to our servers, analytics, or any third-party databases. Every request connects directly and securely from your browser to Google's official Gemini API via HTTPS.</p>
+              </div>
+            </div>
+            <div class="security_guarantee_checklist">
+              <div class="sec_check_item">
+                <span class="check_icon">✓</span>
+                <span>Zero intermediate servers or loggers</span>
+              </div>
+              <div class="sec_check_item">
+                <span class="check_icon">✓</span>
+                <span>Encrypted direct-to-Google HTTPS connection</span>
+              </div>
+              <div class="sec_check_item">
+                <span class="check_icon">✓</span>
+                <span>Wipe from your device anytime in 1 click</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Key Input Row -->
+          <div class="setting_row key_setting_row">
+            <div class="key_label_col">
+              <span class="setting_label">Google Gemini API Key</span>
+              <p class="key_sublabel">Free from Google AI Studio. Stored strictly in your browser.</p>
+            </div>
+            <div class="key_input_container">
+              <div class="key_input_wrapper">
+                <input type="password" id="input_gemini_api_key" class="settings_key_input" placeholder="Paste your API key (AQ... or AIza...)" value="${this.geminiApiKey ? this.escapeHTML(this.geminiApiKey) : ""}" autocomplete="off" spellcheck="false" />
+                <button type="button" id="btn_toggle_key_visibility" class="key_toggle_vis_btn" title="Toggle visibility">👁</button>
+              </div>
+              <div class="key_action_buttons">
+                <button type="button" id="btn_save_gemini_key" class="setting_primary_btn">Save & Verify Key</button>
+                ${this.geminiApiKey ? '<button type="button" id="btn_clear_gemini_key" class="setting_secondary_btn danger">Remove Key</button>' : ""}
+              </div>
+              <div id="gemini_key_feedback" class="key_feedback_msg"></div>
+              <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="get_api_key_link">
+                <span>Get a free Gemini API Key from Google AI Studio</span>
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+              </a>
+            </div>
           </div>
         </div>
 

@@ -9,7 +9,7 @@
     <!-- High-end Fonts & Icons -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <meta name="theme-color" content="#06070a">
 </head>
@@ -269,20 +269,129 @@
              ===================================================================== -->
         <section id="consistency_panel" class="app_panel" style="display: none;">
             
-            <!-- Weekly habit checklist matrix grid -->
+            <!-- 1. Habit Motivation & Daily Momentum Deck -->
+            <div class="habit_motivation_card">
+                <div class="habit_motivation_stats_row">
+                    <div class="habit_stat_item">
+                        <span class="habit_stat_label">Today's Progress</span>
+                        <div class="habit_stat_val_row">
+                            <span id="habit_today_score" class="habit_stat_val">0 / 0</span>
+                            <span id="habit_today_pct" class="habit_stat_badge">0%</span>
+                        </div>
+                        <div class="habit_progress_bar_track">
+                            <div id="habit_today_progress_bar" class="habit_progress_bar_fill" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                    <div class="habit_stat_item">
+                        <span class="habit_stat_label">7-Day Consistency</span>
+                        <div class="habit_stat_val_row">
+                            <span id="habit_weekly_rate" class="habit_stat_val">0%</span>
+                            <span class="habit_stat_badge accent">Weekly</span>
+                        </div>
+                        <p class="habit_stat_sub">Rolling 7-day completion</p>
+                    </div>
+                    <div class="habit_stat_item">
+                        <span class="habit_stat_label">Best Active Streak</span>
+                        <div class="habit_stat_val_row">
+                            <span id="habit_top_streak" class="habit_stat_val">0d</span>
+                            <span class="habit_stat_badge flame">🔥 Streak</span>
+                        </div>
+                        <p class="habit_stat_sub">Top consecutive days</p>
+                    </div>
+                </div>
+                <div class="habit_motivation_quote_box">
+                    <span class="habit_quote_icon">⚡</span>
+                    <p id="habit_motivation_quote">"Small daily disciplines compound into massive life transformations. Check 1 habit to keep momentum alive."</p>
+                </div>
+            </div>
+
+            <!-- 2. Spontaneous Quick-Add & Preset Chips -->
+            <div class="habit_spontaneous_deck">
+                <form id="habit_quick_add_form" class="habit_quick_form">
+                    <div class="habit_quick_input_wrap">
+                        <span class="habit_quick_icon">⚡</span>
+                        <input type="text" id="habit_quick_input" class="habit_quick_input" placeholder="Quick-add habit spontaneously (e.g. 15m Morning Walk, Read 10 Pages)..." autocomplete="off" required />
+                    </div>
+                    <select id="habit_quick_cat" class="habit_quick_cat_select">
+                        <option value="Routine">Routine</option>
+                        <option value="Health">Health</option>
+                        <option value="Mind">Mind</option>
+                        <option value="Fitness">Fitness</option>
+                        <option value="Focus">Focus</option>
+                    </select>
+                    <button type="submit" class="habit_quick_submit_btn">
+                        <span>+ Add</span>
+                    </button>
+                    <button type="button" id="btn_consistency_add_habit" class="habit_custom_dialog_btn" title="Detailed Habit Settings">
+                        <span>⚙ Custom</span>
+                    </button>
+                </form>
+
+                <!-- Spontaneous 1-Click Suggestions -->
+                <div class="habit_presets_row">
+                    <span class="presets_hint">1-Click Presets:</span>
+                    <div class="presets_scroll_area">
+                        <button type="button" class="habit_preset_chip" data-title="Drink 2.5L Water" data-cat="Health" data-color="emerald">💧 2.5L Water</button>
+                        <button type="button" class="habit_preset_chip" data-title="20m Daily Workout" data-cat="Fitness" data-color="rose">🏃 20m Workout</button>
+                        <button type="button" class="habit_preset_chip" data-title="Read 10 Pages" data-cat="Mind" data-color="indigo">📖 Read 10 Pages</button>
+                        <button type="button" class="habit_preset_chip" data-title="10m Mindful Meditation" data-cat="Mind" data-color="indigo">🧘 10m Meditation</button>
+                        <button type="button" class="habit_preset_chip" data-title="No Phone First 30m" data-cat="Focus" data-color="amber">🌅 No Phone 30m</button>
+                        <button type="button" class="habit_preset_chip" data-title="Sleep Before 11 PM" data-cat="Health" data-color="emerald">🌙 Sleep by 11 PM</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. AI Health Alert / Intervention Banner (Shows on unhealthy habits) -->
+            <div id="habit_ai_advisory_card" class="habit_ai_advisory_card" style="display: none;">
+                <div class="ai_advisory_header">
+                    <div class="ai_advisory_badge">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        <span>Gemini AI Health Advisory</span>
+                    </div>
+                    <button type="button" id="btn_dismiss_ai_advisory" class="ai_advisory_close" aria-label="Dismiss">✕</button>
+                </div>
+                <div class="ai_advisory_body">
+                    <h4 id="ai_advisory_title">Unhealthy Habit Detected</h4>
+                    <p id="ai_advisory_reason">This habit may undermine your long-term focus or well-being.</p>
+                    <div class="ai_advisory_alt_box">
+                        <span class="alt_label">Recommended Replacement:</span>
+                        <strong id="ai_advisory_alternative">5-minute mindful breathing</strong>
+                        <p id="ai_advisory_tip" class="alt_tip"></p>
+                    </div>
+                </div>
+                <div class="ai_advisory_actions">
+                    <button type="button" id="btn_ai_adopt_alternative" class="ai_action_btn primary">Adopt Healthy Replacement</button>
+                    <button type="button" id="btn_ai_keep_habit" class="ai_action_btn secondary">Keep As-Is</button>
+                </div>
+            </div>
+
+            <!-- 4. Weekly habit checklist matrix grid with full Date & Past Navigation -->
             <div class="consistency_matrix_card">
                 <div class="matrix_header_row">
                     <div>
-                        <h3>Weekly Habit Tracker</h3>
-                        <p>Sleek grid checklist. Complete habits daily to expand streaks.</p>
+                        <div class="matrix_title_with_date">
+                            <h3>Weekly Habit Tracker</h3>
+                            <span id="habit_week_range_badge" class="habit_date_range_pill">October 26 – November 1, 2026</span>
+                        </div>
+                        <p>Complete habits daily to expand streaks. Click column headers to inspect past dates.</p>
                     </div>
-                    <button class="matrix_addition_btn" id="btn_consistency_add_habit">+ Add Habit</button>
+                    <div class="matrix_week_navigator">
+                        <button type="button" id="btn_habit_prev_week" class="habit_nav_arrow_btn" title="Previous Week">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+                            <span>Prev Week</span>
+                        </button>
+                        <button type="button" id="btn_habit_this_week" class="habit_nav_today_btn" title="Current Week">This Week</button>
+                        <button type="button" id="btn_habit_next_week" class="habit_nav_arrow_btn" title="Next Week">
+                            <span>Next Week</span>
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                        </button>
+                    </div>
                 </div>
 
                 <div class="matrix_table_responsive_wrapper">
                     <table class="matrix_table">
                         <thead>
-                            <tr>
+                            <tr id="habit_matrix_thead_row">
                                 <th>Atomic Habit</th>
                                 <th>Mon</th>
                                 <th>Tue</th>
@@ -298,19 +407,67 @@
                 </div>
             </div>
 
-            <!-- Monthly Contribution Heatmap SVG block -->
-            <div class="consistency_heatmap_card">
-                <h3>Monthly Achievement Heatmap</h3>
-                <p class="heatmap_sub">Habit completions density grid</p>
-                <div id="chart_heatmap_grid" class="heatmap_box"></div>
-                <div class="heatmap_shades_legend">
-                    <span>Less consistent</span>
-                    <span class="shade_box shade-0"></span>
-                    <span class="shade_box shade-1"></span>
-                    <span class="shade_box shade-2"></span>
-                    <span class="shade_box shade-3"></span>
-                    <span>Fully committed</span>
+            <!-- 5 & 6. Bottom Deck: Compact 1/4th Month Heatmap + 3/4th Gemini AI Habit Coach -->
+            <div class="consistency_deck_grid">
+
+                <!-- 5. Monthly Contribution Heatmap (Compact 1/4th Space Widget) -->
+                <div class="consistency_heatmap_card">
+                    <div class="heatmap_header_row compact">
+                        <div class="heatmap_title_stack">
+                            <h3>Monthly Heatmap</h3>
+                            <span id="heatmap_month_badge" class="habit_date_range_pill">October 2026</span>
+                        </div>
+                        <div class="matrix_week_navigator mini">
+                            <button type="button" id="btn_heatmap_prev_month" class="habit_nav_arrow_btn mini" title="Previous Month">
+                                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+                            </button>
+                            <button type="button" id="btn_heatmap_this_month" class="habit_nav_today_btn mini" title="Current Month">Now</button>
+                            <button type="button" id="btn_heatmap_next_month" class="habit_nav_arrow_btn mini" title="Next Month">
+                                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <p class="heatmap_sub">Hover or tap any date to inspect completions.</p>
+                    <div id="chart_heatmap_grid" class="heatmap_box"></div>
+                    <div class="heatmap_shades_legend compact">
+                        <span>Less</span>
+                        <div class="shades_swatches">
+                            <span class="shade_box shade-0"></span>
+                            <span class="shade_box shade-1"></span>
+                            <span class="shade_box shade-2"></span>
+                            <span class="shade_box shade-3"></span>
+                        </div>
+                        <span>More</span>
+                    </div>
                 </div>
+
+                <!-- 6. Gemini AI Habit Coach & Insights Deck -->
+                <div class="consistency_ai_card">
+                    <div class="ai_coach_header_row">
+                        <div class="ai_coach_title_group">
+                            <div class="ai_coach_icon_orb">✨</div>
+                            <div>
+                                <h3>Gemini AI Habit Coach</h3>
+                                <p>Intelligent consistency diagnosis, habit stacking advice, and weekly momentum coaching.</p>
+                            </div>
+                        </div>
+                        <button type="button" id="btn_ai_analyze_habits" class="ai_coach_trigger_btn">
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                            <span>Analyze My Habits</span>
+                        </button>
+                    </div>
+                    <div id="habit_ai_coach_results" class="ai_coach_results_box">
+                        <div class="ai_coach_placeholder">
+                            <p>Click <strong>"Analyze My Habits"</strong> to get a personalized consistency diagnosis, identify break points, and receive Atomic Habit stacking strategies powered by Gemini AI.</p>
+                            <div class="ai_prompt_suggestion_chips">
+                                <button type="button" class="ai_prompt_chip" data-prompt="How should I stack my current habits for an effortless morning routine?">☕ How to stack my morning habits?</button>
+                                <button type="button" class="ai_prompt_chip" data-prompt="Why do I struggle with consistency on weekends and how do I fix it?">🏖️ Overcoming weekend consistency drops</button>
+                                <button type="button" class="ai_prompt_chip" data-prompt="Suggest 2 micro-habits that take under 2 minutes but produce huge results.">⚡ 2-minute high-leverage atomic habits</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
 
         </section>
