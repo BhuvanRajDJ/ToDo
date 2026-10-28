@@ -5227,6 +5227,92 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
         });
       });
 
+      // Gemini API Key Management
+      const keyInput = document.getElementById("input_gemini_api_key");
+      const toggleVisBtn = document.getElementById("btn_toggle_key_visibility");
+      const saveKeyBtn = document.getElementById("btn_save_gemini_key");
+      const clearKeyBtn = document.getElementById("btn_clear_gemini_key");
+      const feedbackEl = document.getElementById("gemini_key_feedback");
+
+      if (toggleVisBtn && keyInput) {
+        toggleVisBtn.addEventListener("click", () => {
+          if (keyInput.type === "password") {
+            keyInput.type = "text";
+            toggleVisBtn.textContent = "🔒";
+            toggleVisBtn.setAttribute("title", "Hide key");
+          } else {
+            keyInput.type = "password";
+            toggleVisBtn.textContent = "👁";
+            toggleVisBtn.setAttribute("title", "Show key");
+          }
+        });
+      }
+
+      if (saveKeyBtn && keyInput) {
+        const handleSaveKey = async () => {
+          const val = keyInput.value.trim();
+          if (!val) {
+            if (feedbackEl) {
+              feedbackEl.className = "key_feedback_msg error";
+              feedbackEl.textContent = "Please enter an API key before saving.";
+            }
+            return;
+          }
+
+          saveKeyBtn.disabled = true;
+          saveKeyBtn.textContent = "Verifying with Google...";
+          if (feedbackEl) {
+            feedbackEl.className = "key_feedback_msg info";
+            feedbackEl.textContent = "Directly verifying key with Google Gemini API...";
+          }
+
+          try {
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(val)}`);
+            if (res.ok) {
+              localStorage.setItem("aurora_gemini_api_key", val);
+              this.geminiApiKey = val;
+              this.showToast("Gemini API key saved securely on device!", "success");
+              this.renderSettingsUI();
+            } else {
+              const errData = await res.json().catch(() => ({}));
+              const msg = errData.error?.message || "Invalid API key or forbidden access.";
+              saveKeyBtn.disabled = false;
+              saveKeyBtn.textContent = "Save & Verify Key";
+              if (feedbackEl) {
+                feedbackEl.className = "key_feedback_msg error";
+                feedbackEl.textContent = `Verification failed: ${msg}`;
+              }
+            }
+          } catch (err) {
+            saveKeyBtn.disabled = false;
+            saveKeyBtn.textContent = "Save & Verify Key";
+            if (feedbackEl) {
+              feedbackEl.className = "key_feedback_msg error";
+              feedbackEl.textContent = "Network error. Unable to reach Google API to verify key.";
+            }
+          }
+        };
+
+        saveKeyBtn.addEventListener("click", handleSaveKey);
+        keyInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            handleSaveKey();
+          }
+        });
+      }
+
+      if (clearKeyBtn) {
+        clearKeyBtn.addEventListener("click", () => {
+          if (confirm("Remove your stored Gemini API key from this device? AI coaching and health checks will require a key to function.")) {
+            localStorage.removeItem("aurora_gemini_api_key");
+            this.geminiApiKey = "";
+            this.showToast("Gemini API key removed from device.", "info");
+            this.renderSettingsUI();
+          }
+        });
+      }
+
       document.getElementById("btn_clear_data").addEventListener("click", () => {
         const message = "Permanently clear all task sheets, routines, streaks, and focus metrics? This action is irreversible!\n\nTo confirm, please type \"clear storage\" below:";
         const input = prompt(message);
