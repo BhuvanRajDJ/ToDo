@@ -922,12 +922,29 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.resetTimer();
     }
 
-    skipTimerInterval() {
+    skipTimerInterval(autoStart = true) {
+      const wasRunning = this.timer.isRunning;
+      const currentTaskId = this.timer.activeTaskId;
       this.pauseTimer();
-      if (this.timer.type === "pomodoro") this.changeTimerType("shortBreak");
-      else if (this.timer.type === "shortBreak") this.changeTimerType("longBreak");
-      else this.changeTimerType("pomodoro");
-      this.emit("notification", { message: "Focus block skipped!", type: "info" });
+
+      if (this.timer.type === "pomodoro") {
+        this.savedFocusTaskId = currentTaskId;
+        this.timer.type = "shortBreak";
+        this.resetTimer();
+        this.emit("notification", { message: "Focus skipped · Break started", type: "info" });
+      } else {
+        const taskIdToRestore = currentTaskId || this.savedFocusTaskId;
+        this.timer.type = "pomodoro";
+        this.resetTimer();
+        if (taskIdToRestore) {
+          this.timer.activeTaskId = taskIdToRestore;
+        }
+        this.emit("notification", { message: "Break skipped · Focus started", type: "info" });
+      }
+
+      if (wasRunning || autoStart) {
+        this.startTimer(this.timer.activeTaskId);
+      }
     }
 
     tickTimer() {
@@ -6183,6 +6200,14 @@ Return ONLY a valid JSON object matching this schema:
             background: var(--accent-primary, #6366f1);
             color: #fff;
           }
+          .pip_btn.skip_accent {
+            color: var(--text-primary, #e6edf3);
+          }
+          .pip_btn.skip_accent:hover {
+            background: var(--accent-secondary, #10b981);
+            border-color: var(--accent-secondary, #10b981);
+            color: #fff;
+          }
           .pip_progress {
             position: absolute;
             bottom: 0; left: 0;
@@ -6207,11 +6232,14 @@ Return ONLY a valid JSON object matching this schema:
             <button class="pip_btn" id="pip_play_pause" title="Play/Pause">
               <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
             </button>
-            <button class="pip_btn" id="pip_stop" title="Stop">
-              <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+            <button class="pip_btn skip_accent" id="pip_skip" title="Skip to Break">
+              <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2.5"></line></svg>
             </button>
             <button class="pip_btn restart_accent" id="pip_restart" title="Reset & Start Again">
               <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+            </button>
+            <button class="pip_btn" id="pip_stop" title="Stop">
+              <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
             </button>
           </div>
           <div class="pip_progress" id="pip_progress"></div>
@@ -6222,6 +6250,7 @@ Return ONLY a valid JSON object matching this schema:
         const pipTime = pipWindow.document.getElementById('pip_time');
         const pipLabel = pipWindow.document.getElementById('pip_label');
         const pipPlayPause = pipWindow.document.getElementById('pip_play_pause');
+        const pipSkip = pipWindow.document.getElementById('pip_skip');
         const pipStop = pipWindow.document.getElementById('pip_stop');
         const pipRestart = pipWindow.document.getElementById('pip_restart');
         const pipProgress = pipWindow.document.getElementById('pip_progress');
@@ -6234,12 +6263,24 @@ Return ONLY a valid JSON object matching this schema:
           if (pipTime) pipTime.textContent = `${mins}:${secs.toString().padStart(2, "0")}`;
           if (pipLabel) pipLabel.textContent = typeLabels[t.type] || 'FOCUS';
 
+          const isBreak = t.type === 'shortBreak' || t.type === 'longBreak';
+          if (strip) {
+            strip.style.borderBottomColor = isBreak ? 'var(--accent-secondary, #10b981)' : 'var(--accent-primary, #6366f1)';
+          }
+
           // Progress bar width
           if (pipProgress) {
             let pct = 100;
             if (t.type !== 'stopwatch' && t.totalDuration > 0) pct = (t.duration / t.totalDuration) * 100;
             else if (t.type === 'stopwatch') pct = ((t.duration % 60) / 60) * 100;
             pipProgress.style.width = `${pct}%`;
+            pipProgress.style.backgroundColor = isBreak ? 'var(--accent-secondary, #10b981)' : 'var(--accent-primary, #6366f1)';
+          }
+
+          // Dynamic skip tooltip
+          if (pipSkip) {
+            pipSkip.title = isBreak ? 'Skip Break → Start Focus' : 'Skip Focus → Start Break';
+            pipSkip.setAttribute('aria-label', pipSkip.title);
           }
 
           // Toggle play/pause icon
@@ -6255,6 +6296,10 @@ Return ONLY a valid JSON object matching this schema:
         // Bind controls
         pipPlayPause.addEventListener('click', () => {
           this.store.timer.isRunning ? this.store.pauseTimer() : this.store.startTimer();
+        });
+
+        pipSkip.addEventListener('click', () => {
+          this.store.skipTimerInterval(true);
         });
 
         pipStop.addEventListener('click', () => {
