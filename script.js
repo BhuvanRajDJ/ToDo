@@ -5072,24 +5072,26 @@ Return ONLY a valid JSON object matching this schema:
     // -------------------------------------------------------------------------
     renderTimerUI(t) {
       const detailsBox = document.getElementById("timer_task_details");
-      if (t.activeTaskId) {
-        const task = this.store.tasks.find(tk => tk.id === t.activeTaskId);
-        if (task) {
-          detailsBox.innerHTML = `
-            <div class="active_focus_task">
-              <span class="focus_tag">${task.category}</span>
-              <h3>${this.escapeHTML(task.title)}</h3>
-              <p>${task.description ? this.escapeHTML(task.description) : 'Deep working session...'}</p>
-            </div>
-          `;
+      if (detailsBox) {
+        if (t.activeTaskId) {
+          const task = this.store.tasks.find(tk => tk.id === t.activeTaskId);
+          if (task) {
+            detailsBox.style.display = "block";
+            detailsBox.innerHTML = `
+              <div class="active_focus_task">
+                <span class="focus_tag">${task.category}</span>
+                <h3>${this.escapeHTML(task.title)}</h3>
+                <p>${task.description ? this.escapeHTML(task.description) : 'Deep working session...'}</p>
+              </div>
+            `;
+          } else {
+            detailsBox.style.display = "none";
+            detailsBox.innerHTML = "";
+          }
+        } else {
+          detailsBox.style.display = "none";
+          detailsBox.innerHTML = "";
         }
-      } else {
-        detailsBox.innerHTML = `
-          <div class="active_focus_task_none">
-            <h3>Solitary Focus Mode</h3>
-            <p>Select a task card Focus play button to tie session directly to analytics.</p>
-          </div>
-        `;
       }
 
       this.updateTimerCountdown(t);
