@@ -6,6 +6,20 @@
 
 document.addEventListener("DOMContentLoaded", async function () {
   // =========================================================================
+  // 0. DATE HELPER (LOCAL CALENDAR CONSISTENCY)
+  // =========================================================================
+  function getLocalDateString(d = new Date()) {
+    if (typeof d === "string") {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+      d = new Date(d);
+    }
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  // =========================================================================
   // 0. SYSTEM CONFIGURATIONS (DYNAMIC DATA DRIVERS)
   // =========================================================================
   const CONFIG_CAPTURE_NEW_GOAL = {
@@ -442,6 +456,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         duration: 25 * 60,
         totalDuration: 25 * 60,
         activeTaskId: null,
+        targetEndTime: null,
+        stopwatchStartTime: null,
         elapsedSeconds: 0,
         completedSessions: 0
       };
@@ -460,6 +476,13 @@ document.addEventListener("DOMContentLoaded", async function () {
     subscribe(event, callback) {
       if (!this.listeners[event]) this.listeners[event] = [];
       this.listeners[event].push(callback);
+      return () => this.unsubscribe(event, callback);
+    }
+
+    unsubscribe(event, callback) {
+      if (this.listeners[event]) {
+        this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
+      }
     }
 
     emit(event, data) {
@@ -476,7 +499,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         id: this.nextId,
         title: data.title.trim(),
         description: (data.description || "").trim(),
-        dueDate: data.dueDate || new Date().toISOString().split("T")[0],
+        dueDate: data.dueDate || getLocalDateString(),
         priority: data.priority || "Medium",
         category: data.category || "Inbox",
         isLater: data.isLater || false,
@@ -530,12 +553,6 @@ document.addEventListener("DOMContentLoaded", async function () {
     toggleTaskComplete(id) {
       const task = this.tasks.find(t => t.id === id);
       if (task) {
-        const todayStr = new Date().toISOString().split("T")[0];
-        if (!task.completed && task.dueDate && task.dueDate > todayStr) {
-          this.emit("notification", { message: "Cannot complete tasks scheduled for future dates!", type: "error" });
-          return;
-        }
-
         task.completed = !task.completed;
         if (task.completed) {
           task.completedDate = new Date().toISOString();
@@ -557,7 +574,8 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
 
     handleRecurringRecreation(task) {
-      const nextDate = new Date(task.dueDate);
+      const parts = (task.dueDate || "").split("-").map(Number);
+      const nextDate = parts.length === 3 ? new Date(parts[0], parts[1] - 1, parts[2]) : new Date();
       if (task.recurring === "daily") nextDate.setDate(nextDate.getDate() + 1);
       else if (task.recurring === "weekly") nextDate.setDate(nextDate.getDate() + 7);
       else if (task.recurring === "monthly") nextDate.setMonth(nextDate.getMonth() + 1);
@@ -566,7 +584,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         this.addTask({
           title: task.title,
           description: task.description,
-          dueDate: nextDate.toISOString().split("T")[0],
+          dueDate: getLocalDateString(nextDate),
           priority: task.priority,
           category: task.category,
           recurring: task.recurring,
@@ -783,7 +801,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       if (habit) {
         if (!habit.history) habit.history = {};
 
-        const todayStr = new Date().toISOString().split("T")[0];
+        const todayStr = getLocalDateString();
         if (dateStr > todayStr) {
           this.emit("notification", { message: "Cannot complete habits for future dates!", type: "error" });
           return;
@@ -815,10 +833,10 @@ document.addEventListener("DOMContentLoaded", async function () {
         return;
       }
 
-      const todayStr = new Date().toISOString().split("T")[0];
+      const todayStr = getLocalDateString();
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split("T")[0];
+      const yesterdayStr = getLocalDateString(yesterday);
 
       const latestDate = sortedDates[0];
       if (latestDate !== todayStr && latestDate !== yesterdayStr) {
@@ -833,10 +851,10 @@ document.addEventListener("DOMContentLoaded", async function () {
         const prevDate = new Date(sortedDates[i]);
         const diffDays = (checkDate - prevDate) / (1000 * 60 * 60 * 24);
 
-        if (diffDays === 1) {
+        if (Math.round(diffDays) === 1) {
           currentStreak++;
           checkDate = prevDate;
-        } else if (diffDays > 1) {
+        } else if (Math.round(diffDays) > 1) {
           break;
         }
       }
@@ -875,6 +893,11 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.stopAlarm();
       if (taskId !== null) this.timer.activeTaskId = taskId;
       this.timer.isRunning = true;
+      if (this.timer.type !== "stopwatch") {
+        this.timer.targetEndTime = Date.now() + (this.timer.duration * 1000);
+      } else {
+        this.timer.stopwatchStartTime = Date.now() - (this.timer.duration * 1000);
+      }
       this.emit("timerStateChanged", this.timer);
 
       if (this.timerInterval) clearInterval(this.timerInterval);
@@ -885,6 +908,13 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.stopAlarm();
       this.timer.isRunning = false;
       clearInterval(this.timerInterval);
+      if (this.timer.type !== "stopwatch" && this.timer.targetEndTime) {
+        this.timer.duration = Math.max(0, Math.round((this.timer.targetEndTime - Date.now()) / 1000));
+        this.timer.targetEndTime = null;
+      } else if (this.timer.type === "stopwatch" && this.timer.stopwatchStartTime) {
+        this.timer.duration = Math.floor((Date.now() - this.timer.stopwatchStartTime) / 1000);
+        this.timer.stopwatchStartTime = null;
+      }
       this.emit("timerStateChanged", this.timer);
     }
 
@@ -892,6 +922,8 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.stopAlarm();
       this.timer.isRunning = false;
       clearInterval(this.timerInterval);
+      this.timer.targetEndTime = null;
+      this.timer.stopwatchStartTime = null;
       this.timer.activeTaskId = null;
       this.setTimerDuration();
       this.emit("timerStateChanged", this.timer);
@@ -900,7 +932,9 @@ document.addEventListener("DOMContentLoaded", async function () {
     restartTimer() {
       this.stopAlarm();
       this.timer.isRunning = false;
-      if (this.timerInterval) clearInterval(this.timerInterval);
+      clearInterval(this.timerInterval);
+      this.timer.targetEndTime = null;
+      this.timer.stopwatchStartTime = null;
       this.setTimerDuration();
       this.startTimer(this.timer.activeTaskId);
     }
@@ -951,13 +985,23 @@ document.addEventListener("DOMContentLoaded", async function () {
       if (!this.timer.isRunning) return;
 
       if (this.timer.type === "stopwatch") {
-        this.timer.duration += 1;
-        this.timer.elapsedSeconds += 1;
+        if (this.timer.stopwatchStartTime) {
+          this.timer.duration = Math.floor((Date.now() - this.timer.stopwatchStartTime) / 1000);
+        } else {
+          this.timer.duration += 1;
+        }
+        this.timer.elapsedSeconds = this.timer.duration;
       } else {
-        this.timer.duration -= 1;
+        if (this.timer.targetEndTime) {
+          const remaining = Math.round((this.timer.targetEndTime - Date.now()) / 1000);
+          this.timer.duration = Math.max(0, remaining);
+        } else {
+          this.timer.duration -= 1;
+        }
         this.timer.elapsedSeconds += 1;
 
         if (this.timer.duration <= 0) {
+          this.timer.duration = 0;
           this.timerComplete();
           return;
         }
@@ -1199,11 +1243,10 @@ document.addEventListener("DOMContentLoaded", async function () {
       return Notification.permission === "granted";
     }
 
-    static send(title, options) {
+    static send(title, options = {}) {
       const enabledSetting = localStorage.getItem("aurora_notifications_enabled") !== "false";
       if (NotificationService.isSupported() && Notification.permission === "granted" && enabledSetting) {
         new Notification(title, {
-          icon: "assets/logo.png",
           ...options
         });
       }
@@ -1224,7 +1267,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.routineLayoutMode = "timeline";
       this.cachedQuote = null;
       this.lastQuoteFetchTime = 0;
-      this.selectedJournalDate = new Date().toISOString().split("T")[0];
+      this.selectedJournalDate = getLocalDateString();
       this.habitWeekOffset = 0;
       this.habitHeatmapMonthOffset = 0;
       this.geminiApiKey = localStorage.getItem("aurora_gemini_api_key") || "";
@@ -1400,6 +1443,12 @@ document.addEventListener("DOMContentLoaded", async function () {
         });
       }
 
+      // Routine quick add button
+      const routineQuickAddBtn = document.getElementById("routine_quick_add_btn");
+      if (routineQuickAddBtn) {
+        routineQuickAddBtn.addEventListener("click", () => this.openRoutineSheet());
+      }
+
       // Dismissal anchor controllers
       if (this.closeSheetBtn) this.closeSheetBtn.addEventListener("click", () => this.closeBottomSheet());
       if (this.sheetDeleteBtn) {
@@ -1499,9 +1548,9 @@ document.addEventListener("DOMContentLoaded", async function () {
           dateChips.forEach(c => c.classList.remove("active"));
           const val = dateInput.value;
           if (val) {
-            const todayStr = new Date().toISOString().split("T")[0];
-            const tom = new Date(); tom.setDate(tom.getDate() + 1); const tomStr = tom.toISOString().split("T")[0];
-            const nW = new Date(); nW.setDate(nW.getDate() + 7); const nWStr = nW.toISOString().split("T")[0];
+            const todayStr = getLocalDateString();
+            const tom = new Date(); tom.setDate(tom.getDate() + 1); const tomStr = getLocalDateString(tom);
+            const nW = new Date(); nW.setDate(nW.getDate() + 7); const nWStr = getLocalDateString(nW);
 
             dateChips.forEach(c => {
               const offsetStr = c.getAttribute("data-days");
@@ -2101,7 +2150,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       const listSummaryBox = document.getElementById("dash_urgent_tasks");
       const pendingTasks = this.store.tasks.filter(t => t.id !== "general_focus" && !t.completed);
       
-      const todayStr = new Date().toISOString().split("T")[0];
+      const todayStr = getLocalDateString();
       const urgentTasks = pendingTasks.filter(t => t.dueDate <= todayStr || t.priority === "High")
         .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
         .slice(0, 3);
@@ -2161,7 +2210,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         });
       } else {
         // Show today's focus summary
-        const todayStr = new Date().toISOString().split("T")[0];
+        const todayStr = getLocalDateString();
         let todayFocusMin = 0;
         let todaySessions = 0;
         this.store.tasks.forEach(t => {
@@ -2866,7 +2915,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       if (!matrixBox) return;
 
       const today = new Date();
-      const todayISO = today.toISOString().split("T")[0];
+      const todayISO = getLocalDateString(today);
 
       // Calculate Monday of target week factoring in this.habitWeekOffset
       const dayOfWeekIdx = today.getDay(); // 0 is Sun, 1 is Mon
@@ -2882,7 +2931,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       for (let i = 0; i < 7; i++) {
         const d = new Date(startOfWeek);
         d.setDate(startOfWeek.getDate() + i);
-        const iso = d.toISOString().split("T")[0];
+        const iso = getLocalDateString(d);
         weekdays.push({
           iso,
           dayName: weekdaysShort[i],
@@ -2948,7 +2997,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       for (let j = 0; j < 7; j++) {
         const pd = new Date(today);
         pd.setDate(today.getDate() - j);
-        past7Dates.push(pd.toISOString().split("T")[0]);
+        past7Dates.push(getLocalDateString(pd));
       }
 
       this.store.habits.forEach(h => {
@@ -3087,7 +3136,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       if (!container) return;
 
       const today = new Date();
-      const todayISO = today.toISOString().split("T")[0];
+      const todayISO = getLocalDateString(today);
       const targetDate = new Date(today.getFullYear(), today.getMonth() + this.habitHeatmapMonthOffset, 1);
       const year = targetDate.getFullYear();
       const month = targetDate.getMonth();
@@ -3152,6 +3201,44 @@ document.addEventListener("DOMContentLoaded", async function () {
       `;
     }
 
+    async callGeminiWithFallback(bodyPayload) {
+      if (!this.geminiApiKey) {
+        throw new Error("Gemini API key is not configured.");
+      }
+
+      const models = [
+        "gemini-2.5-flash",
+        "gemini-2.0-flash",
+        "gemini-1.5-flash"
+      ];
+
+      let lastError = null;
+
+      for (const model of models) {
+        try {
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.geminiApiKey}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(bodyPayload)
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            return { data, model };
+          }
+
+          const errText = await response.text().catch(() => "");
+          console.warn(`[Gemini] ${model} returned status ${response.status}:`, errText);
+          lastError = new Error(`Model ${model} returned status ${response.status}`);
+        } catch (err) {
+          console.warn(`[Gemini] Request failed for model ${model}:`, err);
+          lastError = err;
+        }
+      }
+
+      throw lastError || new Error("All Gemini models in fallback sequence failed.");
+    }
+
     async evaluateHabitWithAI(habitTitle, habitId) {
       const advisoryCard = document.getElementById("habit_ai_advisory_card");
       if (!advisoryCard) return;
@@ -3170,26 +3257,14 @@ document.addEventListener("DOMContentLoaded", async function () {
       try {
         const prompt = `You are a behavioral psychology and health expert. Analyze this habit: "${habitTitle}". Determine if this habit is UNHEALTHY, counterproductive, detrimental to health or productivity (e.g. smoking, doomscrolling, skipping meals, binge drinking, junk food binge, late sleeping). If healthy or neutral, isUnhealthy is false. Return ONLY valid JSON: {"isUnhealthy": boolean, "risk": "1-sentence risk explanation", "alternative": "constructive replacement habit", "tip": "atomic habit cue"}`;
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${this.geminiApiKey}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              temperature: 0.1,
-              responseMimeType: "application/json"
-            }
-          })
+        const { data } = await this.callGeminiWithFallback({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.1,
+            responseMimeType: "application/json"
+          }
         });
 
-        if (!response.ok) {
-          if (containsSuspicious) {
-            this.showAIAdvisoryCard(habitId, habitTitle, "This habit may negatively impact your physical health and focus.", "Drink a glass of water and practice 5m mindful walking.", "Place your cue in a different room.");
-          }
-          return;
-        }
-
-        const data = await response.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!text) return;
 
@@ -3300,22 +3375,13 @@ Provide a structured, inspiring habit coaching plan. Return HTML markup (use <h4
 Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown backticks or html code blocks, return raw HTML tags only.`;
 
       try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${this.geminiApiKey}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              temperature: 0.3
-            }
-          })
+        const { data, model } = await this.callGeminiWithFallback({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.3
+          }
         });
 
-        if (!response.ok) {
-          throw new Error(`Gemini API returned status ${response.status}`);
-        }
-
-        const data = await response.json();
         let content = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
         content = content.replace(/^```html\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
 
@@ -3323,7 +3389,7 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
           <div class="ai_coach_content_rendered">
             ${content}
             <div style="margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-              <span style="font-size: 11px; color: var(--text-muted);">✨ Powered by Gemini 3.5 Flash Lite</span>
+              <span style="font-size: 11px; color: var(--text-muted);">✨ Powered by ${model}</span>
               <button type="button" class="ai_prompt_chip" id="btn_reask_ai_coach" style="font-size: 11px;">Ask Another Question</button>
             </div>
           </div>
@@ -3384,7 +3450,7 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
       for (let i = 0; i < 30; i++) {
         const d = new Date(today);
         d.setDate(today.getDate() - i);
-        const dateStr = d.toISOString().split("T")[0];
+        const dateStr = getLocalDateString(d);
         habits.forEach(h => {
           if (h.history && h.history[dateStr] === true) actualCompletions30++;
         });
@@ -3404,7 +3470,7 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
             for (let i = 0; i < 30; i++) {
               const d = new Date(today);
               d.setDate(today.getDate() - i);
-              const dateStr = d.toISOString().split("T")[0];
+              const dateStr = getLocalDateString(d);
               if (h.history && h.history[dateStr] === true) compCount30++;
             }
             const completionPct = Math.round((compCount30 / 30) * 100);
@@ -3458,7 +3524,7 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
 
       for (let i = 6; i >= 0; i--) {
         const d = new Date(); d.setDate(d.getDate() - i);
-        const dateStr = d.toISOString().split("T")[0];
+        const dateStr = getLocalDateString(d);
         days.push(dateStr);
 
         let completions = 0;
@@ -3578,7 +3644,7 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
       for (let i = 0; i < 7; i++) {
         const d = new Date(today);
         d.setDate(today.getDate() - i);
-        const dateStr = d.toISOString().split("T")[0];
+        const dateStr = getLocalDateString(d);
         
         const completedToday = [];
         habits.forEach(h => {
@@ -3662,7 +3728,7 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
       for (let i = 0; i < 7; i++) {
         const d = new Date();
         d.setDate(d.getDate() - i);
-        dates.push(d.toISOString().split("T")[0]);
+        dates.push(getLocalDateString(d));
       }
 
       // Add selected date if it's older than 7 days
@@ -3680,10 +3746,10 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
 
       const navItemsHtml = dates.map(dStr => {
         const d = new Date(dStr + "T12:00:00");
-        const todayStr = new Date().toISOString().split("T")[0];
+        const todayStr = getLocalDateString();
         const yesterdayStr = (() => {
           const yes = new Date(); yes.setDate(yes.getDate() - 1);
-          return yes.toISOString().split("T")[0];
+          return getLocalDateString(yes);
         })();
 
         let label = `${months[d.getMonth()]} ${d.getDate()}`;
@@ -4013,10 +4079,10 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
 
         const getFriendlyDateLabel = (dateStr) => {
           if (dateStr === "No Date") return "Completed (Unscheduled)";
-          const todayStr = new Date().toISOString().split("T")[0];
+          const todayStr = getLocalDateString();
           const yesterday = new Date();
           yesterday.setDate(yesterday.getDate() - 1);
-          const yesterdayStr = yesterday.toISOString().split("T")[0];
+          const yesterdayStr = getLocalDateString(yesterday);
 
           if (dateStr === todayStr) return "Today";
           if (dateStr === yesterdayStr) return "Yesterday";
@@ -4119,10 +4185,10 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
     }
 
     getFilteredTasks(view) {
-      const nowStr = new Date().toISOString().split("T")[0];
+      const nowStr = getLocalDateString();
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toISOString().split("T")[0];
+      const tomorrowStr = getLocalDateString(tomorrow);
 
       let list = this.store.tasks.filter(t => t.id !== "general_focus");
 
@@ -4180,7 +4246,7 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
     getNDaysFromNow(n) {
       const d = new Date();
       d.setDate(d.getDate() + n);
-      return d.toISOString().split("T")[0];
+      return getLocalDateString(d);
     }
 
     // -------------------------------------------------------------------------
@@ -4389,7 +4455,7 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
       if (laterBtn) {
         laterBtn.addEventListener("click", () => {
           if (task.isLater) {
-            const todayStr = new Date().toISOString().split("T")[0];
+            const todayStr = getLocalDateString();
             this.store.updateTask(task.id, { isLater: false, dueDate: todayStr });
           } else {
             this.store.updateTask(task.id, { isLater: true });
@@ -4706,20 +4772,14 @@ Return ONLY a valid JSON object with these keys:
 }`;
 
       try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${this.geminiApiKey}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              temperature: 0.2,
-              responseMimeType: "application/json"
-            }
-          })
+        const { data } = await this.callGeminiWithFallback({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.2,
+            responseMimeType: "application/json"
+          }
         });
 
-        if (!response.ok) throw new Error(`Gemini API error ${response.status}`);
-        const data = await response.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!text) throw new Error("Empty response from AI");
 
@@ -4776,20 +4836,14 @@ ${JSON.stringify(payload, null, 2)}
 Return ONLY a JSON array of task IDs in recommended execution order: [${payload.map(p => p.id).join(", ")}]`;
 
       try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${this.geminiApiKey}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              temperature: 0.1,
-              responseMimeType: "application/json"
-            }
-          })
+        const { data } = await this.callGeminiWithFallback({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.1,
+            responseMimeType: "application/json"
+          }
         });
 
-        if (!response.ok) throw new Error("API error");
-        const data = await response.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
         const orderedIds = JSON.parse(text);
 
@@ -4863,20 +4917,14 @@ Return ONLY a valid JSON object matching this schema:
 }`;
 
       try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${this.geminiApiKey}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              temperature: 0.2,
-              responseMimeType: "application/json"
-            }
-          })
+        const { data } = await this.callGeminiWithFallback({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.2,
+            responseMimeType: "application/json"
+          }
         });
 
-        if (!response.ok) throw new Error("API response not OK");
-        const data = await response.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
         const result = JSON.parse(text);
 
@@ -4991,9 +5039,9 @@ Return ONLY a valid JSON object matching this schema:
         document.getElementById("task_duration").value = task.estimatedDuration || 25;
         document.getElementById("task_recurring").value = task.recurring || "none";
 
-        const todayStr = new Date().toISOString().split("T")[0];
-        const tom = new Date(); tom.setDate(tom.getDate() + 1); const tomStr = tom.toISOString().split("T")[0];
-        const nW = new Date(); nW.setDate(nW.getDate() + 7); const nWStr = nW.toISOString().split("T")[0];
+        const todayStr = getLocalDateString();
+        const tom = new Date(); tom.setDate(tom.getDate() + 1); const tomStr = getLocalDateString(tom);
+        const nW = new Date(); nW.setDate(nW.getDate() + 7); const nWStr = getLocalDateString(nW);
 
         dateChips.forEach(c => {
           c.classList.remove("active");
@@ -5015,7 +5063,7 @@ Return ONLY a valid JSON object matching this schema:
 
         this.sheetForm.reset();
         
-        document.getElementById("task_due_date").value = new Date().toISOString().split("T")[0];
+        document.getElementById("task_due_date").value = getLocalDateString();
         document.getElementById("task_priority").value = "Medium";
         document.getElementById("task_category").value = "Inbox";
         document.getElementById("task_duration").value = 25;
@@ -5059,7 +5107,7 @@ Return ONLY a valid JSON object matching this schema:
       const isLater = (doLaterChip && doLaterChip.classList.contains("active")) || !dueDate;
 
       if (isLater && !dueDate) {
-        dueDate = new Date().toISOString().split("T")[0]; // default safe date fallback
+        dueDate = getLocalDateString(); // default safe date fallback
       }
 
       const formData = { title, description, dueDate, priority, category, estimatedDuration, recurring, isLater };
@@ -5271,7 +5319,7 @@ Return ONLY a valid JSON object matching this schema:
       const total = this.store.tasks.filter(t => t.id !== "general_focus").length;
       const completionRate = total > 0 ? Math.round((completed.length / total) * 100) : 0;
 
-      const todayStr = new Date().toISOString().split("T")[0];
+      const todayStr = getLocalDateString();
       let totalFocusMin = 0;
       let todayFocusMin = 0;
       let totalSessions = 0;
@@ -5313,7 +5361,7 @@ Return ONLY a valid JSON object matching this schema:
       const wrapper = document.getElementById("chart_focus_distribution");
       if (!wrapper) return;
 
-      const todayStr = new Date().toISOString().split("T")[0];
+      const todayStr = getLocalDateString();
       const tasksWithFocusToday = this.store.tasks
         .filter(t => t.focusSessions && t.focusSessions.some(fs => fs.startTime && fs.startTime.startsWith(todayStr)))
         .sort((a, b) => {
@@ -5355,7 +5403,7 @@ Return ONLY a valid JSON object matching this schema:
     }
 
     getCompletedTodayCount() {
-      const todayStr = new Date().toISOString().split("T")[0];
+      const todayStr = getLocalDateString();
       return this.store.tasks.filter(t => t.id !== "general_focus" && t.completed && t.completedDate && t.completedDate.startsWith(todayStr)).length;
     }
 
@@ -5377,7 +5425,7 @@ Return ONLY a valid JSON object matching this schema:
 
       for (let i = 6; i >= 0; i--) {
         const d = new Date(); d.setDate(d.getDate() - i);
-        const dateStr = d.toISOString().split("T")[0];
+        const dateStr = getLocalDateString(d);
         days.push(dateStr);
         counts.push(completedCountMap[dateStr] || 0);
       }
@@ -5449,7 +5497,7 @@ Return ONLY a valid JSON object matching this schema:
 
       for (let i = 6; i >= 0; i--) {
         const d = new Date(); d.setDate(d.getDate() - i);
-        const dateStr = d.toISOString().split("T")[0];
+        const dateStr = getLocalDateString(d);
         days.push(dateStr);
         mins.push(dailyFocusMap[dateStr] || 0);
       }
@@ -6003,7 +6051,7 @@ Return ONLY a valid JSON object matching this schema:
     }
 
     checkOverdueDeadlines() {
-      const today = new Date().toISOString().split("T")[0];
+      const today = getLocalDateString();
       const overdue = this.store.tasks.filter(t => !t.completed && t.dueDate < today);
       if (overdue.length > 0) {
         setTimeout(() => {
@@ -6080,8 +6128,8 @@ Return ONLY a valid JSON object matching this schema:
     }
 
     escapeHTML(str) {
-      if (!str) return "";
-      return str
+      if (str === null || str === undefined) return "";
+      return String(str)
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
@@ -6311,13 +6359,25 @@ Return ONLY a valid JSON object matching this schema:
           this.store.restartTimer();
         });
 
+        // Clean up previous PiP subscriptions if any
+        if (this.pipUnsubscribers) {
+          this.pipUnsubscribers.forEach(unsub => unsub());
+          this.pipUnsubscribers = [];
+        }
+
         // Subscribe to ticks
         const onTick = (t) => updatePiPUI(t);
         const onStateChange = (t) => updatePiPUI(t);
-        this.store.subscribe('timerTick', onTick);
-        this.store.subscribe('timerStateChanged', onStateChange);
+        this.pipUnsubscribers = [
+          this.store.subscribe('timerTick', onTick),
+          this.store.subscribe('timerStateChanged', onStateChange)
+        ];
 
         pipWindow.addEventListener('pagehide', () => {
+          if (this.pipUnsubscribers) {
+            this.pipUnsubscribers.forEach(unsub => unsub());
+            this.pipUnsubscribers = [];
+          }
           this.pipWindow = null;
           if (this.timerPipToggleBtn) this.timerPipToggleBtn.classList.remove("active");
         });
@@ -6328,8 +6388,12 @@ Return ONLY a valid JSON object matching this schema:
     }
 
     closeDocumentPiP() {
+      if (this.pipUnsubscribers) {
+        this.pipUnsubscribers.forEach(unsub => unsub());
+        this.pipUnsubscribers = [];
+      }
       if (this.pipWindow) {
-        this.pipWindow.close();
+        try { this.pipWindow.close(); } catch(e){}
         this.pipWindow = null;
       }
       if (this.timerPipToggleBtn) this.timerPipToggleBtn.classList.remove("active");
@@ -6352,5 +6416,17 @@ Return ONLY a valid JSON object matching this schema:
     console.log("Aurora Companion SPA Booted Flawlessly on Transactional IndexedDB!");
   } catch (err) {
     console.error("Critical failure during Aurora Companion database startup:", err);
+    const appEl = document.getElementById("app") || document.body;
+    const errorBox = document.createElement("div");
+    errorBox.className = "db_fatal_error_banner";
+    errorBox.style.cssText = "position:fixed;inset:0;background:#0d1117;color:#f85149;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;z-index:999999;font-family:-apple-system,BlinkMacSystemFont,sans-serif;";
+    errorBox.innerHTML = `
+      <h2 style="font-size:22px;margin-bottom:12px;color:#fff;">Storage Initialization Failed</h2>
+      <p style="max-width:480px;line-height:1.5;color:#8b949e;margin-bottom:20px;">
+        Aurora Companion could not access local database storage. This can happen in private browsing mode, if browser storage is blocked, or if disk storage quota is exceeded.
+      </p>
+      <button style="padding:10px 20px;border-radius:8px;border:none;background:#6366f1;color:#fff;font-weight:600;cursor:pointer;" onclick="window.location.reload()">Reload Application</button>
+    `;
+    appEl.appendChild(errorBox);
   }
 });
