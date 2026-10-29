@@ -767,7 +767,16 @@
         <div class="sheet_drag_bar"></div>
         <div class="sheet_header">
             <h3 id="sheet_form_title">Capture New Goal</h3>
-            <button id="close_sheet" class="sheet_close_btn" aria-label="Dismiss Sheet">✕</button>
+            <div class="sheet_header_actions">
+                <button type="button" id="sheet_delete_btn" class="sheet_delete_btn" title="Delete Task" aria-label="Delete Task" style="display: none;">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                        <line x1="10" y1="11" x2="10" y2="17"></line>
+                        <line x1="14" y1="11" x2="14" y2="17"></line>
+                    </svg>
+                </button>
+                <button type="button" id="close_sheet" class="sheet_close_btn" aria-label="Dismiss Sheet">✕</button>
+            </div>
         </div>
 
         <form id="sheet_form" class="sheet_form_body">

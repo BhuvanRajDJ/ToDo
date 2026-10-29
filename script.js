@@ -1269,6 +1269,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.sheetTitle = document.getElementById("sheet_form_title");
       this.sheetSubmitBtn = document.getElementById("sheet_submit");
       this.closeSheetBtn = document.getElementById("close_sheet");
+      this.sheetDeleteBtn = document.getElementById("sheet_delete_btn");
 
       // Routine Sheet specifically
       this.routineSheet = document.getElementById("routine_sheet");
@@ -1394,6 +1395,17 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       // Dismissal anchor controllers
       if (this.closeSheetBtn) this.closeSheetBtn.addEventListener("click", () => this.closeBottomSheet());
+      if (this.sheetDeleteBtn) {
+        this.sheetDeleteBtn.addEventListener("click", () => {
+          if (this.activeEditingTaskId) {
+            const task = this.store.tasks.find(t => t.id === this.activeEditingTaskId);
+            if (confirm(`Delete "${task ? task.title : 'task'}"?`)) {
+              this.store.deleteTask(this.activeEditingTaskId);
+              this.closeBottomSheet();
+            }
+          }
+        });
+      }
       if (this.closeRoutineSheetBtn) this.closeRoutineSheetBtn.addEventListener("click", () => this.closeRoutineSheet());
       if (this.routineSheetOverlay) this.routineSheetOverlay.addEventListener("click", () => this.closeRoutineSheet());
 
@@ -4222,6 +4234,13 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
               </div>
               ${task.description ? `<p class="card_desc">${this.escapeHTML(task.description)}</p>` : ""}
             </div>
+            <button type="button" class="quick_delete_task_btn" title="Delete task" aria-label="Delete task">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                <line x1="10" y1="11" x2="10" y2="17"></line>
+                <line x1="14" y1="11" x2="14" y2="17"></line>
+              </svg>
+            </button>
           </div>
 
           <div class="card_meta_row">
@@ -4313,7 +4332,7 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
 
       const content = card.querySelector(".card_content");
       content.addEventListener("click", (e) => {
-        const ignores = [".checkbox_btn", "polyline", "svg", "rect", "line", ".recurring_icon", ".subtask_item", ".sub_check_btn", ".sub_delete_btn", ".subtask_input", "button", "input", ".task_ai_breakdown_deck"];
+        const ignores = [".checkbox_btn", ".quick_delete_task_btn", "polyline", "svg", "rect", "line", ".recurring_icon", ".subtask_item", ".sub_check_btn", ".sub_delete_btn", ".subtask_input", "button", "input", ".task_ai_breakdown_deck"];
         if (ignores.some(sel => e.target.closest(sel))) return;
         card.classList.toggle("expanded");
       });
@@ -4322,6 +4341,16 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
         e.stopPropagation();
         this.store.toggleTaskComplete(task.id);
       });
+
+      const quickDelBtn = card.querySelector(".quick_delete_task_btn");
+      if (quickDelBtn) {
+        quickDelBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (confirm(`Delete "${task.title}"?`)) {
+            this.store.deleteTask(task.id);
+          }
+        });
+      }
 
       const playBtn = card.querySelector(".play_btn");
       if (playBtn) {
@@ -4935,6 +4964,7 @@ Return ONLY a valid JSON object matching this schema:
         this.activeEditingTaskId = task.id;
         this.sheetTitle.textContent = "Refine Task Details";
         this.sheetSubmitBtn.textContent = "Save Changes";
+        if (this.sheetDeleteBtn) this.sheetDeleteBtn.style.display = "inline-flex";
 
         document.getElementById("task_title").value = task.title;
         document.getElementById("task_desc").value = task.description || "";
@@ -4964,6 +4994,7 @@ Return ONLY a valid JSON object matching this schema:
         this.activeEditingTaskId = null;
         this.sheetTitle.textContent = "Capture New Goal";
         this.sheetSubmitBtn.textContent = "Commit Task";
+        if (this.sheetDeleteBtn) this.sheetDeleteBtn.style.display = "none";
 
         this.sheetForm.reset();
         
@@ -4985,6 +5016,7 @@ Return ONLY a valid JSON object matching this schema:
       this.bottomSheet.classList.remove("visible");
       this.bottomSheetOverlay.classList.remove("visible");
       document.body.classList.remove("modal-open");
+      if (this.sheetDeleteBtn) this.sheetDeleteBtn.style.display = "none";
       this.activeEditingTaskId = null;
       this.isSubmitting = false;
       if (this.sheetSubmitBtn) this.sheetSubmitBtn.disabled = false;

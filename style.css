@@ -1241,6 +1241,54 @@ h1, h2, h3, h4, h5, h6 {
   opacity: 0.6;
 }
 
+.card_main_row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.card_text {
+  flex: 1;
+  min-width: 0;
+}
+
+.card_title_row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quick_delete_task_btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-top: -2px;
+  opacity: 0.7;
+  transition: color var(--transition-smooth), background-color var(--transition-smooth), border-color var(--transition-smooth), transform var(--transition-smooth), opacity var(--transition-smooth);
+}
+
+.quick_delete_task_btn:hover {
+  opacity: 1;
+  color: #ef4444;
+  background-color: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.25);
+  transform: scale(1.08);
+}
+
+.quick_delete_task_btn:active {
+  transform: scale(0.95);
+}
+
 .card_title {
   font-size: 14.5px;
   font-weight: 600;
@@ -4047,6 +4095,33 @@ svg text { font-family: var(--font-stack); }
 
 .sheet_close_btn:hover { background-color: var(--bg-primary); }
 
+.sheet_header_actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sheet_delete_btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background-color: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: var(--transition-smooth);
+}
+
+.sheet_delete_btn:hover {
+  color: #ef4444;
+  background-color: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.25);
+  transform: scale(1.08);
+}
+
 .sheet_form_body {
   display: flex;
   flex-direction: column;
@@ -6147,6 +6222,24 @@ body[data-style="neo-brutalism"] .sub_check_btn {
   height: 22px !important;
   background-color: var(--bg-secondary) !important;
   transition: transform 0.08s ease, box-shadow 0.08s ease !important;
+}
+
+body[data-style="neo-brutalism"] .quick_delete_task_btn,
+body[data-style="neo-brutalism"] .sheet_delete_btn {
+  border: 2px solid #000000 !important;
+  background-color: #ffffff !important;
+  color: #000000 !important;
+  box-shadow: 2px 2px 0px 0px #000000 !important;
+  border-radius: 0px !important;
+  opacity: 1 !important;
+}
+
+body[data-style="neo-brutalism"] .quick_delete_task_btn:hover,
+body[data-style="neo-brutalism"] .sheet_delete_btn:hover {
+  background-color: #ef4444 !important;
+  color: #ffffff !important;
+  transform: translate(-1px, -1px) !important;
+  box-shadow: 3px 3px 0px 0px #000000 !important;
 }
 
 body[data-style="neo-brutalism"] .task_card.completed .checkbox_btn,
