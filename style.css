@@ -3370,6 +3370,11 @@ body.view-timer-active .view_header {
   background: var(--accent-glow);
   transform: translateY(-1px);
 }
+.timer_sec_btn.active {
+  border-color: var(--accent-primary);
+  background-color: var(--accent-primary);
+  color: #ffffff;
+}
 .timer_sec_btn:active { transform: translateY(0); }
 .timer_sec_btn.danger:hover {
   border-color: #ef4444;
@@ -5126,149 +5131,6 @@ svg text { font-family: var(--font-stack); }
   }
 }
 
-/* --- FLOATING FOCUS TIMER OVERLAY --- */
-.floating_timer_container {
-  position: fixed;
-  bottom: 85px; /* Sits comfortably above mobile tab navigation */
-  right: 20px;
-  width: 84px;
-  height: 84px;
-  z-index: 10005; /* Always on top of all sheets/overlays */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  user-select: none;
-  touch-action: none;
-  cursor: grab;
-  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s;
-  animation: floatingAppear 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-}
-
-@keyframes floatingAppear {
-  from { transform: scale(0.6) translateY(20px); opacity: 0; }
-  to { transform: scale(1) translateY(0); opacity: 1; }
-}
-
-.floating_timer_container:active {
-  cursor: grabbing;
-}
-
-.floating_timer_drag_handle {
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  border-radius: 50%;
-  z-index: 2;
-}
-
-.floating_timer_circle {
-  width: 100%;
-  height: 100%;
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  box-shadow: var(--shadow-lg);
-  overflow: hidden;
-}
-
-.floating_progress_ring {
-  position: absolute;
-  top: 0; left: 0; width: 100%; height: 100%;
-  transform: rotate(-90deg);
-}
-
-.floating_progress_ring_bg {
-  fill: none;
-  stroke: rgba(255, 255, 255, 0.02);
-  stroke-width: 4;
-}
-
-.floating_progress_ring_stroke {
-  fill: none;
-  stroke: var(--accent-primary);
-  stroke-width: 4;
-  stroke-linecap: round;
-  stroke-dasharray: 251.3; /* 2 * PI * 40 */
-  stroke-dashoffset: 251.3;
-  transition: stroke-dashoffset 0.3s ease;
-}
-
-.floating_timer_text_layer {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 3;
-  transition: opacity 0.2s, filter 0.2s;
-}
-
-#floating_timer_time {
-  font-size: 15px;
-  font-weight: 800;
-  color: var(--text-primary);
-  letter-spacing: -0.5px;
-}
-
-#floating_timer_sub {
-  font-size: 8px;
-  font-weight: 800;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  margin-top: -2px;
-}
-
-/* Expanded Quick Controls on Click/Hover */
-.floating_timer_controls {
-  position: absolute;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%) scale(0.6);
-  display: flex;
-  gap: 4px;
-  z-index: 10;
-  opacity: 0;
-  pointer-events: none;
-  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.floating_timer_container.expanded .floating_timer_controls {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translate(-50%, -50%) scale(1);
-}
-
-.floating_timer_container.expanded .floating_timer_text_layer {
-  opacity: 0.05;
-  filter: blur(2px);
-}
-
-.floating_ctrl_btn {
-  background-color: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: transform 0.2s, background-color 0.2s;
-  box-shadow: var(--shadow-sm);
-  padding: 0;
-}
-
-.floating_ctrl_btn:hover {
-  background-color: var(--accent-primary);
-  border-color: var(--accent-primary);
-  color: #ffffff;
-  transform: scale(1.1);
-}
-
-
-
 /* --- HABIT TEMPLATE CHIPS & COMPACT DELETION --- */
 .habit_templates_chips {
   display: flex;
@@ -6066,8 +5928,7 @@ body[data-style="neo-brutalism"] .shutdown_checklist_wrapper,
 body[data-style="neo-brutalism"] .dash_timeline_box,
 body[data-style="neo-brutalism"] .active_focus_task,
 body[data-style="neo-brutalism"] .welcome_dialog_content,
-body[data-style="neo-brutalism"] .modal_dialog_content,
-body[data-style="neo-brutalism"] .floating_timer_circle {
+body[data-style="neo-brutalism"] .modal_dialog_content {
   border: var(--border-width) var(--border-style) var(--border-color-token) !important;
   border-radius: var(--border-radius-lg-token) !important;
   box-shadow: var(--shadow-md-token) !important;

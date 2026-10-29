@@ -1224,9 +1224,6 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.bindUserInteractions();
       this.populateCreationFormsFromConfigs();
 
-      // Initialize Floating Focus Timer
-      this.initFloatingTimer();
-
       // Refresh layout on boot
       this.updateThemeClasses();
       this.updateSidebarClass();
@@ -1293,15 +1290,8 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.grantNotifBtn = document.getElementById("grant_notifications");
       this.closeNotifBtn = document.getElementById("close_notification_banner");
 
-      // Floating Focus Timer nodes
-      this.floatingTimerWidget = document.getElementById("floating_timer_widget");
-      this.floatingProgressRing = document.getElementById("floating_progress_ring_circle");
-      this.floatingTimerTime = document.getElementById("floating_timer_time");
-      this.floatingTimerSub = document.getElementById("floating_timer_sub");
-      this.btnFloatingPlayPause = document.getElementById("btn_floating_play_pause");
-      this.btnFloatingStop = document.getElementById("btn_floating_stop");
-      this.btnFloatingPip = document.getElementById("btn_floating_pip");
-      this.btnFloatingOpen = document.getElementById("btn_floating_open");
+      // Picture-in-Picture controls
+      this.timerPipToggleBtn = document.getElementById("timer_pip_toggle_btn");
 
       // Streak flame indicators
       this.streakCountEl = document.getElementById("streak_count");
@@ -1690,6 +1680,16 @@ document.addEventListener("DOMContentLoaded", async function () {
       if (restartBtn) {
         restartBtn.addEventListener("click", () => {
           this.store.restartTimer();
+        });
+      }
+
+      if (this.timerPipToggleBtn) {
+        this.timerPipToggleBtn.addEventListener("click", () => {
+          if (this.pipWindow) {
+            this.closeDocumentPiP();
+          } else {
+            this.openDocumentPiP();
+          }
         });
       }
 
@@ -6071,231 +6071,8 @@ Return ONLY a valid JSON object matching this schema:
     }
 
     // -------------------------------------------------------------------------
-    // FLOATING FOCUS TIMER MODULE (DRAG-AND-DROP & CONTROLS BINDINGS)
+    // PICTURE-IN-PICTURE NATIVE FOCUS OVERLAY
     // -------------------------------------------------------------------------
-    initFloatingTimer() {
-      if (!this.floatingTimerWidget) return;
-
-      // Restore last saved position of in-app widget with safe viewport clamping
-      const savedX = localStorage.getItem("floating_timer_x");
-      const savedY = localStorage.getItem("floating_timer_y");
-      if (savedX !== null && savedY !== null) {
-        const widgetWidth = 84;
-        const widgetHeight = 84;
-        const maxLeft = window.innerWidth - widgetWidth - 10;
-        const maxTop = window.innerHeight - widgetHeight - 10;
-        
-        const clampedLeft = Math.max(10, Math.min(parseInt(savedX), maxLeft));
-        const clampedTop = Math.max(10, Math.min(parseInt(savedY), maxTop));
-
-        this.floatingTimerWidget.style.left = clampedLeft + "px";
-        this.floatingTimerWidget.style.top = clampedTop + "px";
-        this.floatingTimerWidget.style.bottom = "auto";
-        this.floatingTimerWidget.style.right = "auto";
-      }
-
-      // Drag and Drop implementation (Pointer Events for Touch + Mouse support!)
-      let isDragging = false;
-      let startX, startY;
-      let initialLeft, initialTop;
-      let hasDragged = false;
-
-      const onPointerDown = (e) => {
-        // Prevent dragging if clicking directly on a control button
-        if (e.target.closest(".floating_ctrl_btn")) return;
-        
-        isDragging = true;
-        hasDragged = false;
-        startX = e.clientX;
-        startY = e.clientY;
-
-        const rect = this.floatingTimerWidget.getBoundingClientRect();
-        initialLeft = rect.left;
-        initialTop = rect.top;
-
-        this.floatingTimerWidget.style.transition = "none";
-        this.floatingTimerWidget.setPointerCapture(e.pointerId);
-      };
-
-      const onPointerMove = (e) => {
-        if (!isDragging) return;
-
-        const dx = e.clientX - startX;
-        const dy = e.clientY - startY;
-
-        if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
-          hasDragged = true;
-        }
-
-        let newLeft = initialLeft + dx;
-        let newTop = initialTop + dy;
-
-        // Keep inside viewport boundaries
-        const widgetWidth = this.floatingTimerWidget.offsetWidth;
-        const widgetHeight = this.floatingTimerWidget.offsetHeight;
-        const maxLeft = window.innerWidth - widgetWidth - 10;
-        const maxTop = window.innerHeight - widgetHeight - 10;
-
-        newLeft = Math.max(10, Math.min(newLeft, maxLeft));
-        newTop = Math.max(10, Math.min(newTop, maxTop));
-
-        this.floatingTimerWidget.style.left = newLeft + "px";
-        this.floatingTimerWidget.style.top = newTop + "px";
-        this.floatingTimerWidget.style.bottom = "auto";
-        this.floatingTimerWidget.style.right = "auto";
-      };
-
-      const onPointerUp = (e) => {
-        if (!isDragging) return;
-        isDragging = false;
-
-        this.floatingTimerWidget.releasePointerCapture(e.pointerId);
-        this.floatingTimerWidget.style.transition = "transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s";
-
-        // Save position
-        if (hasDragged) {
-          const rect = this.floatingTimerWidget.getBoundingClientRect();
-          localStorage.setItem("floating_timer_x", Math.round(rect.left));
-          localStorage.setItem("floating_timer_y", Math.round(rect.top));
-        } else {
-          // It was a click/tap! Expand/collapse quick controls
-          this.floatingTimerWidget.classList.toggle("expanded");
-        }
-      };
-
-      this.floatingTimerWidget.addEventListener("pointerdown", onPointerDown);
-      this.floatingTimerWidget.addEventListener("pointermove", onPointerMove);
-      this.floatingTimerWidget.addEventListener("pointerup", onPointerUp);
-
-      // Double-click to pause/resume instantly!
-      this.floatingTimerWidget.addEventListener("dblclick", (e) => {
-        e.stopPropagation();
-        if (this.store.timer.isRunning) {
-          this.store.pauseTimer();
-        } else {
-          this.store.startTimer();
-        }
-      });
-
-      // Quick Controls button bindings
-      if (this.btnFloatingPlayPause) {
-        this.btnFloatingPlayPause.addEventListener("click", (e) => {
-          e.stopPropagation();
-          if (this.store.timer.isRunning) {
-            this.store.pauseTimer();
-          } else {
-            this.store.startTimer();
-          }
-        });
-      }
-
-      if (this.btnFloatingStop) {
-        this.btnFloatingStop.addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.store.resetTimer();
-          this.floatingTimerWidget.classList.remove("expanded");
-        });
-      }
-
-      if (this.btnFloatingOpen) {
-        this.btnFloatingOpen.addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.store.setView("timer");
-          this.floatingTimerWidget.classList.remove("expanded");
-        });
-      }
-
-      if (this.btnFloatingPip) {
-        this.btnFloatingPip.addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.openDocumentPiP();
-          this.floatingTimerWidget.classList.remove("expanded");
-        });
-      }
-
-      // Dismiss expanded menu on click away
-      document.addEventListener("click", (e) => {
-        if (!e.target.closest("#floating_timer_widget")) {
-          this.floatingTimerWidget.classList.remove("expanded");
-        }
-      });
-
-      // Sync timer ticking changes with our floating circular elements!
-      this.store.subscribe("timerStateChanged", (t) => this.syncFloatingTimerState(t));
-      this.store.subscribe("timerTick", (t) => this.syncFloatingTimerTick(t));
-      this.store.subscribe("timerComplete", () => {
-        this.floatingTimerWidget.style.display = "none";
-        this.floatingTimerWidget.classList.remove("expanded");
-      });
-
-      // Synchronize initial state on boot load (handles active running reloads)
-      this.syncFloatingTimerState(this.store.timer);
-    }
-
-    syncFloatingTimerState(t) {
-      if (!this.floatingTimerWidget) return;
-
-      if (t.isRunning) {
-        this.floatingTimerWidget.style.display = "flex";
-        
-        // Update play/pause control button icon
-        if (this.btnFloatingPlayPause) {
-          this.btnFloatingPlayPause.innerHTML = `
-            <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><rect x="4" y="4" width="4" height="16" rx="1"></rect><rect x="16" y="4" width="4" height="16" rx="1"></rect></svg>
-          `;
-          this.btnFloatingPlayPause.title = "Pause Timer";
-        }
-      } else {
-        // If not running and duration is at full set, hide it. Otherwise keep it visible so user can resume!
-        const isFull = t.duration === t.totalDuration;
-        if (isFull) {
-          this.floatingTimerWidget.style.display = "none";
-          this.floatingTimerWidget.classList.remove("expanded");
-        } else {
-          this.floatingTimerWidget.style.display = "flex";
-          if (this.btnFloatingPlayPause) {
-            this.btnFloatingPlayPause.innerHTML = `
-              <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            `;
-            this.btnFloatingPlayPause.title = "Resume Timer";
-          }
-        }
-      }
-
-      this.syncFloatingTimerTick(t);
-    }
-
-    syncFloatingTimerTick(t) {
-      if (!this.floatingTimerWidget) return;
-
-      // Update sub label based on timer type
-      if (this.floatingTimerSub) {
-        const subLabels = { pomodoro: "Focus", shortBreak: "Break", longBreak: "Rest", stopwatch: "Free" };
-        this.floatingTimerSub.textContent = subLabels[t.type] || "Focus";
-      }
-
-      const mins = Math.floor(Math.abs(t.duration) / 60);
-      const secs = Math.abs(t.duration) % 60;
-      this.floatingTimerTime.textContent = `${mins}:${secs.toString().padStart(2, "0")}`;
-
-      const subLabels = {
-        pomodoro: "Focus",
-        shortBreak: "Short",
-        longBreak: "Long",
-        stopwatch: "Timer"
-      };
-      this.floatingTimerSub.textContent = subLabels[t.type] || "Focus";
-
-      if (this.floatingProgressRing) {
-        let percentage = 1;
-        if (t.type !== "stopwatch" && t.totalDuration > 0) percentage = t.duration / t.totalDuration;
-        else if (t.type === "stopwatch") percentage = (t.duration % 60) / 60;
-
-        const offset = 251.3 - (percentage * 251.3);
-        this.floatingProgressRing.style.strokeDashoffset = offset;
-      }
-    }
-
     async openDocumentPiP() {
       if (!('documentPictureInPicture' in window)) {
         this.showToast("Always-on-top overlay is not supported in this browser.", "info");
@@ -6317,6 +6094,7 @@ Return ONLY a valid JSON object matching this schema:
         });
 
         this.pipWindow = pipWindow;
+        if (this.timerPipToggleBtn) this.timerPipToggleBtn.classList.add("active");
 
         // Copy computed CSS variables from main body
         const rootStyles = getComputedStyle(document.body);
@@ -6494,6 +6272,7 @@ Return ONLY a valid JSON object matching this schema:
 
         pipWindow.addEventListener('pagehide', () => {
           this.pipWindow = null;
+          if (this.timerPipToggleBtn) this.timerPipToggleBtn.classList.remove("active");
         });
 
       } catch (err) {
@@ -6506,6 +6285,7 @@ Return ONLY a valid JSON object matching this schema:
         this.pipWindow.close();
         this.pipWindow = null;
       }
+      if (this.timerPipToggleBtn) this.timerPipToggleBtn.classList.remove("active");
     }
   }
 
