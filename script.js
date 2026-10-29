@@ -577,12 +577,34 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
 
     addSubtask(taskId, title) {
-      const task = this.tasks.find(t => t.id === taskId);
+      const task = this.tasks.find(t => t.id == taskId);
       if (task && title.trim()) {
+        if (!task.subtasks) task.subtasks = [];
         task.subtasks.push({
-          id: `${taskId}_sub_${Date.now()}`,
+          id: `${taskId}_sub_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
           title: title.trim(),
           completed: false
+        });
+
+        // Async Background Persist
+        StorageService.putItem("tasks", task);
+
+        this.emit("tasksUpdated", this.tasks);
+      }
+    }
+
+    addSubtasks(taskId, titlesArray) {
+      const task = this.tasks.find(t => t.id == taskId);
+      if (task && Array.isArray(titlesArray)) {
+        if (!task.subtasks) task.subtasks = [];
+        titlesArray.forEach((title, idx) => {
+          if (title && title.trim()) {
+            task.subtasks.push({
+              id: `${taskId}_sub_${Date.now()}_${idx}_${Math.random().toString(36).substr(2, 5)}`,
+              title: title.trim(),
+              completed: false
+            });
+          }
         });
 
         // Async Background Persist
@@ -1190,6 +1212,8 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.habitHeatmapMonthOffset = 0;
       this.geminiApiKey = localStorage.getItem("aurora_gemini_api_key") || "";
       this.pendingUnhealthyHabit = null;
+      this.todayAIPlan = null;
+      this.todayAITaskOrder = null;
 
       // Touch coordinates for swipe-to-complete
       this.touchStartX = 0;
@@ -3908,6 +3932,20 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
       const filtered = this.getFilteredTasks(view);
       this.viewCount.textContent = `(${filtered.length})`;
 
+      // Manage AI Strategy Banner for Focus Today View
+      const bannerContainer = document.getElementById("today_ai_banner_container");
+      if (view === "today") {
+        if (bannerContainer) {
+          bannerContainer.style.display = "block";
+          this.renderTodayAIBanner(filtered);
+        }
+      } else {
+        if (bannerContainer) {
+          bannerContainer.style.display = "none";
+          bannerContainer.innerHTML = "";
+        }
+      }
+
       if (filtered.length === 0) {
         this.taskListContainer.innerHTML = `
           <div class="empty_state">
@@ -4078,11 +4116,24 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
           return bd.localeCompare(ad); // Newest completed first!
         });
       } else {
-        list.sort((a, b) => {
-          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : a.id;
-          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : b.id;
-          return timeB - timeA;
-        });
+        if (view === "today" && this.todayAITaskOrder && this.todayAITaskOrder.length > 0) {
+          list.sort((a, b) => {
+            const indexA = this.todayAITaskOrder.indexOf(a.id);
+            const indexB = this.todayAITaskOrder.indexOf(b.id);
+            if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+            if (indexA !== -1) return -1;
+            if (indexB !== -1) return 1;
+            const timeA = a.createdAt ? new Date(a.createdAt).getTime() : a.id;
+            const timeB = b.createdAt ? new Date(b.createdAt).getTime() : b.id;
+            return timeB - timeA;
+          });
+        } else {
+          list.sort((a, b) => {
+            const timeA = a.createdAt ? new Date(a.createdAt).getTime() : a.id;
+            const timeB = b.createdAt ? new Date(b.createdAt).getTime() : b.id;
+            return timeB - timeA;
+          });
+        }
       }
 
       const search = this.store.filters.search.toLowerCase().trim();
@@ -4132,6 +4183,16 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
       const completedSub = hasSub ? task.subtasks.filter(s => s.completed).length : 0;
       const subPct = hasSub ? Math.round((completedSub / task.subtasks.length) * 100) : 0;
 
+      let aiOrderBadge = "";
+      if (this.todayAITaskOrder && this.todayAITaskOrder.length > 0) {
+        const rank = this.todayAITaskOrder.indexOf(task.id);
+        if (rank === 0) {
+          aiOrderBadge = `<span class="badge ai_rank top" title="AI Ranked #1 Focus"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor" style="display:inline-block; vertical-align:middle; margin-right:3px;"><path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2z"/></svg>#1 Priority</span>`;
+        } else if (rank > 0) {
+          aiOrderBadge = `<span class="badge ai_rank" title="AI Ranked Sequence #${rank + 1}">#${rank + 1} Sequence</span>`;
+        }
+      }
+
       card.innerHTML = `
         <div class="card_swipe_bg left_bg">
           <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
@@ -4156,6 +4217,7 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
             <div class="card_text">
               <div class="card_title_row">
                 <h3 class="card_title">${this.escapeHTML(task.title)}</h3>
+                ${aiOrderBadge}
                 ${task.recurring !== "none" ? `<span class="recurring_icon" title="Repeats ${task.recurring}"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;"><path d="M17 2.1l4 4-4 4"></path><path d="M3 12.2v-2a4 4 0 0 1 4-4h14"></path><path d="M7 21.9l-4-4 4-4"></path><path d="M21 11.8v2a4 4 0 0 1-4 4H3"></path></svg></span>` : ""}
               </div>
               ${task.description ? `<p class="card_desc">${this.escapeHTML(task.description)}</p>` : ""}
@@ -4209,12 +4271,21 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
                 <input type="text" class="subtask_input" data-task-id="${task.id}" placeholder="+ Add subtask checklist, press Enter...">
               </div>
             </div>
+
+            <!-- Inline AI Subtask Breakdown Slot -->
+            <div class="task_ai_drawer_slot"></div>
             
             <div class="card_control_buttons">
               <button class="action_btn edit_btn" aria-label="Edit Task">
                 Edit
               </button>
               ${!task.completed ? `
+                <button class="action_btn ai_breakdown_btn" aria-label="Break down task with AI">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; color: var(--accent-primary);">
+                    <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2z"/>
+                  </svg>
+                  AI Breakdown
+                </button>
                 <button class="action_btn play_btn" aria-label="Focus on task">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                     <polygon points="5 3 19 12 5 21 5 3"></polygon>
@@ -4242,7 +4313,7 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
 
       const content = card.querySelector(".card_content");
       content.addEventListener("click", (e) => {
-        const ignores = [".checkbox_btn", "polyline", "svg", "rect", "line", ".recurring_icon", ".subtask_item", ".sub_check_btn", ".sub_delete_btn", ".subtask_input", "button", "input"];
+        const ignores = [".checkbox_btn", "polyline", "svg", "rect", "line", ".recurring_icon", ".subtask_item", ".sub_check_btn", ".sub_delete_btn", ".subtask_input", "button", "input", ".task_ai_breakdown_deck"];
         if (ignores.some(sel => e.target.closest(sel))) return;
         card.classList.toggle("expanded");
       });
@@ -4257,6 +4328,14 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
         playBtn.addEventListener("click", () => {
           this.store.setView("timer");
           this.store.startTimer(task.id);
+        });
+      }
+
+      const aiBreakdownBtn = card.querySelector(".ai_breakdown_btn");
+      if (aiBreakdownBtn) {
+        aiBreakdownBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.openAIBreakdownDrawer(task, card);
         });
       }
 
@@ -4366,6 +4445,480 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
           rightBg.style.opacity = 0;
         }
       });
+    }
+
+    // =========================================================================
+    // FOCUS TODAY AI STRATEGIST & SUBTASK BREAKDOWN ENGINE
+    // =========================================================================
+    renderTodayAIBanner(todayTasks) {
+      const container = document.getElementById("today_ai_banner_container");
+      if (!container) return;
+
+      container.innerHTML = `
+        <div class="today_ai_deck">
+          <div class="today_ai_header">
+            <div class="today_ai_title_group">
+              <div class="today_ai_sparkle_icon">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2z"/>
+                </svg>
+              </div>
+              <div>
+                <div class="today_ai_title_with_badge">
+                  <h3>AI Focus Strategist</h3>
+                  <span class="today_ai_tag">Daily Plan</span>
+                </div>
+                <p class="today_ai_subtitle">Intelligent prioritization, anti-procrastination cues & time blocking</p>
+              </div>
+            </div>
+
+            <div class="today_ai_actions">
+              <button type="button" id="btn_today_ai_plan" class="today_ai_btn primary">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                <span>Plan Today's Focus</span>
+              </button>
+              <button type="button" id="btn_today_ai_prioritize" class="today_ai_btn secondary">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+                <span>⚡ Smart Order</span>
+              </button>
+              ${this.todayAIPlan || (this.todayAITaskOrder && this.todayAITaskOrder.length > 0) ? `
+                <button type="button" id="btn_today_ai_reset" class="today_ai_btn text_only" title="Reset AI Ordering">Reset</button>
+              ` : ""}
+            </div>
+          </div>
+
+          <div id="today_ai_plan_result" class="today_ai_plan_result"></div>
+        </div>
+      `;
+
+      if (this.todayAIPlan) {
+        this.renderTodayAIPlanDetails(this.todayAIPlan, todayTasks);
+      }
+
+      const planBtn = document.getElementById("btn_today_ai_plan");
+      const prioritizeBtn = document.getElementById("btn_today_ai_prioritize");
+      const resetBtn = document.getElementById("btn_today_ai_reset");
+
+      if (planBtn) {
+        planBtn.addEventListener("click", () => this.generateTodayAIPlan(todayTasks));
+      }
+      if (prioritizeBtn) {
+        prioritizeBtn.addEventListener("click", () => this.autoPrioritizeTodayTasks(todayTasks));
+      }
+      if (resetBtn) {
+        resetBtn.addEventListener("click", () => {
+          this.todayAIPlan = null;
+          this.todayAITaskOrder = null;
+          this.renderTaskListUI("today");
+          this.showToast("Reset AI daily plan and ordering.", "info");
+        });
+      }
+    }
+
+    renderTodayAIPlanDetails(plan, todayTasks) {
+      const resultEl = document.getElementById("today_ai_plan_result");
+      if (!resultEl) return;
+
+      const topTask = todayTasks.find(t => t.id === plan.topFocusTaskId) || todayTasks[0];
+
+      resultEl.innerHTML = `
+        <div class="today_ai_plan_card">
+          <p class="today_ai_summary">"${this.escapeHTML(plan.executiveSummary || "")}"</p>
+
+          ${topTask ? `
+            <div class="today_ai_conquer_box">
+              <div class="conquer_info">
+                <span class="conquer_badge">🎯 Start Here · #1 Priority Focus</span>
+                <strong class="conquer_title">${this.escapeHTML(topTask.title)}</strong>
+                <p class="conquer_reason">${this.escapeHTML(plan.topFocusReason || "Highest leverage goal for today.")}</p>
+              </div>
+              <button type="button" class="today_ai_btn primary" id="btn_ai_launch_top_task">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                <span>Focus in Timer</span>
+              </button>
+            </div>
+          ` : ""}
+
+          ${plan.antiProcrastinationTip ? `
+            <div class="today_ai_inertia_box">
+              <span class="micro_icon" style="font-size: 16px;">⚡</span>
+              <div>
+                <strong>Anti-Procrastination Starter Step:</strong>
+                <span>${this.escapeHTML(plan.antiProcrastinationTip)}</span>
+              </div>
+            </div>
+          ` : ""}
+
+          <div class="today_ai_timeline_section">
+            <span class="timeline_section_label">Recommended Flow (${plan.totalEstimatedMinutes || 50}m Total)</span>
+            <div class="today_ai_timeline_list">
+              ${(plan.recommendedOrder || []).map((step, idx) => {
+                const task = todayTasks.find(t => t.id === step.taskId);
+                const taskTitle = task ? task.title : (step.taskTitle || "Task");
+                return `
+                  <div class="today_ai_timeline_item">
+                    <div class="step_left">
+                      <span class="step_number">#${idx + 1}</span>
+                      <strong class="step_task_title">${this.escapeHTML(taskTitle)}</strong>
+                    </div>
+                    <div class="step_meta">
+                      ${step.timeSlot ? `<span class="step_slot">${this.escapeHTML(step.timeSlot)}</span>` : ""}
+                      ${step.energyTag ? `<span class="step_energy">${this.escapeHTML(step.energyTag)}</span>` : ""}
+                    </div>
+                  </div>
+                `;
+              }).join("")}
+            </div>
+          </div>
+        </div>
+      `;
+
+      const launchBtn = document.getElementById("btn_ai_launch_top_task");
+      if (launchBtn && topTask) {
+        launchBtn.addEventListener("click", () => {
+          this.store.setView("timer");
+          this.store.startTimer(topTask.id);
+        });
+      }
+    }
+
+    async generateTodayAIPlan(todayTasks) {
+      const resultEl = document.getElementById("today_ai_plan_result");
+      if (!resultEl) return;
+
+      if (!this.geminiApiKey) {
+        resultEl.innerHTML = `
+          <div class="ai_coach_placeholder" style="border-left: 3px solid var(--accent-primary); padding-left: 14px; margin-top: 14px;">
+            <p style="font-size: 13.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">Gemini API Key Required</p>
+            <p style="margin-bottom: 8px;">To activate intelligent daily game plans, smart task ranking, and subtask generation, add your free Google Gemini API key in Settings.</p>
+            <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 8px 12px; margin-bottom: 12px; font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 14px;">🔒</span>
+              <span><strong>Privacy Guarantee:</strong> Your key is stored 100% locally on this device in your browser's private storage. It is never sent to any external server.</span>
+            </div>
+            <button type="button" class="habit_quick_submit_btn" id="btn_goto_settings_plan" style="height: 34px; font-size: 11.5px;">Configure Key in Settings</button>
+          </div>
+        `;
+        const gotoBtn = document.getElementById("btn_goto_settings_plan");
+        if (gotoBtn) gotoBtn.addEventListener("click", () => this.store.setView("settings"));
+        return;
+      }
+
+      if (todayTasks.length === 0) {
+        resultEl.innerHTML = `
+          <div class="ai_coach_placeholder" style="margin-top: 12px;">
+            <p><strong>No active tasks in Today's list!</strong> Add tasks using the + button to generate your personalized AI daily focus plan.</p>
+          </div>
+        `;
+        return;
+      }
+
+      resultEl.innerHTML = `
+        <div class="ai_coach_loading" style="padding: 16px 0;">
+          <div class="ai_coach_spinner"></div>
+          <span>Gemini AI is analyzing your goals, overdue inertia, and cognitive workload...</span>
+        </div>
+      `;
+
+      const now = new Date();
+      const tasksPayload = todayTasks.map(t => {
+        const due = new Date(t.dueDate + "T23:59:59");
+        const diffDays = Math.ceil((due - now) / (1000 * 60 * 60 * 24));
+        return {
+          id: t.id,
+          title: t.title,
+          priority: t.priority,
+          category: t.category,
+          estimatedDuration: t.estimatedDuration || 25,
+          isOverdue: diffDays < 0,
+          overdueDays: diffDays < 0 ? Math.abs(diffDays) : 0,
+          subtasksCount: t.subtasks ? t.subtasks.length : 0
+        };
+      });
+
+      const prompt = `You are an elite productivity strategist and behavioral psychologist.
+Analyze these tasks scheduled for the user's TODAY focus view:
+${JSON.stringify(tasksPayload, null, 2)}
+
+Provide a sharp, motivating, anti-procrastination daily focus strategy.
+Notice if any tasks are severely overdue (high friction/procrastination trap) or compound goals.
+Return ONLY a valid JSON object with these keys:
+{
+  "executiveSummary": "1-2 punchy sentences assessing today's momentum and cognitive workload.",
+  "topFocusTaskId": ${tasksPayload[0].id},
+  "topFocusReason": "Why this task should be conquered first (e.g. Eat the Frog or quick win)",
+  "antiProcrastinationTip": "A microscopic 2-minute starter cue for the most overdue or daunting task",
+  "recommendedOrder": [
+    {
+      "taskId": ${tasksPayload[0].id},
+      "order": 1,
+      "timeSlot": "Morning Session (09:00 - 09:30)",
+      "energyTag": "Deep Work / Quick Win",
+      "strategyNote": "Execution tip in 1 short sentence"
+    }
+  ],
+  "totalEstimatedMinutes": 50
+}`;
+
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${this.geminiApiKey}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.2,
+              responseMimeType: "application/json"
+            }
+          })
+        });
+
+        if (!response.ok) throw new Error(`Gemini API error ${response.status}`);
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) throw new Error("Empty response from AI");
+
+        const plan = JSON.parse(text);
+        this.todayAIPlan = plan;
+        if (plan.recommendedOrder && Array.isArray(plan.recommendedOrder)) {
+          this.todayAITaskOrder = plan.recommendedOrder.map(r => r.taskId);
+        }
+        this.renderTodayAIPlanDetails(plan, todayTasks);
+        this.renderTaskListUI("today");
+      } catch (err) {
+        console.error("AI Daily Plan error:", err);
+        resultEl.innerHTML = `
+          <div class="key_feedback_msg error" style="display: block; margin-top: 12px;">
+            Failed to generate AI daily plan. Please check your network connection or Gemini API key in Settings.
+          </div>
+        `;
+      }
+    }
+
+    async autoPrioritizeTodayTasks(todayTasks) {
+      if (!this.geminiApiKey) {
+        this.generateTodayAIPlan(todayTasks);
+        return;
+      }
+      if (todayTasks.length <= 1) {
+        this.showToast("Only 1 task scheduled for today — already #1 priority!", "info");
+        this.todayAITaskOrder = todayTasks.map(t => t.id);
+        this.renderTaskListUI("today");
+        return;
+      }
+
+      const prioritizeBtn = document.getElementById("btn_today_ai_prioritize");
+      if (prioritizeBtn) {
+        prioritizeBtn.disabled = true;
+        prioritizeBtn.innerHTML = `<span>Ordering...</span>`;
+      }
+
+      const now = new Date();
+      const payload = todayTasks.map(t => {
+        const due = new Date(t.dueDate + "T23:59:59");
+        const diffDays = Math.ceil((due - now) / (1000 * 60 * 60 * 24));
+        return {
+          id: t.id,
+          title: t.title,
+          priority: t.priority,
+          overdueDays: diffDays < 0 ? Math.abs(diffDays) : 0,
+          estimatedDuration: t.estimatedDuration || 25
+        };
+      });
+
+      const prompt = `Rank these today tasks from highest leverage/impact to lowest:
+${JSON.stringify(payload, null, 2)}
+Return ONLY a JSON array of task IDs in recommended execution order: [${payload.map(p => p.id).join(", ")}]`;
+
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${this.geminiApiKey}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.1,
+              responseMimeType: "application/json"
+            }
+          })
+        });
+
+        if (!response.ok) throw new Error("API error");
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        const orderedIds = JSON.parse(text);
+
+        if (Array.isArray(orderedIds)) {
+          this.todayAITaskOrder = orderedIds;
+          this.showToast("Tasks prioritized by AI! #1 Priority highlighted.", "success");
+          this.renderTaskListUI("today");
+        }
+      } catch (err) {
+        console.error("Prioritization error:", err);
+        this.showToast("Unable to prioritize tasks with AI.", "error");
+      } finally {
+        if (prioritizeBtn) {
+          prioritizeBtn.disabled = false;
+          prioritizeBtn.innerHTML = `
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+            <span>⚡ Smart Order</span>
+          `;
+        }
+      }
+    }
+
+    async openAIBreakdownDrawer(task, card) {
+      const slot = card.querySelector(".task_ai_drawer_slot");
+      if (!slot) return;
+
+      if (slot.innerHTML.trim() !== "") {
+        slot.innerHTML = "";
+        return;
+      }
+
+      if (!this.geminiApiKey) {
+        slot.innerHTML = `
+          <div class="task_ai_breakdown_deck">
+            <p style="font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">Gemini API Key Required</p>
+            <p style="font-size: 11.5px; color: var(--text-secondary); margin-bottom: 8px;">Configure your free Google Gemini API key in Settings to activate AI subtask breakdowns.</p>
+            <button type="button" class="today_ai_btn primary btn_slot_settings" style="height: 30px; font-size: 11px;">Go to Settings</button>
+          </div>
+        `;
+        slot.querySelector(".btn_slot_settings").addEventListener("click", (e) => {
+          e.stopPropagation();
+          this.store.setView("settings");
+        });
+        return;
+      }
+
+      slot.innerHTML = `
+        <div class="task_ai_breakdown_deck">
+          <div class="ai_coach_loading" style="padding: 10px 0;">
+            <div class="ai_coach_spinner"></div>
+            <span>Gemini AI is generating subtasks & action cues...</span>
+          </div>
+        </div>
+      `;
+
+      const prompt = `You are an expert productivity engineer. Break down this task into 3 to 5 concrete, actionable, small subtasks (each taking 5-30 minutes).
+If the title has typos, misspellings (e.g. 'domin' -> 'domain', 'EMail' -> 'Email'), or is compound/vague, provide a clean, professional refinedTitle.
+Task Title: "${task.title}"
+Task Description: "${task.description || "None"}"
+Estimated Duration: ${task.estimatedDuration || 25} minutes.
+
+Return ONLY a valid JSON object matching this schema:
+{
+  "refinedTitle": "Corrected and concise title",
+  "firstMicroStep": "A microscopic 2-minute starter action to overcome inertia",
+  "subtasks": [
+    "Concrete actionable step 1",
+    "Concrete actionable step 2",
+    "Concrete actionable step 3"
+  ]
+}`;
+
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=${this.geminiApiKey}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.2,
+              responseMimeType: "application/json"
+            }
+          })
+        });
+
+        if (!response.ok) throw new Error("API response not OK");
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        const result = JSON.parse(text);
+
+        const hasRefined = result.refinedTitle && result.refinedTitle.toLowerCase().trim() !== task.title.toLowerCase().trim();
+
+        slot.innerHTML = `
+          <div class="task_ai_breakdown_deck">
+            <div class="task_ai_header_row">
+              <div class="task_ai_title_group">
+                <span class="task_ai_sparkle">✨</span>
+                <strong>AI Action Steps & Subtasks</strong>
+              </div>
+              <button type="button" class="task_ai_close_btn" title="Close">✕</button>
+            </div>
+
+            ${result.firstMicroStep ? `
+              <div class="task_ai_micro_step">
+                <span class="micro_icon">⚡</span>
+                <span><strong>2-Min Starter:</strong> ${this.escapeHTML(result.firstMicroStep)}</span>
+              </div>
+            ` : ""}
+
+            ${hasRefined ? `
+              <div class="task_ai_refined_title_row">
+                <span>Clean Title: <em>"${this.escapeHTML(result.refinedTitle)}"</em></span>
+                <button type="button" class="task_ai_apply_title_btn">Apply Title</button>
+              </div>
+            ` : ""}
+
+            <div class="task_ai_subtasks_list">
+              ${(result.subtasks || []).map(sub => `
+                <div class="task_ai_subtask_row">
+                  <span class="check_bullet">✓</span>
+                  <span class="subtask_text">${this.escapeHTML(sub)}</span>
+                </div>
+              `).join("")}
+            </div>
+
+            <div class="task_ai_actions_row">
+              <button type="button" class="today_ai_btn primary task_ai_commit_btn">
+                <span>✓ Add All (${result.subtasks ? result.subtasks.length : 0}) to Checklist</span>
+              </button>
+              <button type="button" class="today_ai_btn secondary task_ai_dismiss_btn">Dismiss</button>
+            </div>
+          </div>
+        `;
+
+        slot.querySelector(".task_ai_close_btn").addEventListener("click", (e) => {
+          e.stopPropagation();
+          slot.innerHTML = "";
+        });
+
+        slot.querySelector(".task_ai_dismiss_btn").addEventListener("click", (e) => {
+          e.stopPropagation();
+          slot.innerHTML = "";
+        });
+
+        const applyTitleBtn = slot.querySelector(".task_ai_apply_title_btn");
+        if (applyTitleBtn) {
+          applyTitleBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            this.store.updateTask(task.id, { title: result.refinedTitle });
+            this.showToast(`Updated task title to "${result.refinedTitle}"`, "success");
+            applyTitleBtn.disabled = true;
+            applyTitleBtn.textContent = "Applied ✓";
+          });
+        }
+
+        slot.querySelector(".task_ai_commit_btn").addEventListener("click", (e) => {
+          e.stopPropagation();
+          if (result.subtasks && result.subtasks.length > 0) {
+            this.store.addSubtasks(task.id, result.subtasks);
+            this.showToast(`Added ${result.subtasks.length} subtasks to task checklist!`, "success");
+          }
+          slot.innerHTML = "";
+          setTimeout(() => {
+            const reRenderedCard = document.querySelector(`.task_card[data-id="${task.id}"]`);
+            if (reRenderedCard) reRenderedCard.classList.add("expanded");
+          }, 60);
+        });
+      } catch (err) {
+        console.error("Subtask generation error:", err);
+        slot.innerHTML = `
+          <div class="task_ai_breakdown_deck">
+            <p style="color: #ef4444; font-size: 11.5px; font-weight: 600;">Failed to generate subtasks. Please check API key.</p>
+          </div>
+        `;
+      }
     }
 
     // -------------------------------------------------------------------------

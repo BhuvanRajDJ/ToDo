@@ -756,6 +756,411 @@ h1, h2, h3, h4, h5, h6 {
   transition: var(--transition-smooth);
 }
 
+/* --- 6B. FOCUS TODAY AI STRATEGIST & SUBTASK BREAKDOWN --- */
+.today_ai_deck {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-left: 4px solid var(--accent-primary);
+  border-radius: var(--border-radius-lg);
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow-sm);
+  position: relative;
+  transition: var(--transition-smooth);
+}
+
+.today_ai_header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.today_ai_title_group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.today_ai_sparkle_icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--accent-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.today_ai_title_with_badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.today_ai_title_with_badge h3 {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.today_ai_tag {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--accent-primary);
+  letter-spacing: 0.5px;
+}
+
+.today_ai_subtitle {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  margin: 2px 0 0 0;
+}
+
+.today_ai_actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.today_ai_btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--border-radius-sm);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: var(--transition-smooth);
+}
+
+.today_ai_btn.primary {
+  background-color: var(--accent-primary);
+  color: #ffffff;
+}
+
+.today_ai_btn.primary:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.today_ai_btn.secondary {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+}
+
+.today_ai_btn.secondary:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.today_ai_btn.text_only {
+  background: none;
+  color: var(--text-muted);
+  padding: 0 8px;
+  font-size: 11.5px;
+}
+
+.today_ai_btn.text_only:hover {
+  color: #ef4444;
+}
+
+.today_ai_plan_result {
+  empty-cells: hide;
+}
+
+.today_ai_plan_card {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: fadeIn 0.3s ease;
+}
+
+.today_ai_summary {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  font-style: italic;
+  margin: 0;
+}
+
+.today_ai_conquer_box {
+  background: rgba(99, 102, 241, 0.06);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-left: 4px solid var(--accent-primary);
+  border-radius: var(--border-radius-sm);
+  padding: 12px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.conquer_info {
+  flex: 1;
+  min-width: 220px;
+}
+
+.conquer_badge {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--accent-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+  display: block;
+}
+
+.conquer_title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: block;
+}
+
+.conquer_reason {
+  font-size: 11.5px;
+  color: var(--text-secondary);
+  margin: 3px 0 0 0;
+}
+
+.today_ai_inertia_box {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-left: 4px solid #f59e0b;
+  border-radius: var(--border-radius-sm);
+  padding: 10px 14px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  line-height: 1.45;
+}
+
+.today_ai_timeline_section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.timeline_section_label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+.today_ai_timeline_list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.today_ai_timeline_item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  gap: 12px;
+  font-size: 12px;
+}
+
+.step_left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.step_number {
+  font-size: 10.5px;
+  font-weight: 800;
+  color: var(--accent-primary);
+  background: rgba(99, 102, 241, 0.12);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.step_task_title {
+  color: var(--text-primary);
+  font-size: 12.5px;
+}
+
+.step_meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.step_slot {
+  color: var(--text-muted);
+}
+
+.step_energy {
+  padding: 2px 7px;
+  border-radius: 10px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+/* AI Priority Ranking Badges on Task Cards */
+.badge.ai_rank {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 12px;
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--accent-primary);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  margin-left: 8px;
+}
+
+.badge.ai_rank.top {
+  background: rgba(99, 102, 241, 0.18);
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.2);
+}
+
+/* Per-task AI Breakdown Drawer */
+.task_ai_breakdown_deck {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--accent-primary);
+  border-radius: var(--border-radius-sm);
+  padding: 12px 14px;
+  margin: 10px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: fadeIn 0.25s ease;
+}
+
+.task_ai_header_row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.task_ai_title_group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-primary);
+}
+
+.task_ai_close_btn {
+  background: none;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.task_ai_close_btn:hover {
+  color: var(--text-primary);
+}
+
+.task_ai_micro_step {
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  border-radius: 4px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.task_ai_refined_title_row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  background: var(--card-bg);
+  padding: 6px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+}
+
+.task_ai_refined_title_row em {
+  color: var(--text-primary);
+  font-weight: 600;
+  font-style: normal;
+}
+
+.task_ai_apply_title_btn {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 10.5px;
+  font-weight: 700;
+  background: var(--accent-primary);
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.task_ai_subtasks_list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.task_ai_subtask_row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.task_ai_subtask_row .check_bullet {
+  color: var(--accent-secondary);
+  font-weight: 800;
+  font-size: 12px;
+}
+
+.task_ai_actions_row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+
 /* --- 7. DYNAMIC CHECKLIST TASK CARDS --- */
 .card_stack {
   display: flex;
@@ -2336,9 +2741,19 @@ body[data-style="neo-brutalism"] .ai_action_btn,
 body[data-style="neo-brutalism"] .ai_security_guarantee_box,
 body[data-style="neo-brutalism"] .badge_key_status,
 body[data-style="neo-brutalism"] .settings_key_input,
-body[data-style="neo-brutalism"] .setting_primary_btn {
+body[data-style="neo-brutalism"] .setting_primary_btn,
+body[data-style="neo-brutalism"] .today_ai_deck,
+body[data-style="neo-brutalism"] .today_ai_conquer_box,
+body[data-style="neo-brutalism"] .today_ai_inertia_box,
+body[data-style="neo-brutalism"] .today_ai_timeline_item,
+body[data-style="neo-brutalism"] .today_ai_btn,
+body[data-style="neo-brutalism"] .task_ai_breakdown_deck {
   border: var(--border-width) solid var(--border-color-token) !important;
   border-radius: 0px !important;
+}
+
+body[data-style="neo-brutalism"] .today_ai_deck {
+  box-shadow: 4px 4px 0px 0px var(--border-color-token) !important;
 }
 body[data-style="neo-brutalism"] .ai_coach_trigger_btn,
 body[data-style="neo-brutalism"] .ai_prompt_chip {
