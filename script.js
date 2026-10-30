@@ -1278,6 +1278,11 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.tomorrowPlan = this.loadTomorrowPlan();
       this.tomorrowPlanDraft = null;
       this.eveningPlanningStreak = parseInt(localStorage.getItem("aurora_evening_streak") || "0", 10);
+      this.quickAddState = {
+        dateMode: "today",
+        priority: "Medium",
+        category: "Inbox"
+      };
 
       // Touch coordinates for swipe-to-complete
       this.touchStartX = 0;
@@ -1331,6 +1336,18 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.sheetSubmitBtn = document.getElementById("sheet_submit");
       this.closeSheetBtn = document.getElementById("close_sheet");
       this.sheetDeleteBtn = document.getElementById("sheet_delete_btn");
+
+      // Quick Add Task Elements
+      this.quickAddContainer = document.getElementById("quick_add_container");
+      this.quickAddInput = document.getElementById("quick_add_input");
+      this.qaChipDate = document.getElementById("qa_chip_date");
+      this.qaDateText = document.getElementById("qa_date_text");
+      this.qaChipPriority = document.getElementById("qa_chip_priority");
+      this.qaPriorityText = document.getElementById("qa_priority_text");
+      this.qaChipCategory = document.getElementById("qa_chip_category");
+      this.qaCategoryText = document.getElementById("qa_category_text");
+      this.qaBtnAdvanced = document.getElementById("qa_btn_advanced");
+      this.qaBtnCommit = document.getElementById("qa_btn_commit");
 
       // Routine Sheet specifically
       this.routineSheet = document.getElementById("routine_sheet");
@@ -1455,6 +1472,8 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       // Dismissal anchor controllers
       if (this.closeSheetBtn) this.closeSheetBtn.addEventListener("click", () => this.closeBottomSheet());
+      const cancelSheetBtn = document.getElementById("btn_cancel_sheet");
+      if (cancelSheetBtn) cancelSheetBtn.addEventListener("click", () => this.closeBottomSheet());
       if (this.sheetDeleteBtn) {
         this.sheetDeleteBtn.addEventListener("click", () => {
           if (this.activeEditingTaskId) {
@@ -1468,6 +1487,11 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
       if (this.closeRoutineSheetBtn) this.closeRoutineSheetBtn.addEventListener("click", () => this.closeRoutineSheet());
       if (this.routineSheetOverlay) this.routineSheetOverlay.addEventListener("click", () => this.closeRoutineSheet());
+
+      // Quick-Add Task Deck & Redesigned Modal Handlers
+      this.bindQuickAddInteractions();
+      this.bindPriorityPills();
+      this.bindSheetAdvancedToggle();
 
       // Forms commit handlers
       if (this.sheetForm) {
@@ -1541,9 +1565,17 @@ document.addEventListener("DOMContentLoaded", async function () {
               const M = String(d.getMonth() + 1).padStart(2, "0");
               const D = String(d.getDate()).padStart(2, "0");
               dateInput.value = `${Y}-${M}-${D}`;
+              dateInput.style.display = "none";
+            } else if (chip.id === "chip_custom_date") {
+              dateInput.style.display = "block";
+              if (!dateInput.value) {
+                dateInput.value = getLocalDateString();
+              }
+              dateInput.focus();
             } else {
               // Clicked "Do Later" chip!
               dateInput.value = "";
+              dateInput.style.display = "none";
             }
           });
         });
@@ -1556,18 +1588,25 @@ document.addEventListener("DOMContentLoaded", async function () {
             const tom = new Date(); tom.setDate(tom.getDate() + 1); const tomStr = getLocalDateString(tom);
             const nW = new Date(); nW.setDate(nW.getDate() + 7); const nWStr = getLocalDateString(nW);
 
+            let matched = false;
             dateChips.forEach(c => {
               const offsetStr = c.getAttribute("data-days");
               if (offsetStr) {
                 const offset = parseInt(offsetStr);
-                if (offset === 0 && val === todayStr) c.classList.add("active");
-                if (offset === 1 && val === tomStr) c.classList.add("active");
-                if (offset === 7 && val === nWStr) c.classList.add("active");
+                if (offset === 0 && val === todayStr) { c.classList.add("active"); matched = true; }
+                if (offset === 1 && val === tomStr) { c.classList.add("active"); matched = true; }
+                if (offset === 7 && val === nWStr) { c.classList.add("active"); matched = true; }
               }
             });
+            if (!matched) {
+              const customChip = document.getElementById("chip_custom_date");
+              if (customChip) customChip.classList.add("active");
+              dateInput.style.display = "block";
+            }
           } else {
             const doLater = document.getElementById("chip_do_later");
             if (doLater) doLater.classList.add("active");
+            dateInput.style.display = "none";
           }
         });
       }
@@ -1622,11 +1661,17 @@ document.addEventListener("DOMContentLoaded", async function () {
         const activeEditing = ["input", "textarea", "select"].includes(tag) || e.target.isContentEditable;
 
         if (!activeEditing) {
-          // "+" or "=" slides up task creator (or routine creator depending on view)
-          if (e.key === "+" || e.key === "=") {
+          // "+" or "=" or "n" focuses quick-add input or opens task creator (or routine creator)
+          if (e.key === "+" || e.key === "=" || e.key === "n" || e.key === "N") {
             e.preventDefault();
-            if (this.store.currentView === "routine") this.openRoutineSheet();
-            else this.openBottomSheet();
+            if (this.store.currentView === "routine") {
+              this.openRoutineSheet();
+            } else if (this.quickAddInput && this.quickAddContainer && this.quickAddContainer.style.display !== "none") {
+              this.quickAddInput.focus();
+              this.quickAddInput.select();
+            } else {
+              this.openBottomSheet();
+            }
           }
 
           // Timer keyboard shortcuts (always active globally when timer is visible)
@@ -4030,6 +4075,9 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
 
       const filtered = this.getFilteredTasks(view);
       this.viewCount.textContent = `(${filtered.length})`;
+
+      // Update context and visibility for quick add deck
+      this.updateQuickAddContext(view);
 
       // Manage AI Strategy Banner for Focus Today View
       const bannerContainer = document.getElementById("today_ai_banner_container");
