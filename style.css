@@ -520,9 +520,9 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .dash_nudge_prompt_card {
-  background: linear-gradient(135deg, var(--card-bg) 0%, rgba(99, 102, 241, 0.03) 100%);
-  border: 1px solid rgba(99, 102, 241, 0.15);
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.05);
+  background: linear-gradient(135deg, var(--card-bg) 0%, var(--accent-glow) 100%);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
   border-radius: var(--border-radius-lg);
   padding: 20px;
   display: flex;
@@ -787,7 +787,7 @@ h1, h2, h3, h4, h5, h6 {
   width: 38px;
   height: 38px;
   border-radius: 10px;
-  background: rgba(99, 102, 241, 0.12);
+  background: var(--accent-glow);
   color: var(--accent-primary);
   display: flex;
   align-items: center;
@@ -813,7 +813,7 @@ h1, h2, h3, h4, h5, h6 {
   text-transform: uppercase;
   padding: 2px 8px;
   border-radius: 12px;
-  background: rgba(99, 102, 241, 0.12);
+  background: var(--accent-glow);
   color: var(--accent-primary);
   letter-spacing: 0.5px;
 }
@@ -900,8 +900,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .today_ai_conquer_box {
-  background: rgba(99, 102, 241, 0.06);
-  border: 1px solid rgba(99, 102, 241, 0.25);
+  background: var(--accent-glow);
+  border: 1px solid var(--border-color);
   border-left: 4px solid var(--accent-primary);
   border-radius: var(--border-radius-sm);
   padding: 12px 14px;
@@ -998,7 +998,7 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 10.5px;
   font-weight: 800;
   color: var(--accent-primary);
-  background: rgba(99, 102, 241, 0.12);
+  background: var(--accent-glow);
   padding: 2px 6px;
   border-radius: 4px;
 }
@@ -1314,8 +1314,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .tomorrow_diagnosis_box {
-  background: rgba(99, 102, 241, 0.05);
-  border: 1px solid rgba(99, 102, 241, 0.2);
+  background: var(--accent-glow);
+  border: 1px solid var(--border-color);
   border-left: 3px solid var(--accent-primary);
   border-radius: var(--border-radius-sm);
   padding: 10px 14px;
@@ -1358,7 +1358,7 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 800;
   text-transform: uppercase;
   color: var(--accent-primary);
-  background: rgba(99, 102, 241, 0.12);
+  background: var(--accent-glow);
   padding: 2px 7px;
   border-radius: 4px;
 }
@@ -1543,17 +1543,17 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 700;
   padding: 2px 7px;
   border-radius: 12px;
-  background: rgba(99, 102, 241, 0.1);
+  background: var(--accent-glow);
   color: var(--accent-primary);
-  border: 1px solid rgba(99, 102, 241, 0.25);
+  border: 1px solid var(--border-color);
   margin-left: 8px;
 }
 
 .badge.ai_rank.top {
-  background: rgba(99, 102, 241, 0.18);
+  background: var(--accent-glow);
   color: var(--accent-primary);
   border-color: var(--accent-primary);
-  box-shadow: 0 0 8px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 0 8px var(--accent-glow);
 }
 
 /* Per-task AI Breakdown Drawer */
@@ -3712,7 +3712,11 @@ body.view-timer-active .view_header {
   position: absolute;
   top: 0; left: 0;
   width: 100%; height: 100%;
-  filter: drop-shadow(0 0 16px rgba(99,102,241,0.18));
+  filter: drop-shadow(0 0 16px var(--accent-glow));
+}
+
+#ringGradient stop {
+  stop-color: var(--accent-primary);
 }
 
 .timer_ring_center {
@@ -4607,7 +4611,7 @@ svg text { font-family: var(--font-stack); }
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  background: rgba(99, 102, 241, 0.12);
+  background: var(--accent-glow);
   color: var(--accent-primary);
   display: flex;
   align-items: center;

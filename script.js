@@ -1972,6 +1972,19 @@ document.addEventListener("DOMContentLoaded", async function () {
     updateThemeClasses() {
       document.body.className = `theme-${this.store.theme} accent-${this.store.accent}`;
       document.body.setAttribute("data-style", this.store.uiStyle || "neo-brutalism");
+
+      // Dynamically sync SVG gradients to match theme accent in real-time
+      const ringGradient = document.getElementById("ringGradient");
+      if (ringGradient) {
+        const accentColor = getComputedStyle(document.body).getPropertyValue("--accent-primary").trim();
+        if (accentColor) {
+          const stops = ringGradient.querySelectorAll("stop");
+          stops.forEach(s => {
+            s.setAttribute("stop-color", accentColor);
+            s.style.stopColor = accentColor;
+          });
+        }
+      }
     }
 
     updateSidebarClass() {
