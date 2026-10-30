@@ -1707,6 +1707,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
           this.closeBottomSheet();
           this.closeRoutineSheet();
+          this.closeHabitSheet();
           this.desktopSidebar.classList.remove("mobile_reveal");
           if (document.body.classList.contains("journal-distraction-free")) {
             document.body.classList.remove("journal-distraction-free");
@@ -2676,6 +2677,8 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
 
     openRoutineSheet(block = null) {
+      this.closeBottomSheet();
+      this.closeHabitSheet();
       this.routineSheet.classList.add("visible");
       this.routineSheetOverlay.classList.add("visible");
       document.body.classList.add("modal-open");
@@ -2726,6 +2729,8 @@ document.addEventListener("DOMContentLoaded", async function () {
     }
 
     openHabitSheet(habit = null) {
+      this.closeBottomSheet();
+      this.closeRoutineSheet();
       this.habitSheet.classList.add("visible");
       this.habitSheetOverlay.classList.add("visible");
       document.body.classList.add("modal-open");
@@ -5810,6 +5815,8 @@ Return ONLY a valid JSON object matching this schema:
     // SYSTEM BOTTOM SHEET EDITORS (TASKS)
     // -------------------------------------------------------------------------
     openBottomSheet(task = null, initialData = null) {
+      this.closeRoutineSheet();
+      this.closeHabitSheet();
       this.bottomSheet.classList.add("visible");
       this.bottomSheetOverlay.classList.add("visible");
       document.body.classList.add("modal-open");

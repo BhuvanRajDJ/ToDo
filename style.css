@@ -4541,12 +4541,14 @@ svg text { font-family: var(--font-stack); }
   z-index: 100;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.3s ease;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
 .bottom_sheet_overlay.visible {
   opacity: 1;
   pointer-events: auto;
+  visibility: visible;
 }
 
 /* --- 14. TASK SLIDE-UP BOTTOM SHEET (MODAL CREATOR & ADVANCED SETUP) --- */
@@ -4562,11 +4564,14 @@ svg text { font-family: var(--font-stack); }
   z-index: 101;
   padding: 18px 20px 32px 20px;
   transform: translateY(100%);
-  transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease, visibility 0.3s ease;
   overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--border-color) transparent;
   -webkit-overflow-scrolling: touch;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .bottom_sheet_drawer::-webkit-scrollbar {
@@ -4583,7 +4588,12 @@ svg text { font-family: var(--font-stack); }
   background: var(--text-muted);
 }
 
-.bottom_sheet_drawer.visible { transform: translateY(0); }
+.bottom_sheet_drawer.visible {
+  transform: translateY(0);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
 
 .sheet_drag_bar {
   width: 36px; height: 4px;
@@ -5230,11 +5240,19 @@ svg text { font-family: var(--font-stack); }
     border: 1px solid var(--border-color);
     box-shadow: 0 20px 48px rgba(0, 0, 0, 0.28), 0 0 0 1px var(--border-color);
     transform: translate(-50%, -46%) scale(0.96);
-    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease, visibility 0.3s ease;
     padding: 24px 28px;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
   }
   
-  .bottom_sheet_drawer.visible { transform: translate(-50%, -50%) scale(1); }
+  .bottom_sheet_drawer.visible {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
   
   .sheet_drag_bar { display: none; }
 }
@@ -6829,7 +6847,7 @@ body[data-style="neo-brutalism"] .modal_dialog_content {
   border-radius: var(--border-radius-lg-token) !important;
   box-shadow: var(--shadow-md-token) !important;
   background-color: var(--card-bg) !important;
-  transition: transform 0.1s ease, box-shadow 0.1s ease, background-color 0.1s ease !important;
+  transition: transform 0.1s ease, box-shadow 0.1s ease, background-color 0.1s ease, opacity 0.1s ease, visibility 0.1s ease !important;
 }
 
 /* Apply satisfying tactile button lifts and presses to interactive controllers */
