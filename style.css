@@ -2828,14 +2828,17 @@ h1, h2, h3, h4, h5, h6 {
 .habit_matrix_check_pill.completed {
   border-style: solid;
   border-color: transparent !important;
+  background-color: var(--accent-primary) !important;
   color: #ffffff !important;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 3px 8px var(--accent-glow);
 }
 
-.habit_matrix_check_pill.completed.bg-indigo { background-color: #6366f1 !important; }
-.habit_matrix_check_pill.completed.bg-emerald { background-color: #10b981 !important; }
-.habit_matrix_check_pill.completed.bg-rose { background-color: #f43f5e !important; }
-.habit_matrix_check_pill.completed.bg-amber { background-color: #f59e0b !important; }
+.habit_matrix_check_pill.completed.bg-indigo,
+.habit_matrix_check_pill.completed.bg-emerald,
+.habit_matrix_check_pill.completed.bg-rose,
+.habit_matrix_check_pill.completed.bg-amber {
+  background-color: var(--accent-primary) !important;
+}
 
 .habit_matrix_check_pill.future_pill {
   opacity: 0.35;
@@ -3072,13 +3075,13 @@ h1, h2, h3, h4, h5, h6 {
   width: 38px;
   height: 38px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  background: var(--accent-primary);
   color: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 18px;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+  box-shadow: 0 4px 12px var(--accent-glow);
   flex-shrink: 0;
 }
 
@@ -3098,7 +3101,7 @@ h1, h2, h3, h4, h5, h6 {
   height: 36px;
   padding: 0 16px;
   border-radius: 30px;
-  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  background: var(--accent-primary);
   color: #ffffff;
   border: none;
   font-size: 12px;
@@ -3107,13 +3110,14 @@ h1, h2, h3, h4, h5, h6 {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+  box-shadow: 0 4px 12px var(--accent-glow);
 }
 
 .ai_coach_trigger_btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 16px rgba(99, 102, 241, 0.35);
+  filter: brightness(1.08);
+  box-shadow: 0 6px 16px var(--accent-glow);
 }
 
 .ai_coach_results_box {
