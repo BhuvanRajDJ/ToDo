@@ -1274,6 +1274,10 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.pendingUnhealthyHabit = null;
       this.todayAIPlan = null;
       this.todayAITaskOrder = null;
+      this.focusAITab = "today";
+      this.tomorrowPlan = this.loadTomorrowPlan();
+      this.tomorrowPlanDraft = null;
+      this.eveningPlanningStreak = parseInt(localStorage.getItem("aurora_evening_streak") || "0", 10);
 
       // Touch coordinates for swipe-to-complete
       this.touchStartX = 0;
@@ -4562,45 +4566,325 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
     // =========================================================================
     // FOCUS TODAY AI STRATEGIST & SUBTASK BREAKDOWN ENGINE
     // =========================================================================
-    renderTodayAIBanner(todayTasks) {
-      const container = document.getElementById("today_ai_banner_container");
-      if (!container) return;
+    // =========================================================================
+    // FOCUS TODAY: PSYCHOLOGICAL MOMENTUM & TOMORROW PLANNING ENGINE
+    // =========================================================================
+    loadTomorrowPlan() {
+      try {
+        const raw = localStorage.getItem("aurora_tomorrow_plan");
+        return raw ? JSON.parse(raw) : null;
+      } catch (e) {
+        return null;
+      }
+    }
 
-      container.innerHTML = `
-        <div class="today_ai_deck">
-          <div class="today_ai_header">
-            <div class="today_ai_title_group">
-              <div class="today_ai_sparkle_icon">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2z"/>
-                </svg>
-              </div>
-              <div>
-                <div class="today_ai_title_with_badge">
-                  <h3>AI Focus Strategist</h3>
-                  <span class="today_ai_tag">Daily Plan</span>
-                </div>
-                <p class="today_ai_subtitle">Intelligent prioritization, anti-procrastination cues & time blocking</p>
-              </div>
+    saveTomorrowPlan(plan) {
+      this.tomorrowPlan = plan;
+      try {
+        if (plan) {
+          localStorage.setItem("aurora_tomorrow_plan", JSON.stringify(plan));
+          StorageService.savePreference("tomorrow_plan", plan);
+        } else {
+          localStorage.removeItem("aurora_tomorrow_plan");
+          StorageService.savePreference("tomorrow_plan", null);
+        }
+      } catch (e) {
+        console.error("Failed to save tomorrow plan:", e);
+      }
+    }
+
+    getMorningMomentumPlan() {
+      if (!this.tomorrowPlan) return null;
+      const nowStr = getLocalDateString();
+      if (this.tomorrowPlan.targetDate === nowStr && !this.tomorrowPlan.dismissed) {
+        return this.tomorrowPlan;
+      }
+      return null;
+    }
+
+    getPastTodosPsychologyMetrics() {
+      const now = new Date();
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      const sevenDaysAgoStr = getLocalDateString(sevenDaysAgo);
+      const nowStr = getLocalDateString(now);
+
+      const allCompleted = this.store.tasks.filter(t => t.completed && t.id !== "general_focus");
+      const recentCompleted = allCompleted.filter(t => {
+        if (!t.completedDate) return false;
+        const dStr = t.completedDate.substring(0, 10);
+        return dStr >= sevenDaysAgoStr && dStr <= nowStr;
+      });
+
+      const activeDaysSet = new Set(recentCompleted.map(t => t.completedDate.substring(0, 10)));
+      const activeDaysCount = Math.max(1, activeDaysSet.size);
+
+      const dailyVelocity = activeDaysSet.size > 0 
+        ? +(recentCompleted.length / activeDaysCount).toFixed(1)
+        : (allCompleted.length > 0 ? +(allCompleted.length / 5).toFixed(1) : 2.5);
+
+      const recommendedTaskCap = Math.min(4, Math.max(2, Math.round(dailyVelocity) || 3));
+
+      const categoryCounts = {};
+      allCompleted.forEach(t => {
+        const cat = t.category || "General";
+        categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+      });
+
+      let topCategory = "Focus";
+      let maxCatCount = 0;
+      Object.entries(categoryCounts).forEach(([cat, count]) => {
+        if (count > maxCatCount) {
+          maxCatCount = count;
+          topCategory = cat;
+        }
+      });
+
+      const overdueTasks = this.store.tasks.filter(t => 
+        !t.completed && !t.isLater && t.id !== "general_focus" && t.dueDate < nowStr
+      );
+
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = getLocalDateString(tomorrow);
+      const alreadyScheduledTomorrow = this.store.tasks.filter(t => 
+        !t.completed && !t.isLater && t.id !== "general_focus" && t.dueDate === tomorrowStr
+      );
+
+      const todayPending = this.store.tasks.filter(t => 
+        !t.completed && !t.isLater && t.id !== "general_focus" && t.dueDate === nowStr
+      );
+
+      return {
+        totalCompletedAllTime: allCompleted.length,
+        recentCompletedCount: recentCompleted.length,
+        dailyVelocity,
+        recommendedTaskCap,
+        topCategory,
+        maxCatCount,
+        overdueCount: overdueTasks.length,
+        overdueTasks,
+        alreadyScheduledTomorrow,
+        todayPending,
+        activeDaysCount
+      };
+    }
+
+    synthesizeMicroStarter(title = "") {
+      const t = title.toLowerCase();
+      if (/write|draft|doc|report|blog|article|content|essay|journal/.test(t)) {
+        return "Open the document and write 1 sentence or bullet outline.";
+      }
+      if (/code|bug|feature|fix|dev|implement|refactor|test|pr|commit|repo|pull request|review/.test(t)) {
+        return "Open the project in your editor and locate the first file.";
+      }
+      if (/read|study|book|learn|course|lecture|research/.test(t)) {
+        return "Open page 1 and read the first 3 headings or 1 paragraph.";
+      }
+      if (/email|message|call|contact|reach|slack|reply|invoice/.test(t)) {
+        return "Open the message box and draft the greeting line.";
+      }
+      if (/gym|workout|exercise|run|walk|fitness|stretch/.test(t)) {
+        return "Put on workout shoes and drink a glass of water.";
+      }
+      if (/clean|organize|tidy|desk|room/.test(t)) {
+        return "Pick up 1 single item from your desk and put it in place.";
+      }
+      return `Open the workspace for "${title}" and write down the single first physical step.`;
+    }
+
+    generateAlgorithmicTomorrowBlueprint(metrics) {
+      const nowStr = getLocalDateString();
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = getLocalDateString(tomorrow);
+
+      let keystone = metrics.overdueTasks.find(t => t.priority === "High") 
+        || metrics.overdueTasks[0] 
+        || metrics.todayPending.find(t => t.priority === "High")
+        || metrics.todayPending[0]
+        || metrics.alreadyScheduledTomorrow[0]
+        || this.store.tasks.find(t => !t.completed && !t.isLater && t.id !== "general_focus")
+        || { id: 0, title: "Deep Focus Keystone Milestone", priority: "High", category: metrics.topCategory };
+
+      const microStarter = this.synthesizeMicroStarter(keystone.title);
+
+      const morningRoutine = (this.store.routines || []).find(r => r.startTime && r.startTime <= "10:00");
+      const intentionTime = morningRoutine ? `${morningRoutine.startTime} (after "${morningRoutine.title}")` : "09:00 AM";
+      const implementationIntention = `When ${intentionTime} arrives, I will sit at my desk and spend 2 minutes executing the starter step.`;
+
+      const cap = Math.max(1, metrics.recommendedTaskCap - 1);
+      const candidates = this.store.tasks.filter(t => 
+        !t.completed && !t.isLater && t.id !== "general_focus" && t.id !== keystone.id
+      );
+
+      const supporting = candidates.slice(0, cap).map(t => ({
+        taskId: t.id,
+        title: t.title,
+        priority: t.priority,
+        category: t.category,
+        estimatedDuration: t.estimatedDuration || 25,
+        role: t.priority === "High" ? "Core Milestone" : "Quick-Win Stepping Stone"
+      }));
+
+      let diagnosis = "";
+      if (metrics.recentCompletedCount > 0) {
+        diagnosis = `Your past to-dos show a proven velocity of ${metrics.dailyVelocity} tasks/day with strong momentum in ${metrics.topCategory}. To protect against the planning fallacy, tomorrow is capped at ${metrics.recommendedTaskCap} high-impact goals so you maintain an unbroken winning streak.`;
+      } else {
+        diagnosis = `Starting fresh requires low activation friction. We selected 1 Keystone Frog with an effortless 2-minute starter to build immediate dopamine momentum tomorrow morning.`;
+      }
+
+      if (metrics.overdueCount > 0) {
+        diagnosis += ` Note: ${metrics.overdueCount} task carried over; we converted it into your primary frog so it no longer drains your mental energy.`;
+      }
+
+      const affirmation = "Cognitive closure established. Your tomorrow is decided. Put down your task list tonight with peace of mind.";
+
+      return {
+        psychologicalDiagnosis: diagnosis,
+        keystoneTaskId: keystone.id,
+        keystoneTitle: keystone.title,
+        keystoneCategory: keystone.category || metrics.topCategory,
+        keystonePriority: keystone.priority || "High",
+        keystoneReason: metrics.overdueTasks.includes(keystone) 
+          ? "Carrying over from earlier; conquering this first eliminates subconscious procrastination dread." 
+          : "Highest leverage objective to guarantee the day is an absolute win.",
+        microStarter,
+        implementationIntention,
+        supportingTasks: supporting,
+        closureAffirmation: affirmation,
+        source: "Behavioral Science Heuristics"
+      };
+    }
+
+    renderMorningMomentumCardHTML(morningPlan) {
+      return `
+        <div class="morning_momentum_bridge_card">
+          <div class="morning_bridge_badge_row">
+            <div class="morning_bridge_title_group">
+              <span class="morning_bridge_pill">🌅 Morning Momentum Bridge</span>
+              <span class="morning_bridge_streak">🔥 ${this.eveningPlanningStreak}-Day Planning Streak</span>
             </div>
-
-            <div class="today_ai_actions">
-              <button type="button" id="btn_today_ai_plan" class="today_ai_btn primary">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-                <span>Plan Today's Focus</span>
-              </button>
-              <button type="button" id="btn_today_ai_prioritize" class="today_ai_btn secondary">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
-                <span>⚡ Smart Order</span>
-              </button>
-              ${this.todayAIPlan || (this.todayAITaskOrder && this.todayAITaskOrder.length > 0) ? `
-                <button type="button" id="btn_today_ai_reset" class="today_ai_btn text_only" title="Reset AI Ordering">Reset</button>
+            <button type="button" class="morning_bridge_dismiss_btn" id="btn_dismiss_morning_bridge" title="Dismiss Morning Bridge">✕</button>
+          </div>
+          <div class="morning_bridge_content">
+            <div class="morning_bridge_text">
+              <div class="morning_bridge_eyebrow">Pre-Committed Yesterday · Zero Morning Friction</div>
+              <h4 class="morning_bridge_title">Anchor Goal: <strong>${this.escapeHTML(morningPlan.keystoneTitle || "Keystone Task")}</strong></h4>
+              <div class="morning_bridge_starter_box">
+                <span class="micro_icon">⚡</span>
+                <div>
+                  <strong>2-Minute Micro-Starter:</strong>
+                  <span>${this.escapeHTML(morningPlan.microStarter || "Take 2 minutes to start the first action.")}</span>
+                </div>
+              </div>
+              ${morningPlan.implementationIntention ? `
+                <div class="morning_bridge_cue_row">
+                  <span class="cue_icon">⏰</span>
+                  <span>${this.escapeHTML(morningPlan.implementationIntention)}</span>
+                </div>
               ` : ""}
+            </div>
+            <div class="morning_bridge_actions">
+              ${morningPlan.microStarterDone ? `
+                <div class="morning_bridge_done_badge">✓ 2-Min Starter Conquered</div>
+              ` : `
+                <button type="button" class="today_ai_btn primary" id="btn_launch_morning_micro_start">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                  <span>Launch 2-Min Focus</span>
+                </button>
+                <button type="button" class="today_ai_btn secondary" id="btn_complete_morning_micro_start">
+                  <span>✓ Started!</span>
+                </button>
+              `}
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    bindMorningCardEvents(morningPlan) {
+      const dismissBtn = document.getElementById("btn_dismiss_morning_bridge");
+      const launchBtn = document.getElementById("btn_launch_morning_micro_start");
+      const completeBtn = document.getElementById("btn_complete_morning_micro_start");
+
+      if (dismissBtn) {
+        dismissBtn.addEventListener("click", () => {
+          morningPlan.dismissed = true;
+          this.saveTomorrowPlan(morningPlan);
+          const filtered = this.getFilteredTasks("today");
+          this.renderTodayAIBanner(filtered);
+        });
+      }
+
+      if (launchBtn) {
+        launchBtn.addEventListener("click", () => {
+          this.launchMorningMicroStart(morningPlan.keystoneTitle, morningPlan.keystoneTaskId);
+        });
+      }
+
+      if (completeBtn) {
+        completeBtn.addEventListener("click", () => {
+          morningPlan.microStarterDone = true;
+          this.saveTomorrowPlan(morningPlan);
+          this.store.emit("celebrate", { elementId: "btn_complete_morning_micro_start" });
+          this.showToast("Morning momentum starter conquered! Your brain is now in flow.", "success");
+          const filtered = this.getFilteredTasks("today");
+          this.renderTodayAIBanner(filtered);
+        });
+      }
+    }
+
+    launchMorningMicroStart(taskTitle, taskId) {
+      let task = null;
+      if (taskId) task = this.store.tasks.find(t => t.id === taskId);
+      if (!task && taskTitle) {
+        task = this.store.tasks.find(t => t.title.toLowerCase() === taskTitle.toLowerCase());
+      }
+
+      this.store.setView("timer");
+      if (task) {
+        this.store.timer.activeTaskId = task.id;
+      }
+      this.store.timer.duration = 120; // 2-minute starter sprint
+      this.store.timer.totalDuration = 120;
+      this.store.startTimer(task ? task.id : null);
+      this.showToast("⚡ 2-Minute Micro-Starter Timer Launched! Zero friction, just start.", "success");
+    }
+
+    renderTodayExecutionContent(container, todayTasks) {
+      container.innerHTML = `
+        <div class="today_ai_header">
+          <div class="today_ai_title_group">
+            <div class="today_ai_sparkle_icon">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2z"/>
+              </svg>
+            </div>
+            <div>
+              <div class="today_ai_title_with_badge">
+                <h3>AI Focus Strategist</h3>
+                <span class="today_ai_tag">Daily Plan</span>
+              </div>
+              <p class="today_ai_subtitle">Intelligent prioritization, anti-procrastination cues & time blocking</p>
             </div>
           </div>
 
-          <div id="today_ai_plan_result" class="today_ai_plan_result"></div>
+          <div class="today_ai_actions">
+            <button type="button" id="btn_today_ai_plan" class="today_ai_btn primary">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+              <span>Plan Today's Focus</span>
+            </button>
+            <button type="button" id="btn_today_ai_prioritize" class="today_ai_btn secondary">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+              <span>⚡ Smart Order</span>
+            </button>
+            ${this.todayAIPlan || (this.todayAITaskOrder && this.todayAITaskOrder.length > 0) ? `
+              <button type="button" id="btn_today_ai_reset" class="today_ai_btn text_only" title="Reset AI Ordering">Reset</button>
+            ` : ""}
+          </div>
         </div>
+
+        <div id="today_ai_plan_result" class="today_ai_plan_result"></div>
       `;
 
       if (this.todayAIPlan) {
@@ -4624,6 +4908,452 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
           this.renderTaskListUI("today");
           this.showToast("Reset AI daily plan and ordering.", "info");
         });
+      }
+    }
+
+    renderTomorrowMomentumContent(container) {
+      const metrics = this.getPastTodosPsychologyMetrics();
+      const plan = this.tomorrowPlanDraft || (this.tomorrowPlan && this.tomorrowPlan.targetDate === this.getNDaysFromNow(1) ? this.tomorrowPlan : null);
+
+      container.innerHTML = `
+        <div class="today_ai_header">
+          <div class="today_ai_title_group">
+            <div class="today_ai_sparkle_icon" style="background: rgba(245, 158, 11, 0.12); color: #f59e0b;">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+              </svg>
+            </div>
+            <div>
+              <div class="today_ai_title_with_badge">
+                <h3>Tomorrow Momentum Bridge</h3>
+                <span class="today_ai_tag" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;">Psychological Setup</span>
+              </div>
+              <p class="today_ai_subtitle">Past to-dos analysis · Planning fallacy shield · Zero morning friction</p>
+            </div>
+          </div>
+
+          <div class="today_ai_actions">
+            <button type="button" id="btn_generate_tomorrow_blueprint" class="today_ai_btn primary">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2z"/></svg>
+              <span>✨ Plan Tomorrow</span>
+            </button>
+            <button type="button" id="btn_heuristic_tomorrow" class="today_ai_btn secondary">
+              <span>⚡ Fast Heuristic</span>
+            </button>
+            ${plan ? `
+              <button type="button" id="btn_reset_tomorrow_draft" class="today_ai_btn text_only" title="Reset Blueprint">Reset</button>
+            ` : ""}
+          </div>
+        </div>
+
+        <!-- 3-Pillar Evidence Grid from Past To-Dos -->
+        <div class="tomorrow_psych_stats_grid">
+          <div class="psych_stat_card">
+            <span class="psych_stat_badge">Proven Velocity</span>
+            <span class="psych_stat_val">${metrics.dailyVelocity} / day</span>
+            <span class="psych_stat_desc">Based on past 7 days</span>
+          </div>
+          <div class="psych_stat_card">
+            <span class="psych_stat_badge">${this.escapeHTML(metrics.topCategory)} Leader</span>
+            <span class="psych_stat_val">${metrics.recentCompletedCount} Won</span>
+            <span class="psych_stat_desc">Self-efficacy domain</span>
+          </div>
+          <div class="psych_stat_card">
+            <span class="psych_stat_badge">Fallacy Guard</span>
+            <span class="psych_stat_val">Max ${metrics.recommendedTaskCap} Goals</span>
+            <span class="psych_stat_desc">Optimal cognitive capacity</span>
+          </div>
+          <div class="psych_stat_card">
+            <span class="psych_stat_badge">Evening Habit</span>
+            <span class="psych_stat_val">🔥 ${this.eveningPlanningStreak}d Streak</span>
+            <span class="psych_stat_desc">Nightly shutdown ritual</span>
+          </div>
+        </div>
+
+        <div id="tomorrow_blueprint_result_slot"></div>
+      `;
+
+      const resultSlot = document.getElementById("tomorrow_blueprint_result_slot");
+      if (plan && resultSlot) {
+        this.renderTomorrowBlueprintDetails(resultSlot, plan, metrics);
+      } else if (resultSlot) {
+        resultSlot.innerHTML = `
+          <div class="tomorrow_starter_prompt">
+            <div class="starter_prompt_icon">🌙</div>
+            <div class="starter_prompt_text">
+              <h4>Establish Cognitive Closure for Tonight</h4>
+              <p>Planning tomorrow based on your past completion velocity prevents morning hesitation and protects sleep quality. Click <strong>Plan Tomorrow</strong> to generate your psychological setup.</p>
+            </div>
+          </div>
+        `;
+      }
+
+      const generateBtn = document.getElementById("btn_generate_tomorrow_blueprint");
+      const heuristicBtn = document.getElementById("btn_heuristic_tomorrow");
+      const resetBtn = document.getElementById("btn_reset_tomorrow_draft");
+
+      if (generateBtn) {
+        generateBtn.addEventListener("click", () => this.generateTomorrowAIPlan(metrics));
+      }
+      if (heuristicBtn) {
+        heuristicBtn.addEventListener("click", () => {
+          const draft = this.generateAlgorithmicTomorrowBlueprint(metrics);
+          this.tomorrowPlanDraft = draft;
+          const slot = document.getElementById("tomorrow_blueprint_result_slot");
+          if (slot) this.renderTomorrowBlueprintDetails(slot, draft, metrics);
+        });
+      }
+      if (resetBtn) {
+        resetBtn.addEventListener("click", () => {
+          this.tomorrowPlanDraft = null;
+          this.saveTomorrowPlan(null);
+          const filtered = this.getFilteredTasks("today");
+          this.renderTodayAIBanner(filtered);
+          this.showToast("Reset tomorrow's planning blueprint.", "info");
+        });
+      }
+    }
+
+    renderTomorrowBlueprintDetails(slot, plan, metrics) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = getLocalDateString(tomorrow);
+      const isCommitted = plan.committed && plan.targetDate === tomorrowStr;
+
+      slot.innerHTML = `
+        <div class="tomorrow_plan_card">
+          <!-- 1. Behavioral Psychology Diagnosis -->
+          <div class="tomorrow_diagnosis_box">
+            <div class="diagnosis_header">
+              <span class="diagnosis_icon">🧠</span>
+              <strong>Behavioral Analysis & Velocity Alignment:</strong>
+            </div>
+            <p class="diagnosis_text">${this.escapeHTML(plan.psychologicalDiagnosis || "")}</p>
+          </div>
+
+          <!-- 2. Keystone Frog (The Anchor Goal) -->
+          <div class="tomorrow_keystone_box">
+            <div class="keystone_badge_row">
+              <span class="keystone_badge">🎯 #1 Keystone Frog · The Anchor Goal</span>
+              <span class="keystone_priority_tag ${String(plan.keystonePriority || 'High').toLowerCase()}">${this.escapeHTML(plan.keystonePriority || "High")}</span>
+            </div>
+            <h4 class="keystone_title">${this.escapeHTML(plan.keystoneTitle)}</h4>
+            <p class="keystone_reason">${this.escapeHTML(plan.keystoneReason || "Highest leverage goal.")}</p>
+
+            <!-- 2-Minute Micro-Starter Friction Destroyer -->
+            <div class="tomorrow_micro_starter_box">
+              <span class="micro_icon">⚡</span>
+              <div class="micro_content">
+                <strong>2-Minute Micro-Starter (Anti-Avoidance Cue):</strong>
+                <p id="micro_starter_display" class="micro_text">${this.escapeHTML(plan.microStarter)}</p>
+              </div>
+            </div>
+
+            <!-- Implementation Intention Anchor (Gollwitzer If-Then) -->
+            ${plan.implementationIntention ? `
+              <div class="tomorrow_intention_box">
+                <span class="intention_icon">⏰</span>
+                <div class="intention_content">
+                  <strong>Implementation Intention (If-Then Habit):</strong>
+                  <p class="intention_text">${this.escapeHTML(plan.implementationIntention)}</p>
+                </div>
+              </div>
+            ` : ""}
+          </div>
+
+          <!-- 3. Supporting Stepping Stones (Capped by Velocity) -->
+          ${plan.supportingTasks && plan.supportingTasks.length > 0 ? `
+            <div class="tomorrow_supporting_section">
+              <div class="supporting_section_header">
+                <span class="section_label">Supporting Stepping Stones (Velocity Guard: ${plan.supportingTasks.length} added)</span>
+              </div>
+              <div class="tomorrow_supporting_list">
+                ${plan.supportingTasks.map((t) => `
+                  <div class="tomorrow_supporting_item">
+                    <label class="supporting_checkbox_label">
+                      <input type="checkbox" class="supporting_task_cb" data-task-id="${t.taskId || ''}" data-task-title="${this.escapeHTML(t.title)}" checked />
+                      <span class="supporting_task_title">${this.escapeHTML(t.title)}</span>
+                    </label>
+                    <div class="supporting_meta">
+                      <span class="supporting_role_badge">${this.escapeHTML(t.role || 'Quick Win')}</span>
+                      <span class="step_slot">${t.estimatedDuration || 25}m</span>
+                    </div>
+                  </div>
+                `).join("")}
+              </div>
+            </div>
+          ` : ""}
+
+          <!-- 4. Zeigarnik Evening Shutdown Affirmation -->
+          <div class="tomorrow_zeigarnik_box">
+            <span class="shutdown_moon">🌙</span>
+            <span>"${this.escapeHTML(plan.closureAffirmation || "Tomorrow is set. Shutdown complete. Rest your executive control.")}"</span>
+          </div>
+
+          <!-- 5. Commit & Lock-in Button -->
+          <div class="tomorrow_action_row">
+            ${isCommitted ? `
+              <div class="tomorrow_committed_banner">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+                <span>Locked in for Tomorrow (${tomorrowStr})! Morning launchpad primed.</span>
+              </div>
+            ` : `
+              <button type="button" class="today_ai_btn primary lock_tomorrow_btn" id="btn_lock_tomorrow_blueprint">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                <span>🔒 Lock In & Schedule to Tomorrow</span>
+              </button>
+            `}
+          </div>
+        </div>
+      `;
+
+      const lockBtn = document.getElementById("btn_lock_tomorrow_blueprint");
+      if (lockBtn) {
+        lockBtn.addEventListener("click", () => this.lockInTomorrowPlan(plan));
+      }
+    }
+
+    lockInTomorrowPlan(plan) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = getLocalDateString(tomorrow);
+      const nowStr = getLocalDateString();
+
+      let keystoneTask = null;
+      if (plan.keystoneTaskId) {
+        keystoneTask = this.store.tasks.find(t => t.id === plan.keystoneTaskId);
+      }
+      if (!keystoneTask && plan.keystoneTitle) {
+        keystoneTask = this.store.tasks.find(t => t.title.toLowerCase() === plan.keystoneTitle.toLowerCase());
+      }
+
+      if (keystoneTask) {
+        this.store.updateTask(keystoneTask.id, { dueDate: tomorrowStr, isLater: false });
+      } else if (plan.keystoneTitle) {
+        keystoneTask = this.store.addTask({
+          title: plan.keystoneTitle,
+          dueDate: tomorrowStr,
+          priority: plan.keystonePriority || "High",
+          category: plan.keystoneCategory || "Focus"
+        });
+        plan.keystoneTaskId = keystoneTask.id;
+      }
+
+      const checkboxes = document.querySelectorAll(".supporting_task_cb:checked");
+      const selectedSupportingIds = [];
+      checkboxes.forEach(cb => {
+        const taskId = cb.getAttribute("data-task-id");
+        const taskTitle = cb.getAttribute("data-task-title");
+        let task = null;
+        if (taskId) task = this.store.tasks.find(t => String(t.id) === String(taskId));
+        if (!task && taskTitle) task = this.store.tasks.find(t => t.title === taskTitle);
+
+        if (task) {
+          this.store.updateTask(task.id, { dueDate: tomorrowStr, isLater: false });
+          selectedSupportingIds.push(task.id);
+        }
+      });
+
+      const planRecord = {
+        createdDate: nowStr,
+        targetDate: tomorrowStr,
+        keystoneTaskId: keystoneTask ? keystoneTask.id : plan.keystoneTaskId,
+        keystoneTitle: plan.keystoneTitle,
+        keystoneCategory: plan.keystoneCategory || "Focus",
+        keystonePriority: plan.keystonePriority || "High",
+        microStarter: plan.microStarter,
+        implementationIntention: plan.implementationIntention,
+        supportingTaskIds: selectedSupportingIds,
+        psychologicalDiagnosis: plan.psychologicalDiagnosis,
+        closureAffirmation: plan.closureAffirmation,
+        committed: true,
+        dismissed: false,
+        microStarterDone: false
+      };
+
+      this.saveTomorrowPlan(planRecord);
+      this.tomorrowPlanDraft = planRecord;
+
+      const lastPlanDate = localStorage.getItem("aurora_last_plan_date");
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = getLocalDateString(yesterday);
+
+      if (lastPlanDate === yesterdayStr) {
+        this.eveningPlanningStreak += 1;
+      } else if (lastPlanDate !== nowStr) {
+        this.eveningPlanningStreak = 1;
+      }
+      localStorage.setItem("aurora_last_plan_date", nowStr);
+      localStorage.setItem("aurora_evening_streak", this.eveningPlanningStreak.toString());
+
+      this.store.emit("celebrate", { elementId: "btn_lock_tomorrow_blueprint" });
+      this.showToast("🌙 Tomorrow's Momentum Blueprint locked in! Sleep with peace of mind.", "success");
+
+      const filtered = this.getFilteredTasks("today");
+      this.renderTodayAIBanner(filtered);
+    }
+
+    async generateTomorrowAIPlan(metrics) {
+      const resultSlot = document.getElementById("tomorrow_blueprint_result_slot");
+      if (!resultSlot) return;
+
+      if (!this.geminiApiKey) {
+        const draft = this.generateAlgorithmicTomorrowBlueprint(metrics);
+        this.tomorrowPlanDraft = draft;
+        this.renderTomorrowBlueprintDetails(resultSlot, draft, metrics);
+        this.showToast("Generated with Behavioral Science heuristics! Add Gemini API Key for deep AI coaching.", "info");
+        return;
+      }
+
+      resultSlot.innerHTML = `
+        <div class="ai_coach_loading" style="padding: 20px 0;">
+          <div class="ai_coach_spinner"></div>
+          <span>Analyzing historical velocity, category balance, and anti-friction cues for tomorrow...</span>
+        </div>
+      `;
+
+      const candidateTasks = this.store.tasks
+        .filter(t => !t.completed && t.id !== "general_focus")
+        .slice(0, 10)
+        .map(t => ({
+          id: t.id,
+          title: t.title,
+          priority: t.priority,
+          category: t.category,
+          dueDate: t.dueDate,
+          isOverdue: t.dueDate < getLocalDateString(),
+          estimatedDuration: t.estimatedDuration || 25
+        }));
+
+      const routinesBrief = (this.store.routines || [])
+        .filter(r => r.startTime <= "12:00")
+        .map(r => `${r.startTime} (${r.title})`)
+        .join(", ");
+
+      const prompt = `You are a world-class behavioral psychologist and productivity strategist (James Clear, BJ Fogg, Peter Gollwitzer).
+Analyze the user's past todo history and current backlog to create a psychological TOMORROW BLUEPRINT.
+
+PAST TODOS PERFORMANCE:
+- Proven daily velocity: ${metrics.dailyVelocity} tasks/day
+- Completed in past 7 days: ${metrics.recentCompletedCount} tasks
+- Top momentum category: ${metrics.topCategory}
+- Overdue friction tasks count: ${metrics.overdueCount}
+- Evening planning streak: ${this.eveningPlanningStreak} days
+- Morning routine schedule: ${routinesBrief || "09:00 AM start"}
+
+CURRENT CANDIDATE TASKS:
+${JSON.stringify(candidateTasks, null, 2)}
+
+PSYCHOLOGICAL RULES:
+1. Prevent the Planning Fallacy: Capped at maximum ${metrics.recommendedTaskCap} total tasks for tomorrow.
+2. Select 1 Keystone Frog (highest leverage anchor goal).
+3. Provide an effortless 2-Minute Micro-Starter (first physical movement to eliminate morning cold-start resistance).
+4. Provide an 'If-Then' Implementation Intention anchored to their morning routine or 09:00 AM.
+5. Provide up to ${Math.max(1, metrics.recommendedTaskCap - 1)} Supporting Stepping Stones (quick wins / momentum maintainers).
+6. Provide an evening cognitive closure affirmation (Zeigarnik shutdown).
+
+Return ONLY a valid JSON object matching this schema:
+{
+  "psychologicalDiagnosis": "2 sentences analyzing momentum, velocity alignment, and anti-procrastination reasoning.",
+  "keystoneTaskId": ${candidateTasks[0] ? candidateTasks[0].id : 0},
+  "keystoneTitle": "Task title",
+  "keystoneCategory": "Category",
+  "keystonePriority": "High",
+  "keystoneReason": "Why this is the #1 highest leverage frog for tomorrow.",
+  "microStarter": "A microscopic 2-minute starter physical action.",
+  "implementationIntention": "When [time or routine cue], I will sit down and execute the 2-minute starter.",
+  "supportingTasks": [
+    {
+      "taskId": ${candidateTasks[1] ? candidateTasks[1].id : 0},
+      "title": "Supporting task title",
+      "priority": "Medium",
+      "category": "Work",
+      "estimatedDuration": 25,
+      "role": "Quick-Win Stepping Stone"
+    }
+  ],
+  "closureAffirmation": "Evening shutdown statement to clear mental bandwidth."
+}`;
+
+      try {
+        const { data } = await this.callGeminiWithFallback({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.2,
+            responseMimeType: "application/json"
+          }
+        });
+
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) throw new Error("Empty response from AI");
+
+        const plan = JSON.parse(text);
+        plan.source = "Gemini AI";
+        this.tomorrowPlanDraft = plan;
+        this.renderTomorrowBlueprintDetails(resultSlot, plan, metrics);
+      } catch (err) {
+        console.error("AI Tomorrow Plan error, falling back to heuristics:", err);
+        const draft = this.generateAlgorithmicTomorrowBlueprint(metrics);
+        this.tomorrowPlanDraft = draft;
+        this.renderTomorrowBlueprintDetails(resultSlot, draft, metrics);
+        this.showToast("Generated blueprint with Behavioral Science engine!", "info");
+      }
+    }
+
+    renderTodayAIBanner(todayTasks) {
+      const container = document.getElementById("today_ai_banner_container");
+      if (!container) return;
+
+      const morningPlan = this.getMorningMomentumPlan();
+      const hasLockedPlan = this.tomorrowPlan && this.tomorrowPlan.targetDate === this.getNDaysFromNow(1) && this.tomorrowPlan.committed;
+
+      container.innerHTML = `
+        ${morningPlan ? this.renderMorningMomentumCardHTML(morningPlan) : ""}
+
+        <div class="today_ai_deck">
+          <div class="focus_mode_tabs_bar">
+            <button type="button" class="focus_mode_tab ${this.focusAITab === 'today' ? 'active' : ''}" id="tab_focus_today_mode">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+              <span>Today's Execution (${todayTasks.length})</span>
+            </button>
+            <button type="button" class="focus_mode_tab ${this.focusAITab === 'tomorrow' ? 'active' : ''}" id="tab_focus_tomorrow_mode">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+              <span>Plan Tomorrow's Momentum</span>
+              ${hasLockedPlan ? `<span class="focus_tab_badge locked">Locked In ✓</span>` : `<span class="focus_tab_badge">Evening Setup</span>`}
+            </button>
+          </div>
+
+          <div id="focus_ai_content_area"></div>
+        </div>
+      `;
+
+      if (morningPlan) {
+        this.bindMorningCardEvents(morningPlan);
+      }
+
+      const todayTabBtn = document.getElementById("tab_focus_today_mode");
+      const tomorrowTabBtn = document.getElementById("tab_focus_tomorrow_mode");
+      if (todayTabBtn) {
+        todayTabBtn.addEventListener("click", () => {
+          this.focusAITab = "today";
+          this.renderTodayAIBanner(todayTasks);
+        });
+      }
+      if (tomorrowTabBtn) {
+        tomorrowTabBtn.addEventListener("click", () => {
+          this.focusAITab = "tomorrow";
+          this.renderTodayAIBanner(todayTasks);
+        });
+      }
+
+      const contentArea = document.getElementById("focus_ai_content_area");
+      if (!contentArea) return;
+
+      if (this.focusAITab === "today") {
+        this.renderTodayExecutionContent(contentArea, todayTasks);
+      } else {
+        this.renderTomorrowMomentumContent(contentArea);
       }
     }
 

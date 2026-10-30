@@ -229,6 +229,40 @@
             <!-- Focus Today AI Strategy Banner Deck -->
             <div id="today_ai_banner_container"></div>
 
+            <!-- Quick Add Task Deck (Zero-Click Fast Capture) -->
+            <div class="quick_add_container" id="quick_add_container">
+                <div class="quick_add_inner">
+                    <div class="quick_add_icon">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                    </div>
+                    <input type="text" id="quick_add_input" class="quick_add_text_input" placeholder="＋ Quick add a new goal... (Type and press Enter)" autocomplete="off" />
+                    <div class="quick_add_controls">
+                        <button type="button" class="quick_add_chip" id="qa_chip_date" title="Click to cycle date: Today / Tomorrow / Later">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                            <span id="qa_date_text">Today</span>
+                        </button>
+                        <button type="button" class="quick_add_chip" id="qa_chip_priority" title="Click to cycle priority: Med / High / Low">
+                            <span class="qa_p_dot med"></span>
+                            <span id="qa_priority_text">Med</span>
+                        </button>
+                        <button type="button" class="quick_add_chip" id="qa_chip_category" title="Click to cycle category">
+                            <span id="qa_category_text">Inbox</span>
+                        </button>
+                        <button type="button" class="quick_add_adv_trigger" id="qa_btn_advanced" title="Open full modal for notes, duration & recurrence">
+                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                            <span>Advanced</span>
+                        </button>
+                        <button type="button" class="quick_add_commit_btn" id="qa_btn_commit" title="Save Goal (Enter)">
+                            <span>Save</span>
+                            <kbd>↵</kbd>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Active Card Container -->
             <div id="task_list_container" class="card_stack"></div>
         </section>
@@ -772,7 +806,17 @@
     <div id="bottom_sheet" class="bottom_sheet_drawer" role="dialog" aria-labelledby="sheet_form_title">
         <div class="sheet_drag_bar"></div>
         <div class="sheet_header">
-            <h3 id="sheet_form_title">Capture New Goal</h3>
+            <div class="sheet_title_group">
+                <div class="sheet_title_icon">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 5v14M5 12h14"/>
+                    </svg>
+                </div>
+                <div>
+                    <h3 id="sheet_form_title">Capture New Goal</h3>
+                    <p class="sheet_subtitle" id="sheet_subtitle">Configure task objective and execution parameters.</p>
+                </div>
+            </div>
             <div class="sheet_header_actions">
                 <button type="button" id="sheet_delete_btn" class="sheet_delete_btn" title="Delete Task" aria-label="Delete Task" style="display: none;">
                     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -786,31 +830,43 @@
         </div>
 
         <form id="sheet_form" class="sheet_form_body">
-            <div class="form_group">
-                <label for="task_title">Goal Objective</label>
-                <input type="text" id="task_title" placeholder="Capture your next objective..." required autocomplete="off">
+            <div class="form_group main_title_group">
+                <label for="task_title" class="control_label">Goal Objective</label>
+                <input type="text" id="task_title" class="sheet_main_title_input" placeholder="What is your next goal or objective?" required autocomplete="off">
             </div>
 
-            <div class="form_group">
-                <label for="task_desc">Goal Context (Notes)</label>
-                <textarea id="task_desc" rows="3" placeholder="Context details, tags, sub-notes..."></textarea>
+            <div class="form_group notes_group">
+                <label for="task_desc" class="control_label">Context Notes</label>
+                <textarea id="task_desc" class="sheet_notes_input" rows="2" placeholder="Add context notes, links, or sub-details (optional)..."></textarea>
             </div>
 
-            <div class="form_grid_row">
-                <div class="form_group">
-                    <label for="task_due_date">Target Deadline Date</label>
+            <div class="sheet_controls_row">
+                <div class="form_group flex_grow_date">
+                    <label class="control_label">Target Deadline</label>
                     <div class="quick_date_chips">
-                        <button type="button" class="date_chip" data-days="0">Today</button>
+                        <button type="button" class="date_chip active" data-days="0">Today</button>
                         <button type="button" class="date_chip" data-days="1">Tomorrow</button>
                         <button type="button" class="date_chip" data-days="7">Next Wk</button>
-                        <button type="button" class="date_chip" id="chip_do_later">Do Later</button>
+                        <button type="button" class="date_chip" id="chip_do_later">Later</button>
+                        <button type="button" class="date_chip" id="chip_custom_date">Custom</button>
                     </div>
-                    <input type="date" id="task_due_date">
+                    <input type="date" id="task_due_date" class="sheet_custom_date_input" style="display: none;">
                 </div>
 
                 <div class="form_group">
-                    <label for="task_priority">Priority Level</label>
-                    <select id="task_priority" required>
+                    <label class="control_label">Priority Level</label>
+                    <div class="priority_pill_group" id="priority_pill_group">
+                        <button type="button" class="priority_pill_option" data-priority="Low">
+                            <span class="p_dot low"></span> Low
+                        </button>
+                        <button type="button" class="priority_pill_option active" data-priority="Medium">
+                            <span class="p_dot med"></span> Med
+                        </button>
+                        <button type="button" class="priority_pill_option" data-priority="High">
+                            <span class="p_dot high"></span> High
+                        </button>
+                    </div>
+                    <select id="task_priority" style="display: none;" required>
                         <option value="Low">Low Priority</option>
                         <option value="Medium" selected>Medium Priority</option>
                         <option value="High">High Priority</option>
@@ -818,42 +874,66 @@
                 </div>
             </div>
 
-            <div class="form_grid_row">
+            <div class="sheet_controls_row">
                 <div class="form_group">
-                    <label for="task_category">Category Tag</label>
-                    <select id="task_category" required>
-                        <option value="Inbox">Inbox</option>
-                        <option value="Work">Work</option>
-                        <option value="Personal">Personal</option>
-                        <option value="Health">Health</option>
-                        <option value="Finance">Finance</option>
-                        <option value="custom">+ Create Tag...</option>
-                    </select>
+                    <label class="control_label" for="task_category">Category Tag</label>
+                    <div class="select_icon_wrapper">
+                        <select id="task_category" class="sheet_select" required>
+                            <option value="Inbox">Inbox</option>
+                            <option value="Work">Work</option>
+                            <option value="Personal">Personal</option>
+                            <option value="Health">Health</option>
+                            <option value="Finance">Finance</option>
+                            <option value="custom">+ Create Tag...</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div class="form_group">
-                    <label for="task_duration">Estimated focus (m)</label>
-                    <select id="task_duration" required>
-                        <option value="15">15 mins</option>
-                        <option value="25" selected>25 mins</option>
-                        <option value="40">40 mins</option>
-                        <option value="60">60 mins</option>
-                        <option value="90">90 mins</option>
-                    </select>
+                    <label class="control_label" for="task_duration">Estimated Focus</label>
+                    <div class="select_icon_wrapper">
+                        <select id="task_duration" class="sheet_select" required>
+                            <option value="15">15 mins</option>
+                            <option value="25" selected>25 mins (Pomodoro)</option>
+                            <option value="40">40 mins</option>
+                            <option value="60">60 mins</option>
+                            <option value="90">90 mins</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
-            <div class="form_group">
-                <label for="task_recurring">Repetitive Recurrence</label>
-                <select id="task_recurring" required>
-                    <option value="none" selected>Do not repeat</option>
-                    <option value="daily">Repeat Daily</option>
-                    <option value="weekly">Repeat Weekly</option>
-                    <option value="monthly">Repeat Monthly</option>
-                </select>
+            <!-- Expandable Advanced Options Section (Keeps modal compact and clean) -->
+            <div class="sheet_advanced_accordion">
+                <button type="button" id="btn_toggle_sheet_adv" class="sheet_adv_toggle_btn">
+                    <div class="adv_toggle_left">
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                        <span>Advanced Setup (Repetition Recurrence)</span>
+                    </div>
+                    <span id="sheet_adv_chevron" class="sheet_adv_chevron">▾</span>
+                </button>
+                <div id="sheet_adv_content" class="sheet_adv_content" style="display: none;">
+                    <div class="form_group">
+                        <label class="control_label" for="task_recurring">Repetitive Recurrence</label>
+                        <select id="task_recurring" class="sheet_select" required>
+                            <option value="none" selected>Do not repeat</option>
+                            <option value="daily">Repeat Daily</option>
+                            <option value="weekly">Repeat Weekly</option>
+                            <option value="monthly">Repeat Monthly</option>
+                        </select>
+                    </div>
+                </div>
             </div>
 
-            <button type="submit" id="sheet_submit" class="sheet_primary_commit">Commit Task</button>
+            <div class="sheet_footer">
+                <div class="sheet_keyboard_hints">
+                    <span>Press <kbd>↵</kbd> to commit · <kbd>Esc</kbd> to close</span>
+                </div>
+                <div class="sheet_footer_buttons">
+                    <button type="button" id="btn_cancel_sheet" class="sheet_secondary_btn">Cancel</button>
+                    <button type="submit" id="sheet_submit" class="sheet_primary_commit">Commit Task</button>
+                </div>
+            </div>
         </form>
     </div>
 

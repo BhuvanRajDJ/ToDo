@@ -1028,6 +1028,513 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--text-secondary);
 }
 
+/* =========================================================================
+   FOCUS TODAY - TOMORROW MOMENTUM BRIDGE & PSYCHOLOGY PLANNER
+   ========================================================================= */
+
+/* Morning Momentum Bridge Card */
+.morning_momentum_bridge_card {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(99, 102, 241, 0.08) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-left: 4px solid #f59e0b;
+  border-radius: var(--border-radius-lg);
+  padding: 14px 18px;
+  margin-bottom: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: fadeIn 0.25s ease-out;
+}
+
+.morning_bridge_badge_row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.morning_bridge_title_group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.morning_bridge_pill {
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #d97706;
+  background: rgba(245, 158, 11, 0.15);
+  padding: 3px 8px;
+  border-radius: 12px;
+  letter-spacing: 0.5px;
+}
+
+.morning_bridge_streak {
+  font-size: 11px;
+  font-weight: 700;
+  color: #db6d28;
+  background: rgba(219, 109, 40, 0.12);
+  padding: 3px 8px;
+  border-radius: 12px;
+}
+
+.morning_bridge_dismiss_btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: var(--transition-smooth);
+}
+
+.morning_bridge_dismiss_btn:hover {
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.morning_bridge_content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.morning_bridge_text {
+  flex: 1;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.morning_bridge_eyebrow {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.morning_bridge_title {
+  font-size: 15px;
+  color: var(--text-primary);
+  margin: 0;
+  font-weight: 600;
+}
+
+.morning_bridge_title strong {
+  color: var(--accent-primary);
+  font-weight: 700;
+}
+
+.morning_bridge_starter_box {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.6);
+  padding: 6px 10px;
+  border-radius: var(--border-radius-sm);
+  font-size: 12px;
+  color: var(--text-primary);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.theme-dark .morning_bridge_starter_box {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.morning_bridge_cue_row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.morning_bridge_actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.morning_bridge_done_badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #1a7f37;
+  background: rgba(35, 134, 54, 0.12);
+  border: 1px solid rgba(35, 134, 54, 0.3);
+  padding: 6px 12px;
+  border-radius: var(--border-radius-sm);
+}
+
+/* Focus Today Mode Switcher Tabs */
+.focus_mode_tabs_bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+  flex-wrap: wrap;
+}
+
+.focus_mode_tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.focus_mode_tab:hover {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.focus_mode_tab.active {
+  background: var(--accent-primary);
+  color: #ffffff;
+  border-color: var(--accent-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.focus_tab_badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.08);
+  color: inherit;
+}
+
+.focus_mode_tab.active .focus_tab_badge {
+  background: rgba(255, 255, 255, 0.25);
+  color: #ffffff;
+}
+
+.focus_tab_badge.locked {
+  background: rgba(35, 134, 54, 0.2);
+  color: #2da44e;
+}
+
+.focus_mode_tab.active .focus_tab_badge.locked {
+  background: #ffffff;
+  color: #1a7f37;
+}
+
+/* Tomorrow Psychological Stats Grid */
+.tomorrow_psych_stats_grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin: 12px 0 16px 0;
+}
+
+.psych_stat_card {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.psych_stat_badge {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--accent-primary);
+  letter-spacing: 0.3px;
+}
+
+.psych_stat_val {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.psych_stat_desc {
+  font-size: 10.5px;
+  color: var(--text-muted);
+}
+
+.tomorrow_starter_prompt {
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px dashed rgba(245, 158, 11, 0.3);
+  border-radius: var(--border-radius-sm);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.starter_prompt_icon {
+  font-size: 26px;
+}
+
+.starter_prompt_text h4 {
+  font-size: 13.5px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  color: var(--text-primary);
+}
+
+.starter_prompt_text p {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  margin: 0;
+}
+
+/* Tomorrow Plan Result Card */
+.tomorrow_plan_card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border-color);
+}
+
+.tomorrow_diagnosis_box {
+  background: rgba(99, 102, 241, 0.05);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-left: 3px solid var(--accent-primary);
+  border-radius: var(--border-radius-sm);
+  padding: 10px 14px;
+}
+
+.diagnosis_header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.diagnosis_text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.tomorrow_keystone_box {
+  background: var(--bg-primary);
+  border: 1.5px solid var(--accent-primary);
+  border-radius: var(--border-radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.keystone_badge_row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.keystone_badge {
+  font-size: 10.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--accent-primary);
+  background: rgba(99, 102, 241, 0.12);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.keystone_priority_tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.keystone_priority_tag.high {
+  background: rgba(248, 81, 73, 0.15);
+  color: #ff7b72;
+}
+
+.keystone_priority_tag.medium {
+  background: rgba(219, 109, 40, 0.15);
+  color: #f0883e;
+}
+
+.keystone_title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 2px 0 0 0;
+}
+
+.keystone_reason {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.tomorrow_micro_starter_box {
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-left: 3px solid #f59e0b;
+  border-radius: var(--border-radius-sm);
+  padding: 8px 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 11.5px;
+}
+
+.micro_content strong {
+  color: #d97706;
+  font-size: 11px;
+}
+
+.micro_text {
+  color: var(--text-primary);
+  margin: 2px 0 0 0;
+  font-weight: 500;
+}
+
+.tomorrow_intention_box {
+  background: rgba(31, 111, 235, 0.07);
+  border: 1px solid rgba(31, 111, 235, 0.22);
+  border-left: 3px solid var(--accent-primary);
+  border-radius: var(--border-radius-sm);
+  padding: 8px 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 11.5px;
+}
+
+.intention_content strong {
+  color: var(--accent-primary);
+  font-size: 11px;
+}
+
+.intention_text {
+  color: var(--text-primary);
+  margin: 2px 0 0 0;
+}
+
+.tomorrow_supporting_section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.supporting_section_header .section_label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.tomorrow_supporting_list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tomorrow_supporting_item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  font-size: 12px;
+}
+
+.supporting_checkbox_label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--text-primary);
+}
+
+.supporting_meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.supporting_role_badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+}
+
+.tomorrow_zeigarnik_box {
+  background: var(--card-bg);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--border-radius-sm);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 11.5px;
+  font-style: italic;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.tomorrow_action_row {
+  margin-top: 4px;
+}
+
+.tomorrow_committed_banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(35, 134, 54, 0.12);
+  border: 1px solid rgba(35, 134, 54, 0.3);
+  color: #1a7f37;
+  padding: 10px 14px;
+  border-radius: var(--border-radius-sm);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.theme-dark .tomorrow_committed_banner {
+  color: #3fb950;
+  border-color: rgba(63, 185, 80, 0.3);
+}
+
+.lock_tomorrow_btn {
+  width: 100%;
+  justify-content: center;
+  font-weight: 700;
+  height: 38px;
+  font-size: 13px;
+}
+
 /* AI Priority Ranking Badges on Task Cards */
 .badge.ai_rank {
   display: inline-flex;
@@ -2795,12 +3302,25 @@ body[data-style="neo-brutalism"] .today_ai_conquer_box,
 body[data-style="neo-brutalism"] .today_ai_inertia_box,
 body[data-style="neo-brutalism"] .today_ai_timeline_item,
 body[data-style="neo-brutalism"] .today_ai_btn,
-body[data-style="neo-brutalism"] .task_ai_breakdown_deck {
+body[data-style="neo-brutalism"] .task_ai_breakdown_deck,
+body[data-style="neo-brutalism"] .morning_momentum_bridge_card,
+body[data-style="neo-brutalism"] .focus_mode_tab,
+body[data-style="neo-brutalism"] .psych_stat_card,
+body[data-style="neo-brutalism"] .tomorrow_starter_prompt,
+body[data-style="neo-brutalism"] .tomorrow_diagnosis_box,
+body[data-style="neo-brutalism"] .tomorrow_keystone_box,
+body[data-style="neo-brutalism"] .tomorrow_micro_starter_box,
+body[data-style="neo-brutalism"] .tomorrow_intention_box,
+body[data-style="neo-brutalism"] .tomorrow_supporting_item,
+body[data-style="neo-brutalism"] .tomorrow_zeigarnik_box,
+body[data-style="neo-brutalism"] .tomorrow_committed_banner {
   border: var(--border-width) solid var(--border-color-token) !important;
   border-radius: 0px !important;
 }
 
-body[data-style="neo-brutalism"] .today_ai_deck {
+body[data-style="neo-brutalism"] .today_ai_deck,
+body[data-style="neo-brutalism"] .morning_momentum_bridge_card,
+body[data-style="neo-brutalism"] .tomorrow_keystone_box {
   box-shadow: 4px 4px 0px 0px var(--border-color-token) !important;
 }
 body[data-style="neo-brutalism"] .ai_coach_trigger_btn,
