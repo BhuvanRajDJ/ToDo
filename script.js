@@ -5796,16 +5796,21 @@ Return ONLY a valid JSON object matching this schema:
     // -------------------------------------------------------------------------
     // SYSTEM BOTTOM SHEET EDITORS (TASKS)
     // -------------------------------------------------------------------------
-    openBottomSheet(task = null) {
+    openBottomSheet(task = null, initialData = null) {
       this.bottomSheet.classList.add("visible");
       this.bottomSheetOverlay.classList.add("visible");
       document.body.classList.add("modal-open");
 
       const dateChips = this.sheetForm.querySelectorAll(".date_chip");
+      const dateInput = document.getElementById("task_due_date");
+      const sheetSubtitle = document.getElementById("sheet_subtitle");
+      const advContent = document.getElementById("sheet_adv_content");
+      const advChevron = document.getElementById("sheet_adv_chevron");
 
       if (task) {
         this.activeEditingTaskId = task.id;
         this.sheetTitle.textContent = "Refine Task Details";
+        if (sheetSubtitle) sheetSubtitle.textContent = "Update deadline, category, or recurrence parameters.";
         this.sheetSubmitBtn.textContent = "Save Changes";
         if (this.sheetDeleteBtn) this.sheetDeleteBtn.style.display = "inline-flex";
 
@@ -5813,43 +5818,89 @@ Return ONLY a valid JSON object matching this schema:
         document.getElementById("task_desc").value = task.description || "";
         document.getElementById("task_due_date").value = task.isLater ? "" : task.dueDate;
         document.getElementById("task_priority").value = task.priority;
+        this.updatePriorityPillsUI(task.priority);
         document.getElementById("task_category").value = task.category || "Inbox";
         document.getElementById("task_duration").value = task.estimatedDuration || 25;
         document.getElementById("task_recurring").value = task.recurring || "none";
+
+        // Handle accordion state for recurring tasks
+        if (advContent && advChevron) {
+          const hasRecurrence = task.recurring && task.recurring !== "none";
+          advContent.style.display = hasRecurrence ? "block" : "none";
+          advChevron.textContent = hasRecurrence ? "▴" : "▾";
+        }
 
         const todayStr = getLocalDateString();
         const tom = new Date(); tom.setDate(tom.getDate() + 1); const tomStr = getLocalDateString(tom);
         const nW = new Date(); nW.setDate(nW.getDate() + 7); const nWStr = getLocalDateString(nW);
 
+        let chipMatched = false;
         dateChips.forEach(c => {
           c.classList.remove("active");
           const offsetStr = c.getAttribute("data-days");
           if (offsetStr) {
             const offset = parseInt(offsetStr);
-            if (offset === 0 && task.dueDate === todayStr && !task.isLater) c.classList.add("active");
-            if (offset === 1 && task.dueDate === tomStr && !task.isLater) c.classList.add("active");
-            if (offset === 7 && task.dueDate === nWStr && !task.isLater) c.classList.add("active");
+            if (offset === 0 && task.dueDate === todayStr && !task.isLater) { c.classList.add("active"); chipMatched = true; }
+            if (offset === 1 && task.dueDate === tomStr && !task.isLater) { c.classList.add("active"); chipMatched = true; }
+            if (offset === 7 && task.dueDate === nWStr && !task.isLater) { c.classList.add("active"); chipMatched = true; }
           } else if (task.isLater && c.id === "chip_do_later") {
             c.classList.add("active");
+            chipMatched = true;
           }
         });
+
+        if (!chipMatched && !task.isLater && task.dueDate) {
+          const customChip = document.getElementById("chip_custom_date");
+          if (customChip) customChip.classList.add("active");
+          if (dateInput) dateInput.style.display = "block";
+        } else {
+          if (dateInput) dateInput.style.display = "none";
+        }
       } else {
         this.activeEditingTaskId = null;
         this.sheetTitle.textContent = "Capture New Goal";
+        if (sheetSubtitle) sheetSubtitle.textContent = "Configure task objective and execution parameters.";
         this.sheetSubmitBtn.textContent = "Commit Task";
         if (this.sheetDeleteBtn) this.sheetDeleteBtn.style.display = "none";
 
         this.sheetForm.reset();
-        
-        document.getElementById("task_due_date").value = getLocalDateString();
-        document.getElementById("task_priority").value = "Medium";
-        document.getElementById("task_category").value = "Inbox";
+
+        // Collapse advanced accordion by default for compact view
+        if (advContent && advChevron) {
+          advContent.style.display = "none";
+          advChevron.textContent = "▾";
+        }
+
+        const initialTitle = initialData?.title || "";
+        const initialPriority = initialData?.priority || this.quickAddState?.priority || "Medium";
+        const initialCategory = initialData?.category || this.quickAddState?.category || "Inbox";
+        const dateMode = initialData?.dateMode || this.quickAddState?.dateMode || "today";
+
+        document.getElementById("task_title").value = initialTitle;
+        document.getElementById("task_desc").value = "";
+        document.getElementById("task_priority").value = initialPriority;
+        this.updatePriorityPillsUI(initialPriority);
+        document.getElementById("task_category").value = initialCategory;
         document.getElementById("task_duration").value = 25;
         document.getElementById("task_recurring").value = "none";
 
-        dateChips.forEach(c => {
-          c.classList.toggle("active", c.getAttribute("data-days") === "0");
-        });
+        dateChips.forEach(c => c.classList.remove("active"));
+        if (dateInput) dateInput.style.display = "none";
+
+        if (dateMode === "tomorrow") {
+          const tom = new Date(); tom.setDate(tom.getDate() + 1);
+          document.getElementById("task_due_date").value = getLocalDateString(tom);
+          const tomChip = Array.from(dateChips).find(c => c.getAttribute("data-days") === "1");
+          if (tomChip) tomChip.classList.add("active");
+        } else if (dateMode === "later") {
+          document.getElementById("task_due_date").value = "";
+          const laterChip = document.getElementById("chip_do_later");
+          if (laterChip) laterChip.classList.add("active");
+        } else {
+          document.getElementById("task_due_date").value = getLocalDateString();
+          const todayChip = Array.from(dateChips).find(c => c.getAttribute("data-days") === "0");
+          if (todayChip) todayChip.classList.add("active");
+        }
       }
 
       setTimeout(() => document.getElementById("task_title").focus(), 200);
@@ -5860,9 +5911,194 @@ Return ONLY a valid JSON object matching this schema:
       this.bottomSheetOverlay.classList.remove("visible");
       document.body.classList.remove("modal-open");
       if (this.sheetDeleteBtn) this.sheetDeleteBtn.style.display = "none";
+      const dateInput = document.getElementById("task_due_date");
+      if (dateInput) dateInput.style.display = "none";
       this.activeEditingTaskId = null;
       this.isSubmitting = false;
       if (this.sheetSubmitBtn) this.sheetSubmitBtn.disabled = false;
+    }
+
+    // -------------------------------------------------------------------------
+    // QUICK-ADD TASK DECK & ADVANCED MODAL CONTROLLERS
+    // -------------------------------------------------------------------------
+    bindQuickAddInteractions() {
+      if (!this.quickAddInput) return;
+
+      // Pressing Enter inside input creates task immediately
+      this.quickAddInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          this.submitQuickAdd();
+        } else if (e.key === "Escape") {
+          this.quickAddInput.blur();
+        }
+      });
+
+      // Save button click
+      if (this.qaBtnCommit) {
+        this.qaBtnCommit.addEventListener("click", () => this.submitQuickAdd());
+      }
+
+      // Date Chip Cycle: Today -> Tomorrow -> Later -> Today
+      if (this.qaChipDate) {
+        this.qaChipDate.addEventListener("click", () => {
+          const modes = ["today", "tomorrow", "later"];
+          const currentIdx = modes.indexOf(this.quickAddState.dateMode);
+          const nextMode = modes[(currentIdx + 1) % modes.length];
+          this.quickAddState.dateMode = nextMode;
+          const labels = { today: "Today", tomorrow: "Tomorrow", later: "Later" };
+          if (this.qaDateText) this.qaDateText.textContent = labels[nextMode];
+        });
+      }
+
+      // Priority Chip Cycle: Med -> High -> Low -> Med
+      if (this.qaChipPriority) {
+        this.qaChipPriority.addEventListener("click", () => {
+          const priOrder = ["Medium", "High", "Low"];
+          const currentIdx = priOrder.indexOf(this.quickAddState.priority);
+          const nextPri = priOrder[(currentIdx + 1) % priOrder.length];
+          this.quickAddState.priority = nextPri;
+          if (this.qaPriorityText) this.qaPriorityText.textContent = nextPri === "Medium" ? "Med" : nextPri;
+          const dot = this.qaChipPriority.querySelector(".qa_p_dot");
+          if (dot) {
+            dot.className = "qa_p_dot " + (nextPri === "Medium" ? "med" : nextPri.toLowerCase());
+          }
+        });
+      }
+
+      // Category Chip Cycle
+      if (this.qaChipCategory) {
+        this.qaChipCategory.addEventListener("click", () => {
+          const cats = ["Inbox", "Work", "Personal", "Health", "Finance"];
+          const currentIdx = cats.indexOf(this.quickAddState.category);
+          const nextCat = cats[(currentIdx + 1) % cats.length];
+          this.quickAddState.category = nextCat;
+          if (this.qaCategoryText) this.qaCategoryText.textContent = nextCat;
+        });
+      }
+
+      // Advanced Setup Button -> opens redesigned bottom sheet with typed title pre-filled
+      if (this.qaBtnAdvanced) {
+        this.qaBtnAdvanced.addEventListener("click", () => {
+          const title = this.quickAddInput.value.trim();
+          this.openBottomSheet(null, {
+            title,
+            priority: this.quickAddState.priority,
+            category: this.quickAddState.category,
+            dateMode: this.quickAddState.dateMode
+          });
+          this.quickAddInput.value = "";
+        });
+      }
+    }
+
+    submitQuickAdd() {
+      if (!this.quickAddInput) return;
+      const title = this.quickAddInput.value.trim();
+      if (!title) {
+        this.quickAddInput.focus();
+        return;
+      }
+
+      let dueDate = getLocalDateString();
+      let isLater = false;
+
+      if (this.quickAddState.dateMode === "tomorrow") {
+        const tom = new Date();
+        tom.setDate(tom.getDate() + 1);
+        dueDate = getLocalDateString(tom);
+      } else if (this.quickAddState.dateMode === "later") {
+        isLater = true;
+        dueDate = getLocalDateString();
+      }
+
+      const taskData = {
+        title,
+        description: "",
+        dueDate,
+        priority: this.quickAddState.priority || "Medium",
+        category: this.quickAddState.category || "Inbox",
+        estimatedDuration: 25,
+        recurring: "none",
+        isLater
+      };
+
+      const newTask = this.store.addTask(taskData);
+      this.quickAddInput.value = "";
+      this.quickAddInput.focus();
+
+      if (newTask) {
+        // Highlight created task card with celebration particles
+        setTimeout(() => {
+          this.triggerCelebration(newTask.id);
+        }, 150);
+      }
+    }
+
+    updateQuickAddContext(view) {
+      if (!this.quickAddContainer) return;
+      if (view === "completed") {
+        this.quickAddContainer.style.display = "none";
+        return;
+      }
+      this.quickAddContainer.style.display = "block";
+
+      if (view === "today") {
+        this.quickAddState.dateMode = "today";
+        if (this.qaDateText) this.qaDateText.textContent = "Today";
+        if (this.quickAddInput) this.quickAddInput.placeholder = "＋ Quick add a goal for Today... (Press Enter)";
+      } else if (view === "tomorrow") {
+        this.quickAddState.dateMode = "tomorrow";
+        if (this.qaDateText) this.qaDateText.textContent = "Tomorrow";
+        if (this.quickAddInput) this.quickAddInput.placeholder = "＋ Quick add a goal for Tomorrow... (Press Enter)";
+      } else if (view === "later") {
+        this.quickAddState.dateMode = "later";
+        if (this.qaDateText) this.qaDateText.textContent = "Later";
+        if (this.quickAddInput) this.quickAddInput.placeholder = "＋ Quick add a goal to Do Later... (Press Enter)";
+      } else if (view === "upcoming") {
+        this.quickAddState.dateMode = "tomorrow";
+        if (this.qaDateText) this.qaDateText.textContent = "Tomorrow";
+        if (this.quickAddInput) this.quickAddInput.placeholder = "＋ Quick add an upcoming goal... (Press Enter)";
+      } else {
+        this.quickAddState.dateMode = "today";
+        if (this.qaDateText) this.qaDateText.textContent = "Today";
+        if (this.quickAddInput) this.quickAddInput.placeholder = "＋ Quick add a new goal... (Type and press Enter)";
+      }
+    }
+
+    bindPriorityPills() {
+      const pillGroup = document.getElementById("priority_pill_group");
+      const prioritySelect = document.getElementById("task_priority");
+      if (!pillGroup || !prioritySelect) return;
+
+      pillGroup.addEventListener("click", (e) => {
+        const pill = e.target.closest(".priority_pill_option");
+        if (!pill) return;
+        const val = pill.getAttribute("data-priority");
+        if (!val) return;
+        prioritySelect.value = val;
+        this.updatePriorityPillsUI(val);
+      });
+    }
+
+    updatePriorityPillsUI(selectedVal) {
+      const pills = document.querySelectorAll("#priority_pill_group .priority_pill_option");
+      pills.forEach(p => {
+        p.classList.toggle("active", p.getAttribute("data-priority") === selectedVal);
+      });
+    }
+
+    bindSheetAdvancedToggle() {
+      const btn = document.getElementById("btn_toggle_sheet_adv");
+      const content = document.getElementById("sheet_adv_content");
+      const chevron = document.getElementById("sheet_adv_chevron");
+      if (!btn || !content) return;
+
+      btn.addEventListener("click", () => {
+        const isHidden = content.style.display === "none";
+        content.style.display = isHidden ? "block" : "none";
+        if (chevron) chevron.textContent = isHidden ? "▴" : "▾";
+      });
     }
 
     handleFormSubmission() {
