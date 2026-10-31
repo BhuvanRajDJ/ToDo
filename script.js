@@ -551,7 +551,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       StorageService.deleteItem("tasks", id);
 
       this.emit("tasksUpdated", this.tasks);
-      this.emit("notification", { message: `Deleted "${task ? task.title : 'task'}"`, type: "info" });
+      this.emit("notification", { message: `Released "${task ? task.title : 'intention'}"`, type: "info" });
     }
 
     toggleTaskComplete(id) {
@@ -571,7 +571,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
         this.emit("tasksUpdated", this.tasks);
         this.emit("notification", {
-          message: task.completed ? "Goal completed! Keep going!" : "Goal marked as pending",
+          message: task.completed ? "Intention achieved! Neural momentum expanding." : "Intention returned to active pipeline",
           type: task.completed ? "success" : "info"
         });
       }
@@ -2375,21 +2375,21 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       // Update active view header title
       const viewTitles = {
-        dashboard: "Dashboard",
-        routine: "Daily Schedule",
-        consistency: "Habit Tracker",
-        consistency_history: "Consistency History",
-        timer: "Focus Timer",
-        insights: "Performance Analytics",
-        journal: "Mindful Journal",
+        dashboard: "Executive Command",
+        routine: "Energy Architecture",
+        consistency: "Atomic Streaks",
+        consistency_history: "Momentum Trajectory",
+        timer: "Flow State Timer",
+        insights: "Cognitive Insights",
+        journal: "Evening Reflection",
         settings: "Settings",
-        all: "All Tasks",
-        today: "Today's Focus",
-        tomorrow: "Tomorrow's Focus",
-        upcoming: "Upcoming Tasks",
-        overdue: "Overdue Tasks",
-        completed: "Completed Tasks",
-        later: "Do It Later"
+        all: "Focus Pipeline",
+        today: "Today's Core Focus",
+        tomorrow: "Tomorrow's Blueprint",
+        upcoming: "Upcoming Horizons",
+        overdue: "Priority Attention",
+        completed: "Victory Archive",
+        later: "Mindful Backlog"
       };
 
       if (viewTitles[active]) {
@@ -3783,7 +3783,7 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
       const streaksContainer = document.getElementById("history_streaks_container");
       if (streaksContainer) {
         if (habits.length === 0) {
-          streaksContainer.innerHTML = `<div class="empty_state_text">No habits tracked yet. Create a habit to start building streaks!</div>`;
+          streaksContainer.innerHTML = `<div class="empty_state_text">No active streaks yet. Anchor your first ritual to build compounding neural momentum!</div>`;
         } else {
           streaksContainer.innerHTML = habits.map(h => {
             let compCount30 = 0;
@@ -4334,15 +4334,15 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
     // -------------------------------------------------------------------------
     renderTaskListUI(view) {
       const titles = {
-        all: "Inbox Archive",
-        today: "Focus Today",
-        tomorrow: "Focus Tomorrow",
-        upcoming: "Upcoming Tasks",
-        overdue: "Overdue Alerts",
-        completed: "Done Achievements",
-        later: "Do It Later"
+        all: "Focus Pipeline",
+        today: "Today's Core Focus",
+        tomorrow: "Tomorrow's Blueprint",
+        upcoming: "Upcoming Horizons",
+        overdue: "Priority Attention",
+        completed: "Victory Archive",
+        later: "Mindful Backlog"
       };
-      this.viewTitle.textContent = titles[view] || "My Tasks";
+      this.viewTitle.textContent = titles[view] || "Focus Pipeline";
 
       const filtered = this.getFilteredTasks(view);
       this.viewCount.textContent = `(${filtered.length})`;
@@ -4370,9 +4370,9 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
             <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom: 16px; color: var(--text-muted);">
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            <h3>All caught up</h3>
-            <p>Your task list is perfectly clear. Take a breather or capture a new goal!</p>
-            <button class="sheet_primary_commit" id="empty_state_add_task" style="display: inline-flex; align-items: center; justify-content: center; padding: 0 20px; height: 40px; width: auto; font-weight: 600; font-size: 14px; margin-top: 16px; border-radius: 6px;">+ Add First Task</button>
+            <h3>Zero Cognitive Friction</h3>
+            <p>Your mental slate is completely clear. Savor this clarity, or commit your next breakthrough intention.</p>
+            <button class="sheet_primary_commit" id="empty_state_add_task" style="display: inline-flex; align-items: center; justify-content: center; padding: 0 20px; height: 40px; width: auto; font-weight: 600; font-size: 14px; margin-top: 16px; border-radius: 6px;">+ Capture Core Intention</button>
           </div>
         `;
         setTimeout(() => {
@@ -4476,14 +4476,21 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
             section.className = `priority_group_section priority-${pKey.toLowerCase()}`;
             section.setAttribute("data-priority", pKey);
             
+            const priorityDisplayNames = {
+              High: "Keystone Priorities",
+              Medium: "Steady Momentum",
+              Low: "Gentle Focus"
+            };
+            const priTitle = priorityDisplayNames[pKey] || `${pKey} Priority`;
+
             section.innerHTML = `
               <div class="priority_group_header">
                 <div class="priority_group_title">
                   <svg class="chevron_icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                     <polyline points="6 9 12 15 18 9"></polyline>
                   </svg>
-                  <h3>${pKey} Priority</h3>
-                  <span class="count_badge">${groupTasks.length} ${groupTasks.length === 1 ? 'task' : 'tasks'}</span>
+                  <h3>${priTitle}</h3>
+                  <span class="count_badge">${groupTasks.length} ${groupTasks.length === 1 ? 'intention' : 'intentions'}</span>
                 </div>
               </div>
               <div class="priority_group_content"></div>
@@ -4583,7 +4590,7 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
       let remainingBadge = "";
       if (!task.completed) {
         if (task.isLater) {
-          remainingBadge = `<span class="badge later">Flexible</span>`;
+          remainingBadge = `<span class="badge later">Incubating</span>`;
         } else {
           const now = new Date();
           const due = new Date(task.dueDate + "T23:59:59");
@@ -4591,8 +4598,8 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
           const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
 
           if (diffDays < 0) remainingBadge = `<span class="badge overdue">Overdue by ${Math.abs(diffDays)}d</span>`;
-          else if (diffDays === 0) remainingBadge = `<span class="badge today">Due Today</span>`;
-          else if (diffDays === 1) remainingBadge = `<span class="badge tomorrow">Due Tomorrow</span>`;
+          else if (diffDays === 0) remainingBadge = `<span class="badge today">Today's Focus</span>`;
+          else if (diffDays === 1) remainingBadge = `<span class="badge tomorrow">Tomorrow</span>`;
           else remainingBadge = `<span class="badge upcoming">In ${diffDays} days</span>`;
         }
       }
@@ -4605,7 +4612,7 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
       if (this.todayAITaskOrder && this.todayAITaskOrder.length > 0) {
         const rank = this.todayAITaskOrder.indexOf(task.id);
         if (rank === 0) {
-          aiOrderBadge = `<span class="badge ai_rank top" title="AI Ranked #1 Focus"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor" style="display:inline-block; vertical-align:middle; margin-right:3px;"><path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2z"/></svg>#1 Priority</span>`;
+          aiOrderBadge = `<span class="badge ai_rank top" title="AI Ranked #1 Focus"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor" style="display:inline-block; vertical-align:middle; margin-right:3px;"><path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2z"/></svg>#1 Keystone</span>`;
         } else if (rank > 0) {
           aiOrderBadge = `<span class="badge ai_rank" title="AI Ranked Sequence #${rank + 1}">#${rank + 1} Sequence</span>`;
         }
@@ -4650,7 +4657,7 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
           </div>
 
           <div class="card_meta_row">
-            <span class="meta_item priority_badge priority-${task.priority.toLowerCase()}">${task.priority.toUpperCase()}</span>
+            <span class="meta_item priority_badge priority-${task.priority.toLowerCase()}">${{"High": "KEYSTONE", "Medium": "STEADY", "Low": "GENTLE"}[task.priority] || task.priority.toUpperCase()}</span>
             <span class="meta_item category_badge">${this.escapeHTML(task.category)}</span>
             <span class="meta_item date_badge">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
@@ -4659,11 +4666,11 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
                 <line x1="8" y1="2" x2="8" y2="6"></line>
                 <line x1="3" y1="10" x2="21" y2="10"></line>
               </svg>
-              ${task.isLater ? "Someday / Later" : task.dueDate}
+              ${task.isLater ? "Mindful Backlog" : task.dueDate}
             </span>
             ${remainingBadge}
             ${task.estimatedDuration ? `<span class="meta_item duration_badge"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>${task.estimatedDuration}m</span>` : ""}
-            ${task.focusSessions && task.focusSessions.length > 0 ? `<span class="meta_item focus_badge"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 4px;"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2z"></path></svg>${task.focusSessions.reduce((s, fs) => s + (fs.duration || 0), 0)}m focused</span>` : ""}
+            ${task.focusSessions && task.focusSessions.length > 0 ? `<span class="meta_item focus_badge"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 4px;"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2z"></path></svg>${task.focusSessions.reduce((s, fs) => s + (fs.duration || 0), 0)}m flow</span>` : ""}
             <span class="meta_item xp_badge"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>+${(task.estimatedDuration || 25) * 4} XP</span>
           </div>
 
@@ -4693,7 +4700,7 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
                 `).join("")}
               </div>
               <div class="add_subtask_row">
-                <input type="text" class="subtask_input" data-task-id="${task.id}" placeholder="+ Add subtask checklist, press Enter...">
+                <input type="text" class="subtask_input" data-task-id="${task.id}" placeholder="+ Add micro-step, press Enter...">
               </div>
             </div>
 
@@ -4709,23 +4716,23 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
                   <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; color: var(--accent-primary);">
                     <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2z"/>
                   </svg>
-                  AI Breakdown
+                  Clarity Breakdown
                 </button>
-                <button class="action_btn play_btn" aria-label="Focus on task">
+                <button class="action_btn play_btn" aria-label="Enter flow state on intention">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                     <polygon points="5 3 19 12 5 21 5 3"></polygon>
                   </svg>
-                  Focus
+                  Enter Flow
                 </button>
-                <button class="action_btn later_btn" aria-label="${task.isLater ? 'Activate' : 'Do Later'}">
+                <button class="action_btn later_btn" aria-label="${task.isLater ? 'Focus Now' : 'Incubate'}">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
                     <circle cx="12" cy="12" r="10"></circle>
                     <polyline points="12 6 12 12 16 14"></polyline>
                   </svg>
-                  ${task.isLater ? "Activate" : "Do Later"}
+                  ${task.isLater ? "Focus Now" : "Incubate"}
                 </button>
               ` : ""}
-              <button class="action_btn delete_btn_manual" aria-label="Delete Task">
+              <button class="action_btn delete_btn_manual" aria-label="Release Intention">
                 <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
@@ -4789,7 +4796,7 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
       card.querySelector(".edit_btn").addEventListener("click", () => this.openBottomSheet(task));
       
       card.querySelector(".delete_btn_manual").addEventListener("click", () => {
-        if (confirm(`Unschedule "${task.title}"?`)) this.store.deleteTask(task.id);
+        if (confirm(`Release "${task.title}"?`)) this.store.deleteTask(task.id);
       });
 
       card.querySelectorAll(".subtask_item").forEach(item => {
@@ -6643,7 +6650,8 @@ Return ONLY a valid JSON object matching this schema:
           const currentIdx = priOrder.indexOf(this.quickAddState.priority);
           const nextPri = priOrder[(currentIdx + 1) % priOrder.length];
           this.quickAddState.priority = nextPri;
-          if (this.qaPriorityText) this.qaPriorityText.textContent = nextPri === "Medium" ? "Med" : nextPri;
+          const displayLabels = { Medium: "Steady", High: "Keystone", Low: "Gentle" };
+          if (this.qaPriorityText) this.qaPriorityText.textContent = displayLabels[nextPri] || nextPri;
           const dot = this.qaChipPriority.querySelector(".qa_p_dot");
           if (dot) {
             dot.className = "qa_p_dot " + (nextPri === "Medium" ? "med" : nextPri.toLowerCase());
@@ -6731,23 +6739,23 @@ Return ONLY a valid JSON object matching this schema:
       if (view === "today") {
         this.quickAddState.dateMode = "today";
         if (this.qaDateText) this.qaDateText.textContent = "Today";
-        if (this.quickAddInput) this.quickAddInput.placeholder = "＋ Quick add a goal for Today... (Press Enter)";
+        if (this.quickAddInput) this.quickAddInput.placeholder = "＋ Capture today's core intention... (Press Enter)";
       } else if (view === "tomorrow") {
         this.quickAddState.dateMode = "tomorrow";
         if (this.qaDateText) this.qaDateText.textContent = "Tomorrow";
-        if (this.quickAddInput) this.quickAddInput.placeholder = "＋ Quick add a goal for Tomorrow... (Press Enter)";
+        if (this.quickAddInput) this.quickAddInput.placeholder = "＋ Anchor tomorrow's milestone in advance... (Press Enter)";
       } else if (view === "later") {
         this.quickAddState.dateMode = "later";
-        if (this.qaDateText) this.qaDateText.textContent = "Later";
-        if (this.quickAddInput) this.quickAddInput.placeholder = "＋ Quick add a goal to Do Later... (Press Enter)";
+        if (this.qaDateText) this.qaDateText.textContent = "Backlog";
+        if (this.quickAddInput) this.quickAddInput.placeholder = "＋ Park an intention for mindful incubation... (Press Enter)";
       } else if (view === "upcoming") {
         this.quickAddState.dateMode = "tomorrow";
-        if (this.qaDateText) this.qaDateText.textContent = "Tomorrow";
-        if (this.quickAddInput) this.quickAddInput.placeholder = "＋ Quick add an upcoming goal... (Press Enter)";
+        if (this.qaDateText) this.qaDateText.textContent = "Upcoming";
+        if (this.quickAddInput) this.quickAddInput.placeholder = "＋ Architect an upcoming milestone... (Press Enter)";
       } else {
         this.quickAddState.dateMode = "today";
         if (this.qaDateText) this.qaDateText.textContent = "Today";
-        if (this.quickAddInput) this.quickAddInput.placeholder = "＋ Quick add a new goal... (Type and press Enter)";
+        if (this.quickAddInput) this.quickAddInput.placeholder = "＋ Capture your next breakthrough intention... (Type and press Enter)";
       }
     }
 
@@ -7070,7 +7078,7 @@ Return ONLY a valid JSON object matching this schema:
         });
 
       if (tasksWithFocusToday.length === 0) {
-        wrapper.innerHTML = `<div class="empty_state_text" style="text-align: center; padding: 30px 10px; color: var(--text-muted);">No focus sessions logged today. Start the timer!</div>`;
+        wrapper.innerHTML = `<div class="empty_state_text" style="text-align: center; padding: 30px 10px; color: var(--text-muted);">Zero flow sessions logged today. Launch the Flow State Timer to enter deep work!</div>`;
         return;
       }
 
