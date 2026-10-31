@@ -1109,6 +1109,35 @@
         </div>
     </div>
 
+    <!-- 9. PERSONALITY PROFILING & PRODUCTIVITY DNA MODAL -->
+    <div id="personality_quiz_dialog" class="modal_dialog_overlay" style="display: none;">
+        <div class="modal_dialog_content personality_modal">
+            <div class="modal_dialog_header">
+                <div class="personality_header_meta">
+                    <span class="personality_kicker">Behavioral Science Profiler</span>
+                    <h2 id="personality_dialog_title">Productivity DNA</h2>
+                </div>
+                <button type="button" id="close_personality_dialog" class="sheet_close_btn" aria-label="Dismiss Dialog">✕</button>
+            </div>
+            <div class="personality_stepper_bar" id="personality_stepper_bar">
+                <div class="stepper_dot active" data-step="1"></div>
+                <div class="stepper_dot" data-step="2"></div>
+                <div class="stepper_dot" data-step="3"></div>
+                <div class="stepper_dot" data-step="4"></div>
+                <div class="stepper_dot" data-step="5"></div>
+            </div>
+            <div id="personality_step_content" class="modal_dialog_body personality_body">
+                <!-- Dynamically populated step cards -->
+            </div>
+            <div class="modal_dialog_footer personality_footer">
+                <button type="button" id="personality_prev_btn" class="modal_secondary_btn" style="display: none;">Back</button>
+                <div class="footer_spacer"></div>
+                <button type="button" id="personality_skip_btn" class="modal_ghost_btn">Skip for Now</button>
+                <button type="button" id="personality_next_btn" class="modal_primary_btn">Continue</button>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <script src="script.js"></script>

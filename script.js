@@ -385,7 +385,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         notificationsEnabled,
         bannerDismissed,
         uiStyle,
-        alarmSound
+        alarmSound,
+        personalityProfile
       ] = await Promise.all([
         StorageService.getAllItems("tasks"),
         StorageService.getAllItems("routines"),
@@ -399,7 +400,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         StorageService.getPreference("notifications_enabled", true),
         StorageService.getPreference("banner_dismissed", false),
         StorageService.getPreference("ui_style", "neo-brutalism"),
-        StorageService.getPreference("alarm_sound", "default_beeps")
+        StorageService.getPreference("alarm_sound", "default_beeps"),
+        StorageService.getPreference("personality_profile", null)
       ]);
 
       const journal = {};
@@ -422,7 +424,8 @@ document.addEventListener("DOMContentLoaded", async function () {
           notificationsEnabled,
           bannerDismissed,
           uiStyle,
-          alarmSound
+          alarmSound,
+          personalityProfile
         }
       };
     }
@@ -448,6 +451,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.uiStyle = dbData.preferences.uiStyle || "neo-brutalism";
       this.sidebarCollapsed = dbData.preferences.sidebarCollapsed;
       this.alarmSound = dbData.preferences.alarmSound || "default_beeps";
+      this.personalityProfile = dbData.preferences.personalityProfile || null;
       console.log("State Store Loaded Visual Vibe Style:", this.uiStyle);
 
       this.timer = {
@@ -1219,6 +1223,12 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.emit("sidebarToggled", collapsed);
     }
 
+    setPersonalityProfile(profile) {
+      this.personalityProfile = profile;
+      StorageService.savePreference("personality_profile", profile);
+      this.emit("personalityChanged", profile);
+    }
+
     setFilters(search, priority, category) {
       this.filters.search = search;
       this.filters.priority = priority;
@@ -1254,6 +1264,213 @@ document.addEventListener("DOMContentLoaded", async function () {
   }
 
   // =========================================================================
+  // 3.5 BEHAVIORAL SCIENCE & PERSONALITY PROFILING ENGINE
+  // =========================================================================
+  const PERSONALITY_QUESTIONS = [
+    {
+      id: "chronotype",
+      kicker: "Pillar 1: Circadian Energy",
+      title: "When is your mind at its peak analytical clarity?",
+      subtitle: "Tasks requiring deep executive function should match your biological rhythm.",
+      options: [
+        {
+          value: "early_falcon",
+          icon: "🌅",
+          label: "Early Falcon (06:00 – 10:00)",
+          desc: "Highest discipline at dawn. Energy naturally tapers off by late afternoon."
+        },
+        {
+          value: "midday_climber",
+          icon: "☀️",
+          label: "Midday Climber (10:00 – 14:00)",
+          desc: "Requires a gradual morning warm-up. Strikes peak velocity around midday."
+        },
+        {
+          value: "twilight_owl",
+          icon: "🌙",
+          label: "Twilight Owl (18:00 – 23:00)",
+          desc: "Slow day start. Deep creative flow and clarity unlock after dusk."
+        },
+        {
+          value: "variable",
+          icon: "⚡",
+          label: "Wave Surfer (Flexible & Variable)",
+          desc: "Energy fluctuates based on inspiration. Needs adaptive micro-sprints."
+        }
+      ]
+    },
+    {
+      id: "procrastination",
+      kicker: "Pillar 2: Emotional Friction",
+      title: "When you delay a scheduled task, what is the core friction?",
+      subtitle: "Procrastination is emotional regulation. The AI will engineer micro-starters to dissolve this exact trigger.",
+      options: [
+        {
+          value: "perfectionism",
+          icon: "🎯",
+          label: "Perfectionist Resistance",
+          desc: "Fear of suboptimal output, endless research, or waiting for ideal conditions."
+        },
+        {
+          value: "overwhelm",
+          icon: "🌪️",
+          label: "Cognitive Overwhelm",
+          desc: "Too many open tabs and loose ends. Paralyzed about which thread to pull first."
+        },
+        {
+          value: "boredom",
+          icon: "🥱",
+          label: "Low-Stimulation Boredom",
+          desc: "The task feels mundane, mechanical, or devoid of novelty and urgency."
+        },
+        {
+          value: "fatigue",
+          icon: "🔋",
+          label: "Executive Burnout & Fatigue",
+          desc: "Depleted mental stamina, brain fog, or chronic overcommitment to others."
+        }
+      ]
+    },
+    {
+      id: "pacing",
+      kicker: "Pillar 3: Flow Architecture",
+      title: "How does your brain naturally sustain execution momentum?",
+      subtitle: "Determines how the AI groups, sequences, and intervals your day.",
+      options: [
+        {
+          value: "sprints",
+          icon: "🏃",
+          label: "Interval Sprints (20–25m bursts)",
+          desc: "Fast, punchy Pomodoro sessions with frequent dopamine reset breaks."
+        },
+        {
+          value: "deep_dive",
+          icon: "🧘",
+          label: "Deep Immersion (60–90m unbroken)",
+          desc: "Long, uninterrupted blocks. Hate context switching once in the zone."
+        },
+        {
+          value: "rule_of_three",
+          icon: "3️⃣",
+          label: "Power of Three (Capped & Shielded)",
+          desc: "Show me exactly 3 key objectives. Hide everything else from view."
+        },
+        {
+          value: "momentum",
+          icon: "🔥",
+          label: "Micro-Wins Chain (Snowball)",
+          desc: "Conquer a tiny 2-minute win first to ignite neurological momentum."
+        }
+      ]
+    },
+    {
+      id: "coach_voice",
+      kicker: "Pillar 4: Companion Persona",
+      title: "Which coaching voice resonates most deeply with you?",
+      subtitle: "The AI strategist will speak, nudge, and celebrate in this personality tone.",
+      options: [
+        {
+          value: "stoic",
+          icon: "🥋",
+          label: "The Stoic Strategist",
+          desc: "Calm, concise, disciplined, zero fluff. Focuses on duty and quiet consistency."
+        },
+        {
+          value: "scientist",
+          icon: "🧠",
+          label: "The Behavioral Scientist",
+          desc: "Analytical, evidence-based, explains the cognitive psychology behind each recommendation."
+        },
+        {
+          value: "empathetic",
+          icon: "🌿",
+          label: "The Empathetic Anchor",
+          desc: "Warm, supportive, protects your emotional capacity and shields against burnout."
+        },
+        {
+          value: "hype",
+          icon: "⚡",
+          label: "The High-Energy Hype Coach",
+          desc: "Vibrant, celebratory, gamified, dopamine-fueled enthusiasm for every milestone."
+        }
+      ]
+    },
+    {
+      id: "capacity_limit",
+      kicker: "Pillar 5: Capacity Guard",
+      title: "How many critical goals can you sustainably finish in a single day?",
+      subtitle: "Prevents the planning fallacy. The AI will advise deferring items above this limit.",
+      options: [
+        {
+          value: "2",
+          icon: "🎯",
+          label: "1 to 2 Keystone Goals",
+          desc: "Deep research, heavy architecture, or complex engineering requiring massive focus."
+        },
+        {
+          value: "3",
+          icon: "⚖️",
+          label: "3 to 4 Balanced Priorities (Golden Ratio)",
+          desc: "1 anchor milestone plus 2-3 supporting operational stepping stones."
+        },
+        {
+          value: "5",
+          icon: "🚀",
+          label: "5+ High Velocity Tasks",
+          desc: "Fast execution across operational, logistical, and communicative checkpoints."
+        }
+      ]
+    }
+  ];
+
+  function computeArchetype(answers) {
+    const { procrastination, pacing, coach_voice } = answers;
+    if (procrastination === "perfectionism") {
+      return {
+        archetype: "The Perfectionist",
+        heroIcon: "🎯",
+        superpower: "Exacting craftsmanship and uncompromising quality standards.",
+        blindspot: "Fear of starting until conditions feel 100% ideal. Scope-creep anxiety.",
+        strategyTip: "The AI enforces strict 'Done is better than perfect' constraints and timeboxes."
+      };
+    }
+    if (procrastination === "boredom" || pacing === "sprints") {
+      return {
+        archetype: "The Dopamine Sprinter",
+        heroIcon: "⚡",
+        superpower: "Explosive creative bursts and rapid problem-solving when engaged.",
+        blindspot: "Loses stimulation during routine or tedious maintenance tasks.",
+        strategyTip: "The AI injects gamified 20-minute sprints with immediate sensory feedback."
+      };
+    }
+    if (procrastination === "overwhelm" || pacing === "rule_of_three") {
+      return {
+        archetype: "The Overwhelmed Strategist",
+        heroIcon: "🌪️",
+        superpower: "Vast architectural vision and deep multi-threaded thinking.",
+        blindspot: "Cognitive freeze when confronted with broad, open-ended backlogs.",
+        strategyTip: "The AI isolates a single physical micro-starter and shelters overflow tasks."
+      };
+    }
+    if (pacing === "deep_dive") {
+      return {
+        archetype: "The Methodical Architect",
+        heroIcon: "📐",
+        superpower: "Immense stamina for uninterrupted, deep-state cognitive work.",
+        blindspot: "Friction and disorientation when disrupted by sudden context switches.",
+        strategyTip: "The AI builds chronologically sequenced blocks aligned to your peak window."
+      };
+    }
+    return {
+      archetype: "The Compassionate Balancer",
+      heroIcon: "🌿",
+      superpower: "Harmonious balance, empathetic connection, and sustained resilience.",
+      blindspot: "Saying yes to peripheral requests while neglecting your own core keystones.",
+      strategyTip: "The AI prioritizes self-care and boundary defense as non-negotiable milestones."
+    };
+  }
+
+  // =========================================================================
   // 4. UI RENDERER & INTERACTION CONTROLLER
   // =========================================================================
   class AppController {
@@ -1275,6 +1492,9 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.todayAIPlan = null;
       this.todayAITaskOrder = null;
       this.focusAITab = "today";
+      this.personalityProfile = this.store.personalityProfile;
+      this.currentQuizStep = 1;
+      this.quizAnswers = {};
       this.tomorrowPlan = this.loadTomorrowPlan();
       this.tomorrowPlanDraft = null;
       this.eveningPlanningStreak = parseInt(localStorage.getItem("aurora_evening_streak") || "0", 10);
@@ -1376,6 +1596,15 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       // Streak flame indicators
       this.streakCountEl = document.getElementById("streak_count");
+
+      // Personality Quiz Dialog Nodes
+      this.personalityDialog = document.getElementById("personality_quiz_dialog");
+      this.closePersonalityDialogBtn = document.getElementById("close_personality_dialog");
+      this.personalityPrevBtn = document.getElementById("personality_prev_btn");
+      this.personalityNextBtn = document.getElementById("personality_next_btn");
+      this.personalitySkipBtn = document.getElementById("personality_skip_btn");
+      this.personalityStepContent = document.getElementById("personality_step_content");
+      this.personalityStepperBar = document.getElementById("personality_stepper_bar");
     }
 
     bindStoreEvents() {
@@ -1384,6 +1613,10 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.store.subscribe("routinesUpdated", () => this.render());
       this.store.subscribe("habitsUpdated", () => this.render());
       this.store.subscribe("journalUpdated", () => this.render());
+      this.store.subscribe("personalityChanged", (p) => {
+        this.personalityProfile = p;
+        this.render();
+      });
       
       this.store.subscribe("viewChanged", (view) => {
         this.updateActiveTabUI(view);
@@ -1708,6 +1941,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           this.closeBottomSheet();
           this.closeRoutineSheet();
           this.closeHabitSheet();
+          this.closePersonalityQuiz();
           this.desktopSidebar.classList.remove("mobile_reveal");
           if (document.body.classList.contains("journal-distraction-free")) {
             document.body.classList.remove("journal-distraction-free");
@@ -1744,6 +1978,22 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
 
       // -------------------------------------------------------------------------
+      // PERSONALITY QUIZ DIALOG CONTROLLER BINDINGS
+      // -------------------------------------------------------------------------
+      if (this.closePersonalityDialogBtn) {
+        this.closePersonalityDialogBtn.addEventListener("click", () => this.closePersonalityQuiz());
+      }
+      if (this.personalitySkipBtn) {
+        this.personalitySkipBtn.addEventListener("click", () => this.closePersonalityQuiz());
+      }
+      if (this.personalityPrevBtn) {
+        this.personalityPrevBtn.addEventListener("click", () => this.handlePersonalityPrev());
+      }
+      if (this.personalityNextBtn) {
+        this.personalityNextBtn.addEventListener("click", () => this.handlePersonalityNext());
+      }
+
+      // -------------------------------------------------------------------------
       // FIRST-TIME BOOT WELCOME PRIVACY DIALOG
       // -------------------------------------------------------------------------
       StorageService.getPreference("welcome_dialog_shown", false).then(shown => {
@@ -1756,6 +2006,9 @@ document.addEventListener("DOMContentLoaded", async function () {
               dismissBtn.addEventListener("click", () => {
                 welcomeDialog.style.display = "none";
                 StorageService.savePreference("welcome_dialog_shown", true);
+                if (!this.personalityProfile) {
+                  setTimeout(() => this.openPersonalityQuiz(), 350);
+                }
               });
             }
           }
@@ -4918,6 +5171,8 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
     }
 
     renderTodayExecutionContent(container, todayTasks) {
+      const profile = this.personalityProfile;
+
       container.innerHTML = `
         <div class="today_ai_header">
           <div class="today_ai_title_group">
@@ -4929,13 +5184,28 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
             <div>
               <div class="today_ai_title_with_badge">
                 <h3>AI Focus Strategist</h3>
-                <span class="today_ai_tag">Daily Plan</span>
+                ${profile ? `
+                  <span class="today_ai_tag personality_tag" title="Your Cognitive Archetype">${profile.heroIcon || "🧠"} ${this.escapeHTML(profile.archetype)}</span>
+                ` : `
+                  <span class="today_ai_tag">Daily Plan</span>
+                `}
               </div>
-              <p class="today_ai_subtitle">Intelligent prioritization, anti-procrastination cues & time blocking</p>
+              <p class="today_ai_subtitle">
+                ${profile ? `Peak Energy: ${this.escapeHTML(profile.chronotypeLabel || "Morning")} · Voice: ${this.escapeHTML(profile.coachVoiceLabel || "Stoic")}` : `Intelligent prioritization, anti-procrastination cues & time blocking`}
+              </p>
             </div>
           </div>
 
           <div class="today_ai_actions">
+            ${!profile ? `
+              <button type="button" id="btn_open_quiz_nudge" class="personality_quiz_nudge_btn">
+                <span>🧠 Take 60s Quiz</span>
+              </button>
+            ` : `
+              <button type="button" id="btn_open_quiz_nudge" class="personality_quiz_nudge_btn" title="Edit Personality Profile">
+                <span>⚙️ ${this.escapeHTML(profile.archetype.replace("The ", ""))}</span>
+              </button>
+            `}
             <button type="button" id="btn_today_ai_plan" class="today_ai_btn primary">
               <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
               <span>Plan Today's Focus</span>
@@ -4955,6 +5225,11 @@ Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown back
 
       if (this.todayAIPlan) {
         this.renderTodayAIPlanDetails(this.todayAIPlan, todayTasks);
+      }
+
+      const quizNudgeBtn = document.getElementById("btn_open_quiz_nudge");
+      if (quizNudgeBtn) {
+        quizNudgeBtn.addEventListener("click", () => this.openPersonalityQuiz());
       }
 
       const planBtn = document.getElementById("btn_today_ai_plan");
@@ -5428,15 +5703,22 @@ Return ONLY a valid JSON object matching this schema:
       if (!resultEl) return;
 
       const topTask = todayTasks.find(t => t.id === plan.topFocusTaskId) || todayTasks[0];
+      const profile = this.personalityProfile;
 
       resultEl.innerHTML = `
         <div class="today_ai_plan_card">
+          ${plan.personaMotto ? `
+            <div style="font-size: 12px; font-weight: 700; color: var(--accent-primary); margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+              <span>${profile ? profile.heroIcon || "🧠" : "✨"}</span>
+              <em>"${this.escapeHTML(plan.personaMotto)}"</em>
+            </div>
+          ` : ""}
           <p class="today_ai_summary">"${this.escapeHTML(plan.executiveSummary || "")}"</p>
 
           ${topTask ? `
             <div class="today_ai_conquer_box">
               <div class="conquer_info">
-                <span class="conquer_badge">🎯 Start Here · #1 Priority Focus</span>
+                <span class="conquer_badge">🎯 Start Here · #1 Priority Keystone</span>
                 <strong class="conquer_title">${this.escapeHTML(topTask.title)}</strong>
                 <p class="conquer_reason">${this.escapeHTML(plan.topFocusReason || "Highest leverage goal for today.")}</p>
               </div>
@@ -5451,14 +5733,14 @@ Return ONLY a valid JSON object matching this schema:
             <div class="today_ai_inertia_box">
               <span class="micro_icon" style="font-size: 16px;">⚡</span>
               <div>
-                <strong>Anti-Procrastination Starter Step:</strong>
+                <strong>Bespoke 2-Minute Micro-Starter:</strong>
                 <span>${this.escapeHTML(plan.antiProcrastinationTip)}</span>
               </div>
             </div>
           ` : ""}
 
           <div class="today_ai_timeline_section">
-            <span class="timeline_section_label">Recommended Flow (${plan.totalEstimatedMinutes || 50}m Total)</span>
+            <span class="timeline_section_label">Recommended Flow (${plan.totalEstimatedMinutes || 50}m Total · Matched to ${this.escapeHTML(profile ? profile.chronotypeLabel.split('(')[0].trim() : 'Peak Energy')})</span>
             <div class="today_ai_timeline_list">
               ${(plan.recommendedOrder || []).map((step, idx) => {
                 const task = todayTasks.find(t => t.id === step.taskId);
@@ -5478,6 +5760,37 @@ Return ONLY a valid JSON object matching this schema:
               }).join("")}
             </div>
           </div>
+
+          ${plan.overflowTasks && plan.overflowTasks.length > 0 ? `
+            <div class="today_ai_overflow_advisory" id="today_overflow_advisory_box">
+              <div class="overflow_header">
+                <span class="overflow_icon">⚖️</span>
+                <div>
+                  <strong>Cognitive Bandwidth Advisory (${plan.overflowTasks.length} task${plan.overflowTasks.length > 1 ? 's' : ''} exceed your cap)</strong>
+                  <p class="overflow_desc">Your ${this.escapeHTML(profile ? profile.archetype : "personality")} thrives on high focus rather than cognitive fatigue. We recommend deferring these to protect your completion momentum:</p>
+                </div>
+              </div>
+              <div class="overflow_tasks_list">
+                ${plan.overflowTasks.map(ot => {
+                  const task = todayTasks.find(t => t.id === ot.taskId);
+                  return `
+                    <div class="overflow_task_pill">
+                      <span class="overflow_task_name">${this.escapeHTML(task ? task.title : 'Task #' + ot.taskId)}</span>
+                      <span class="overflow_reason">${this.escapeHTML(ot.reason || 'Exceeds daily focus capacity')}</span>
+                    </div>
+                  `;
+                }).join("")}
+              </div>
+              <div class="overflow_actions_row">
+                <button type="button" class="today_ai_btn secondary" id="btn_defer_overflow_tasks">
+                  <span>Move ${plan.overflowTasks.length} to Tomorrow</span>
+                </button>
+                <button type="button" class="today_ai_btn text_only" id="btn_keep_all_today">
+                  <span>Keep All in Today</span>
+                </button>
+              </div>
+            </div>
+          ` : ""}
         </div>
       `;
 
@@ -5488,28 +5801,145 @@ Return ONLY a valid JSON object matching this schema:
           this.store.startTimer(topTask.id);
         });
       }
+
+      const deferBtn = document.getElementById("btn_defer_overflow_tasks");
+      const keepBtn = document.getElementById("btn_keep_all_today");
+
+      if (deferBtn && plan.overflowTasks) {
+        deferBtn.addEventListener("click", () => {
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const tomorrowStr = getLocalDateString(tomorrow);
+
+          plan.overflowTasks.forEach(ot => {
+            this.store.updateTask(ot.taskId, { dueDate: tomorrowStr, isLater: false });
+          });
+
+          this.showToast(`⚡ Sheltered ${plan.overflowTasks.length} tasks to Tomorrow. Cognitive focus restored!`, "success");
+          this.todayAIPlan = null;
+          const filtered = this.getFilteredTasks("today");
+          this.renderTodayAIBanner(filtered);
+          this.renderTaskListUI("today");
+        });
+      }
+
+      if (keepBtn) {
+        keepBtn.addEventListener("click", () => {
+          const advBox = document.getElementById("today_overflow_advisory_box");
+          if (advBox) advBox.style.display = "none";
+          this.showToast("All tasks kept in Today's list.", "info");
+        });
+      }
+    }
+
+    generateAlgorithmicPersonalityPlan(todayTasks) {
+      const profile = this.personalityProfile || {
+        archetype: "The Balanced Achiever",
+        chronotype: "early_falcon",
+        chronotypeLabel: "Early Falcon (06:00 - 10:00)",
+        procrastination: "perfectionism",
+        pacing: "sprints",
+        coachVoice: "stoic",
+        coachVoiceLabel: "The Stoic Strategist",
+        capacityLimit: 3
+      };
+
+      const priorityWeights = { High: 3, Medium: 2, Low: 1 };
+      const sorted = [...todayTasks].sort((a, b) => {
+        const pDiff = (priorityWeights[b.priority] || 2) - (priorityWeights[a.priority] || 2);
+        if (pDiff !== 0) return pDiff;
+        return (a.estimatedDuration || 25) - (b.estimatedDuration || 25);
+      });
+
+      const cap = Math.max(1, profile.capacityLimit || 3);
+      const chosen = sorted.slice(0, cap);
+      const overflow = sorted.slice(cap);
+
+      const keystone = chosen[0] || todayTasks[0];
+
+      const startHours = {
+        early_falcon: 8,
+        midday_climber: 11,
+        twilight_owl: 18,
+        variable: 9
+      };
+      let curHour = startHours[profile.chronotype] || 9;
+      let curMin = 0;
+
+      const recommendedOrder = chosen.map((t, idx) => {
+        const startStr = `${String(curHour).padStart(2, '0')}:${String(curMin).padStart(2, '0')}`;
+        const dur = t.estimatedDuration || 25;
+        curMin += dur;
+        while (curMin >= 60) {
+          curHour += 1;
+          curMin -= 60;
+        }
+        const endStr = `${String(curHour).padStart(2, '0')}:${String(curMin).padStart(2, '0')}`;
+        curMin += 10;
+        while (curMin >= 60) {
+          curHour += 1;
+          curMin -= 60;
+        }
+
+        return {
+          taskId: t.id,
+          taskTitle: t.title,
+          order: idx + 1,
+          timeSlot: `${startStr} - ${endStr} (${idx === 0 ? 'Peak Window' : 'Secondary Block'})`,
+          energyTag: idx === 0 ? 'Keystone Focus' : 'Supporting Goal',
+          strategyNote: idx === 0 ? 'Tackle this during your peak executive window.' : 'Maintain steady momentum without context switching.'
+        };
+      });
+
+      const microStarters = {
+        perfectionism: `Spend exactly 120 seconds jotting an intentionally imperfect 3-bullet draft of "${keystone.title}". Zero judgment allowed.`,
+        overwhelm: `Look only at step 1 of "${keystone.title}". Hide everything else from your desk for the next 2 minutes.`,
+        boredom: `Set a 15-minute speed run for "${keystone.title}". Race the countdown timer to build instant dopamine.`,
+        fatigue: `Open "${keystone.title}", sit comfortably, and read the goal objective with zero expectation to finish it right now.`
+      };
+
+      const summaries = {
+        stoic: {
+          motto: "Discipline is freedom. Focus on what is in your control.",
+          summary: `Your ${profile.archetype} profile demands clarity over chaos. Conquering ${keystone.title} first secures today's momentum.`
+        },
+        hype: {
+          motto: "Unstoppable energy! Strike fast and win the day! 🔥",
+          summary: `Ready to crush it! Lock into ${keystone.title} during your peak window and ride that victory high all day!`
+        },
+        scientist: {
+          motto: "Aligning cognitive demand with circadian biological rhythms.",
+          summary: `Based on your ${profile.chronotypeLabel} energy curve, executing ${keystone.title} early maximizes prefrontal cortex throughput.`
+        },
+        empathetic: {
+          motto: "Sustainable progress over stressful perfection. One gentle step at a time.",
+          summary: `Protect your peace and energy today. Finishing ${keystone.title} is more than enough for a fulfilling day.`
+        }
+      };
+
+      const voiceData = summaries[profile.coachVoice] || summaries.stoic;
+      const totalMins = chosen.reduce((acc, t) => acc + (t.estimatedDuration || 25), 0);
+
+      return {
+        isHeuristic: true,
+        archetypeBadge: profile.archetype,
+        personaMotto: voiceData.motto,
+        executiveSummary: voiceData.summary,
+        topFocusTaskId: keystone.id,
+        topFocusReason: `Primary keystone goal matched to your ${profile.chronotypeLabel} window.`,
+        antiProcrastinationTip: microStarters[profile.procrastination] || microStarters.perfectionism,
+        recommendedOrder,
+        overflowTasks: overflow.map(ot => ({
+          taskId: ot.taskId || ot.id,
+          reason: `Exceeds your sustainable ${cap}-goal capacity cap to shield against overwhelm.`
+        })),
+        totalEstimatedMinutes: totalMins
+      };
     }
 
     async generateTodayAIPlan(todayTasks) {
       const resultEl = document.getElementById("today_ai_plan_result");
       if (!resultEl) return;
-
-      if (!this.geminiApiKey) {
-        resultEl.innerHTML = `
-          <div class="ai_coach_placeholder" style="border-left: 3px solid var(--accent-primary); padding-left: 14px; margin-top: 14px;">
-            <p style="font-size: 13.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">Gemini API Key Required</p>
-            <p style="margin-bottom: 8px;">To activate intelligent daily game plans, smart task ranking, and subtask generation, add your free Google Gemini API key in Settings.</p>
-            <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 8px 12px; margin-bottom: 12px; font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 14px;">🔒</span>
-              <span><strong>Privacy Guarantee:</strong> Your key is stored 100% locally on this device in your browser's private storage. It is never sent to any external server.</span>
-            </div>
-            <button type="button" class="habit_quick_submit_btn" id="btn_goto_settings_plan" style="height: 34px; font-size: 11.5px;">Configure Key in Settings</button>
-          </div>
-        `;
-        const gotoBtn = document.getElementById("btn_goto_settings_plan");
-        if (gotoBtn) gotoBtn.addEventListener("click", () => this.store.setView("settings"));
-        return;
-      }
 
       if (todayTasks.length === 0) {
         resultEl.innerHTML = `
@@ -5520,10 +5950,36 @@ Return ONLY a valid JSON object matching this schema:
         return;
       }
 
+      const profile = this.personalityProfile || {
+        archetype: "The Balanced Achiever",
+        chronotype: "early_falcon",
+        chronotypeLabel: "Early Falcon (06:00 - 10:00)",
+        procrastination: "perfectionism",
+        procrastinationLabel: "Perfectionist Resistance",
+        pacing: "sprints",
+        pacingLabel: "Sprint Intervals",
+        coachVoice: "stoic",
+        coachVoiceLabel: "The Stoic Strategist",
+        capacityLimit: 3
+      };
+
+      // If no API key configured, use local algorithmic personality engine
+      if (!this.geminiApiKey) {
+        const plan = this.generateAlgorithmicPersonalityPlan(todayTasks);
+        this.todayAIPlan = plan;
+        if (plan.recommendedOrder && Array.isArray(plan.recommendedOrder)) {
+          this.todayAITaskOrder = plan.recommendedOrder.map(r => r.taskId);
+        }
+        this.renderTodayAIPlanDetails(plan, todayTasks);
+        this.renderTaskListUI("today");
+        this.showToast(`⚡ ${profile.archetype} daily plan generated from local heuristics.`, "info");
+        return;
+      }
+
       resultEl.innerHTML = `
         <div class="ai_coach_loading" style="padding: 16px 0;">
           <div class="ai_coach_spinner"></div>
-          <span>Gemini AI is analyzing your goals, overdue inertia, and cognitive workload...</span>
+          <span>Gemini AI is calibrating your daily game plan for ${this.escapeHTML(profile.archetype)} (${this.escapeHTML(profile.coachVoiceLabel)})...</span>
         </div>
       `;
 
@@ -5543,25 +5999,44 @@ Return ONLY a valid JSON object matching this schema:
         };
       });
 
-      const prompt = `You are an elite productivity strategist and behavioral psychologist.
-Analyze these tasks scheduled for the user's TODAY focus view:
+      const prompt = `You are an elite behavioral psychologist and productivity coach speaking strictly in the persona of: "${profile.coachVoiceLabel}".
+The user has the cognitive personality archetype: "${profile.archetype}".
+User Psychological Profile:
+- Peak Energy Window: ${profile.chronotypeLabel}
+- Procrastination Friction Trigger: ${profile.procrastinationLabel}
+- Preferred Flow Pacing: ${profile.pacingLabel}
+- Daily Sustainable Capacity Cap: ${profile.capacityLimit} high-leverage goals.
+
+Active tasks scheduled for the user's TODAY focus view:
 ${JSON.stringify(tasksPayload, null, 2)}
 
-Provide a sharp, motivating, anti-procrastination daily focus strategy.
-Notice if any tasks are severely overdue (high friction/procrastination trap) or compound goals.
-Return ONLY a valid JSON object with these keys:
+Directives:
+1. CURATION & CAP: Select up to ${profile.capacityLimit} primary tasks for today. If there are more tasks than this cap, place the excess tasks into "overflowTasks" and explain why deferring them to Tomorrow protects cognitive momentum.
+2. CHRONOTYPE ALIGNMENT: Schedule the hardest/keystone task during their peak energy window (${profile.chronotypeLabel}).
+3. BESPOKE MICRO-STARTER: Create a microscopic 2-minute starter cue formulated specifically to break their procrastination trap (${profile.procrastinationLabel}).
+4. TONE: Speak strictly in the voice of ${profile.coachVoiceLabel}.
+
+Return ONLY a valid JSON object matching this schema:
 {
-  "executiveSummary": "1-2 punchy sentences assessing today's momentum and cognitive workload.",
+  "archetypeBadge": "${profile.archetype}",
+  "personaMotto": "A short, memorable 1-sentence motto in your coach voice",
+  "executiveSummary": "1-2 punchy sentences assessing today's plan in your coach voice",
   "topFocusTaskId": ${tasksPayload[0].id},
-  "topFocusReason": "Why this task should be conquered first (e.g. Eat the Frog or quick win)",
-  "antiProcrastinationTip": "A microscopic 2-minute starter cue for the most overdue or daunting task",
+  "topFocusReason": "Why this specific task is the keystone goal today",
+  "antiProcrastinationTip": "A microscopic 2-minute starter cue formulated for their procrastination trap",
   "recommendedOrder": [
     {
       "taskId": ${tasksPayload[0].id},
       "order": 1,
-      "timeSlot": "Morning Session (09:00 - 09:30)",
-      "energyTag": "Deep Work / Quick Win",
+      "timeSlot": "e.g. 09:00 - 09:30 (Peak Energy Window)",
+      "energyTag": "Keystone Focus",
       "strategyNote": "Execution tip in 1 short sentence"
+    }
+  ],
+  "overflowTasks": [
+    {
+      "taskId": ${tasksPayload[0].id},
+      "reason": "Why deferring this relieves cognitive overload and preserves focus"
     }
   ],
   "totalEstimatedMinutes": 50
@@ -5571,7 +6046,7 @@ Return ONLY a valid JSON object with these keys:
         const { data } = await this.callGeminiWithFallback({
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
-            temperature: 0.2,
+            temperature: 0.25,
             responseMimeType: "application/json"
           }
         });
@@ -5587,12 +6062,14 @@ Return ONLY a valid JSON object with these keys:
         this.renderTodayAIPlanDetails(plan, todayTasks);
         this.renderTaskListUI("today");
       } catch (err) {
-        console.error("AI Daily Plan error:", err);
-        resultEl.innerHTML = `
-          <div class="key_feedback_msg error" style="display: block; margin-top: 12px;">
-            Failed to generate AI daily plan. Please check your network connection or Gemini API key in Settings.
-          </div>
-        `;
+        console.warn("AI Daily Plan error, falling back to local personality heuristics:", err);
+        const fallbackPlan = this.generateAlgorithmicPersonalityPlan(todayTasks);
+        this.todayAIPlan = fallbackPlan;
+        if (fallbackPlan.recommendedOrder && Array.isArray(fallbackPlan.recommendedOrder)) {
+          this.todayAITaskOrder = fallbackPlan.recommendedOrder.map(r => r.taskId);
+        }
+        this.renderTodayAIPlanDetails(fallbackPlan, todayTasks);
+        this.renderTaskListUI("today");
       }
     }
 
@@ -5936,6 +6413,194 @@ Return ONLY a valid JSON object matching this schema:
       this.activeEditingTaskId = null;
       this.isSubmitting = false;
       if (this.sheetSubmitBtn) this.sheetSubmitBtn.disabled = false;
+    }
+
+    // -------------------------------------------------------------------------
+    // PERSONALITY PROFILER & PRODUCTIVITY DNA DIALOG CONTROLLERS
+    // -------------------------------------------------------------------------
+    openPersonalityQuiz() {
+      if (!this.personalityDialog) return;
+      this.currentQuizStep = 1;
+      this.quizAnswers = this.personalityProfile ? {
+        chronotype: this.personalityProfile.chronotype,
+        procrastination: this.personalityProfile.procrastination,
+        pacing: this.personalityProfile.pacing,
+        coach_voice: this.personalityProfile.coachVoice,
+        capacity_limit: String(this.personalityProfile.capacityLimit || "3")
+      } : {};
+
+      this.personalityDialog.style.display = "flex";
+      document.body.classList.add("modal-open");
+      this.renderQuizStep(1);
+    }
+
+    closePersonalityQuiz() {
+      if (!this.personalityDialog) return;
+      this.personalityDialog.style.display = "none";
+      document.body.classList.remove("modal-open");
+    }
+
+    renderQuizStep(step) {
+      if (!this.personalityStepContent) return;
+      this.currentQuizStep = step;
+
+      // Update Stepper Dots
+      if (this.personalityStepperBar) {
+        const dots = this.personalityStepperBar.querySelectorAll(".stepper_dot");
+        dots.forEach((dot, idx) => {
+          const dotStep = idx + 1;
+          dot.classList.remove("active", "completed");
+          if (dotStep < step || step > 5) {
+            dot.classList.add("completed");
+          } else if (dotStep === step) {
+            dot.classList.add("active");
+          }
+        });
+      }
+
+      // Step 1 to 5: Questions
+      if (step >= 1 && step <= 5) {
+        const qIndex = step - 1;
+        const q = PERSONALITY_QUESTIONS[qIndex];
+        const selectedVal = this.quizAnswers[q.id];
+
+        const titleEl = document.getElementById("personality_dialog_title");
+        if (titleEl) titleEl.textContent = "Productivity DNA Profiler";
+
+        this.personalityStepContent.innerHTML = `
+          <div class="quiz_step_header">
+            <span class="quiz_step_kicker">${this.escapeHTML(q.kicker)}</span>
+            <h3 class="quiz_step_title">${this.escapeHTML(q.title)}</h3>
+            <p class="quiz_step_subtitle">${this.escapeHTML(q.subtitle)}</p>
+          </div>
+          <div class="quiz_options_grid">
+            ${q.options.map(opt => `
+              <div class="personality_option_card ${selectedVal === opt.value ? 'selected' : ''}" data-val="${opt.value}">
+                <div class="option_icon_box">${opt.icon}</div>
+                <div class="option_text_col">
+                  <span class="option_label">${this.escapeHTML(opt.label)}</span>
+                  <span class="option_desc">${this.escapeHTML(opt.desc)}</span>
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        `;
+
+        // Card Selection binds
+        this.personalityStepContent.querySelectorAll(".personality_option_card").forEach(card => {
+          card.addEventListener("click", () => {
+            const val = card.getAttribute("data-val");
+            this.quizAnswers[q.id] = val;
+            this.personalityStepContent.querySelectorAll(".personality_option_card").forEach(c => c.classList.remove("selected"));
+            card.classList.add("selected");
+          });
+        });
+
+        if (this.personalityPrevBtn) {
+          this.personalityPrevBtn.style.display = step > 1 ? "inline-block" : "none";
+        }
+        if (this.personalityNextBtn) {
+          this.personalityNextBtn.textContent = step === 5 ? "Calculate Archetype" : "Continue";
+        }
+      } else if (step === 6) {
+        // Step 6: Archetype Result Screen
+        const archetypeData = computeArchetype(this.quizAnswers);
+        const chronoOpt = PERSONALITY_QUESTIONS[0].options.find(o => o.value === this.quizAnswers.chronotype);
+        const coachOpt = PERSONALITY_QUESTIONS[3].options.find(o => o.value === this.quizAnswers.coach_voice);
+        const pacingOpt = PERSONALITY_QUESTIONS[2].options.find(o => o.value === this.quizAnswers.pacing);
+
+        const titleEl = document.getElementById("personality_dialog_title");
+        if (titleEl) titleEl.textContent = "Your Productivity Archetype";
+
+        this.personalityStepContent.innerHTML = `
+          <div class="personality_result_container">
+            <div class="personality_badge_hero">
+              <div class="personality_hero_icon">${archetypeData.heroIcon}</div>
+              <h3 class="personality_hero_title">${this.escapeHTML(archetypeData.archetype)}</h3>
+              <p class="personality_hero_subtitle">${this.escapeHTML(archetypeData.strategyTip)}</p>
+            </div>
+
+            <div class="personality_traits_grid">
+              <div class="trait_card superpower">
+                <span class="trait_label">⚡ Cognitive Superpower</span>
+                <span class="trait_desc">${this.escapeHTML(archetypeData.superpower)}</span>
+              </div>
+              <div class="trait_card blindspot">
+                <span class="trait_label">⚠️ Psychological Trap</span>
+                <span class="trait_desc">${this.escapeHTML(archetypeData.blindspot)}</span>
+              </div>
+            </div>
+
+            <div class="personality_config_summary">
+              <span class="personality_summary_pill">🌅 ${this.escapeHTML(chronoOpt ? chronoOpt.label.split('(')[0].trim() : 'Peak Energy')}</span>
+              <span class="personality_summary_pill">⏱️ ${this.escapeHTML(pacingOpt ? pacingOpt.label.split('(')[0].trim() : 'Pacing Style')}</span>
+              <span class="personality_summary_pill">🎙️ ${this.escapeHTML(coachOpt ? coachOpt.label : 'Companion Voice')}</span>
+              <span class="personality_summary_pill">🎯 Cap: ${this.quizAnswers.capacity_limit || 3} Goals/Day</span>
+            </div>
+          </div>
+        `;
+
+        if (this.personalityPrevBtn) {
+          this.personalityPrevBtn.style.display = "inline-block";
+        }
+        if (this.personalityNextBtn) {
+          this.personalityNextBtn.textContent = "Apply & Activate Profile";
+        }
+      }
+    }
+
+    handlePersonalityNext() {
+      if (this.currentQuizStep >= 1 && this.currentQuizStep <= 5) {
+        const qIndex = this.currentQuizStep - 1;
+        const q = PERSONALITY_QUESTIONS[qIndex];
+        if (!this.quizAnswers[q.id]) {
+          // Default to first option if none selected
+          this.quizAnswers[q.id] = q.options[0].value;
+        }
+        this.renderQuizStep(this.currentQuizStep + 1);
+      } else if (this.currentQuizStep === 6) {
+        this.savePersonalityProfile();
+      }
+    }
+
+    handlePersonalityPrev() {
+      if (this.currentQuizStep > 1) {
+        this.renderQuizStep(this.currentQuizStep - 1);
+      }
+    }
+
+    savePersonalityProfile() {
+      const archetypeData = computeArchetype(this.quizAnswers);
+      const chronoOpt = PERSONALITY_QUESTIONS[0].options.find(o => o.value === this.quizAnswers.chronotype);
+      const procOpt = PERSONALITY_QUESTIONS[1].options.find(o => o.value === this.quizAnswers.procrastination);
+      const pacingOpt = PERSONALITY_QUESTIONS[2].options.find(o => o.value === this.quizAnswers.pacing);
+      const coachOpt = PERSONALITY_QUESTIONS[3].options.find(o => o.value === this.quizAnswers.coach_voice);
+
+      const profile = {
+        archetype: archetypeData.archetype,
+        heroIcon: archetypeData.heroIcon,
+        superpower: archetypeData.superpower,
+        blindspot: archetypeData.blindspot,
+        strategyTip: archetypeData.strategyTip,
+        chronotype: this.quizAnswers.chronotype || "early_falcon",
+        chronotypeLabel: chronoOpt ? chronoOpt.label : "Morning",
+        procrastination: this.quizAnswers.procrastination || "perfectionism",
+        procrastinationLabel: procOpt ? procOpt.label : "Perfectionist Resistance",
+        pacing: this.quizAnswers.pacing || "sprints",
+        pacingLabel: pacingOpt ? pacingOpt.label : "Sprint Intervals",
+        coachVoice: this.quizAnswers.coach_voice || "stoic",
+        coachVoiceLabel: coachOpt ? coachOpt.label : "The Stoic Strategist",
+        capacityLimit: parseInt(this.quizAnswers.capacity_limit || "3", 10),
+        updatedAt: new Date().toISOString()
+      };
+
+      this.store.setPersonalityProfile(profile);
+      this.closePersonalityQuiz();
+      this.showToast(`🧠 ${profile.archetype} activated! Today's AI strategist is personalized.`, "success");
+
+      // Invalidate existing AI plan so it regenerates tailored to the new profile
+      this.todayAIPlan = null;
+      this.render();
     }
 
     // -------------------------------------------------------------------------
@@ -6767,6 +7432,36 @@ Return ONLY a valid JSON object matching this schema:
         <div class="settings_group">
           <div class="settings_header_with_badge">
             <div>
+              <h2>Productivity Personality Profile</h2>
+              <p class="group_desc">Cognitive traits, energy rhythm, and companion coaching tone.</p>
+            </div>
+            <span class="badge_key_status ${this.personalityProfile ? "active" : "inactive"}">
+              ${this.personalityProfile ? this.escapeHTML(this.personalityProfile.archetype) : "No Profile Configured"}
+            </span>
+          </div>
+
+          ${this.personalityProfile ? `
+            <div class="personality_settings_card">
+              <div class="personality_settings_info">
+                <h4>${this.personalityProfile.heroIcon || "🧠"} ${this.escapeHTML(this.personalityProfile.archetype)}</h4>
+                <p><strong>Peak Energy:</strong> ${this.escapeHTML(this.personalityProfile.chronotypeLabel || "Morning")} · <strong>Pacing:</strong> ${this.escapeHTML(this.personalityProfile.pacingLabel || "Sprints")} · <strong>Coach Voice:</strong> ${this.escapeHTML(this.personalityProfile.coachVoiceLabel || "Stoic")} · <strong>Capacity Cap:</strong> ${this.personalityProfile.capacityLimit || 3} Goals</p>
+              </div>
+              <button type="button" id="btn_retake_personality_quiz" class="setting_primary_btn">Retake Quiz</button>
+            </div>
+          ` : `
+            <div class="personality_settings_card">
+              <div class="personality_settings_info">
+                <h4>Discover Your Productivity DNA</h4>
+                <p>Take the 60-second behavioral science quiz to unlock personalized daily to-do lists, anti-procrastination cues, and flow state matching.</p>
+              </div>
+              <button type="button" id="btn_retake_personality_quiz" class="setting_primary_btn">Take 60s Quiz</button>
+            </div>
+          `}
+        </div>
+
+        <div class="settings_group">
+          <div class="settings_header_with_badge">
+            <div>
               <h2>Gemini AI & Local Security</h2>
               <p class="group_desc">Power your personalized Habit Coach and health checks with your own Google Gemini API key.</p>
             </div>
@@ -6999,6 +7694,11 @@ Return ONLY a valid JSON object matching this schema:
         });
       }
 
+      const retakeQuizBtn = document.getElementById("btn_retake_personality_quiz");
+      if (retakeQuizBtn) {
+        retakeQuizBtn.addEventListener("click", () => this.openPersonalityQuiz());
+      }
+
       document.getElementById("btn_clear_data").addEventListener("click", () => {
         const message = "Permanently clear all task sheets, routines, streaks, and focus metrics? This action is irreversible!\n\nTo confirm, please type \"clear storage\" below:";
         const input = prompt(message);
@@ -7027,6 +7727,35 @@ Return ONLY a valid JSON object matching this schema:
 
       const chk = card.querySelector(".checkbox_btn");
       if (chk) this.triggerElementCelebration(chk.id || chk);
+
+      if (this.personalityProfile && this.personalityProfile.coachVoice) {
+        const voice = this.personalityProfile.coachVoice;
+        const voiceMessages = {
+          stoic: [
+            "Discipline verified. Reset for the next objective.",
+            "Standard maintained. Onward.",
+            "Action beats anxiety."
+          ],
+          hype: [
+            "BOOM! Task crushed! You are on absolute fire! 🔥",
+            "Unstoppable momentum! Keep rolling! ⚡",
+            "Another win in the books! Let's go!"
+          ],
+          scientist: [
+            "Dopamine circuit engaged. Neural resistance cleared.",
+            "High self-efficacy event recorded.",
+            "Execution velocity on target."
+          ],
+          empathetic: [
+            "Wonderful progress. Take a conscious breath.",
+            "Honoring your focus. Be proud of this step.",
+            "Gentle consistency wins the day."
+          ]
+        };
+        const list = voiceMessages[voice] || voiceMessages.stoic;
+        const msg = list[Math.floor(Math.random() * list.length)];
+        this.showToast(msg, "success");
+      }
     }
 
     triggerElementCelebration(elementOrId) {

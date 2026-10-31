@@ -7585,4 +7585,411 @@ body[data-style="neo-brutalism"] .priority_group_section.priority-low {
   border-left: 8px solid #3b82f6 !important;
 }
 
+/* =========================================================================
+   20. PRODUCTIVITY PERSONALITY PROFILER & ADVISORY CO-PILOT
+   ========================================================================= */
+
+.personality_modal {
+  max-width: 620px;
+  width: 95%;
+  padding: 28px 32px;
+}
+
+.personality_modal .modal_dialog_header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.personality_kicker {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--accent-primary);
+  display: block;
+  margin-bottom: 2px;
+}
+
+.personality_modal h2 {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.personality_stepper_bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 22px;
+}
+
+.stepper_dot {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background-color: var(--border-color);
+  transition: background-color 0.3s ease;
+}
+
+.stepper_dot.active {
+  background-color: var(--accent-primary);
+}
+
+.stepper_dot.completed {
+  background-color: var(--accent-secondary, #10b981);
+}
+
+.personality_body {
+  margin-bottom: 24px;
+  min-height: 280px;
+}
+
+.quiz_step_header {
+  margin-bottom: 18px;
+}
+
+.quiz_step_kicker {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+  display: block;
+}
+
+.quiz_step_title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+  line-height: 1.35;
+}
+
+.quiz_step_subtitle {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.quiz_options_grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.personality_option_card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border-radius: var(--border-radius-md, 10px);
+  border: 1.5px solid var(--border-color);
+  background-color: var(--card-bg);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  text-align: left;
+}
+
+.personality_option_card:hover {
+  border-color: var(--accent-primary);
+  transform: translateY(-1px);
+  background-color: var(--accent-glow, rgba(99, 102, 241, 0.05));
+}
+
+.personality_option_card.selected {
+  border-color: var(--accent-primary);
+  background-color: var(--accent-glow, rgba(99, 102, 241, 0.08));
+  box-shadow: 0 0 0 1px var(--accent-primary);
+}
+
+.option_icon_box {
+  font-size: 22px;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background-color: var(--bg-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid var(--border-color);
+}
+
+.option_text_col {
+  flex: 1;
+}
+
+.option_label {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text-primary);
+  display: block;
+  margin-bottom: 2px;
+}
+
+.option_desc {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  line-height: 1.35;
+  display: block;
+}
+
+.personality_footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.footer_spacer {
+  flex: 1;
+}
+
+.modal_secondary_btn {
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.modal_secondary_btn:hover {
+  background: var(--border-color);
+  color: var(--text-primary);
+}
+
+.modal_ghost_btn {
+  background: transparent;
+  color: var(--text-muted);
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 8px 12px;
+  transition: color 0.2s;
+}
+
+.modal_ghost_btn:hover {
+  color: var(--text-primary);
+}
+
+/* Personality Result Card */
+.personality_result_container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: fadeIn 0.3s ease;
+}
+
+.personality_badge_hero {
+  text-align: center;
+  padding: 20px 16px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.08), rgba(16, 185, 129, 0.06));
+  border-radius: 12px;
+  border: 1.5px solid var(--border-color);
+}
+
+.personality_hero_icon {
+  font-size: 38px;
+  margin-bottom: 8px;
+}
+
+.personality_hero_title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.personality_hero_subtitle {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  max-width: 440px;
+  margin: 0 auto;
+}
+
+.personality_traits_grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.trait_card {
+  padding: 12px 14px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.trait_card.superpower {
+  border-left: 3px solid #10b981;
+}
+
+.trait_card.blindspot {
+  border-left: 3px solid #f59e0b;
+}
+
+.trait_label {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.trait_card.superpower .trait_label { color: #10b981; }
+.trait_card.blindspot .trait_label { color: #f59e0b; }
+
+.trait_desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.personality_config_summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.personality_summary_pill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 6px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+/* Today Focus Personality Pill & Nudge */
+.personality_tag {
+  background: rgba(99, 102, 241, 0.15) !important;
+  color: var(--accent-primary) !important;
+  border: 1px solid rgba(99, 102, 241, 0.25) !important;
+  font-weight: 700 !important;
+}
+
+.personality_quiz_nudge_btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 12px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition-smooth);
+}
+
+.personality_quiz_nudge_btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.today_ai_overflow_advisory {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1.5px solid rgba(245, 158, 11, 0.3);
+}
+
+.overflow_header {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.overflow_icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.overflow_desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.overflow_tasks_list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.overflow_task_pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  background: var(--card-bg);
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  font-size: 12px;
+}
+
+.overflow_task_name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.overflow_reason {
+  font-size: 11px;
+  color: #f59e0b;
+}
+
+.overflow_actions_row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* Settings Personality Card */
+.personality_settings_card {
+  padding: 16px 20px;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-lg, 12px);
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.personality_settings_info h4 {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 4px 0;
+}
+
+.personality_settings_info p {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+body[data-style="neo-brutalism"] .personality_option_card,
+body[data-style="neo-brutalism"] .personality_modal,
+body[data-style="neo-brutalism"] .today_ai_overflow_advisory,
+body[data-style="neo-brutalism"] .personality_settings_card {
+  border: var(--border-width) var(--border-style) var(--border-color-token) !important;
+  border-radius: var(--border-radius-lg-token) !important;
+  box-shadow: var(--shadow-md-token) !important;
+}
+
 
