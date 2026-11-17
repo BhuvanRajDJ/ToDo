@@ -1488,6 +1488,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.habitWeekOffset = 0;
       this.habitHeatmapMonthOffset = 0;
       this.geminiApiKey = localStorage.getItem("aurora_gemini_api_key") || "";
+      this.cachedGeminiModels = null;
       this.pendingUnhealthyHabit = null;
       this.todayAIPlan = null;
       this.todayAITaskOrder = null;
@@ -3521,22 +3522,69 @@ document.addEventListener("DOMContentLoaded", async function () {
       `;
     }
 
+    async getCandidateGeminiModels() {
+      if (Array.isArray(this.cachedGeminiModels) && this.cachedGeminiModels.length > 0) {
+        return this.cachedGeminiModels;
+      }
+
+      const defaultModels = [
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-3.8-flash",
+        "gemini-3.5-flash"
+      ];
+
+      if (!this.geminiApiKey) {
+        return defaultModels;
+      }
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 4000);
+
+      try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(this.geminiApiKey)}`, {
+          signal: controller.signal
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data.models)) {
+            const supported = data.models
+              .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
+              .map(m => m.name.replace(/^models\//, ""))
+              .filter(name => !name.includes("1.5") && !name.includes("1.0"));
+
+            const flashModels = supported.filter(name => name.includes("flash"));
+            const otherModels = supported.filter(name => !name.includes("flash"));
+            const resolved = [...flashModels, ...otherModels];
+            if (resolved.length > 0) {
+              this.cachedGeminiModels = resolved;
+              return resolved;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("[Gemini] Could not fetch dynamic models list:", e);
+      } finally {
+        clearTimeout(timer);
+      }
+
+      return defaultModels;
+    }
+
     async callGeminiWithFallback(bodyPayload) {
       if (!this.geminiApiKey) {
         throw new Error("Gemini API key is not configured.");
       }
 
-      const models = [
-        "gemini-2.5-flash",
-        "gemini-2.0-flash",
-        "gemini-1.5-flash"
-      ];
+      const candidateModels = await this.getCandidateGeminiModels();
+      const models = candidateModels.slice(0, 4);
 
       let lastError = null;
+      const errorSummaries = [];
 
       for (const model of models) {
         try {
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${this.geminiApiKey}`, {
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(this.geminiApiKey)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(bodyPayload)
@@ -3549,14 +3597,32 @@ document.addEventListener("DOMContentLoaded", async function () {
 
           const errText = await response.text().catch(() => "");
           console.warn(`[Gemini] ${model} returned status ${response.status}:`, errText);
-          lastError = new Error(`Model ${model} returned status ${response.status}`);
+
+          let detail = `Status ${response.status}`;
+          try {
+            const errJson = JSON.parse(errText);
+            if (errJson.error?.message) {
+              detail = errJson.error.message;
+            }
+          } catch (_) {}
+
+          lastError = new Error(`${model}: ${detail}`);
+          errorSummaries.push(`${model} (${response.status})`);
+
+          // Stop fallback sequence immediately on authentication or permission failure
+          if (response.status === 401 || response.status === 403) {
+            break;
+          }
         } catch (err) {
           console.warn(`[Gemini] Request failed for model ${model}:`, err);
           lastError = err;
+          errorSummaries.push(`${model} (Network error)`);
         }
       }
 
-      throw lastError || new Error("All Gemini models in fallback sequence failed.");
+      const summaryStr = errorSummaries.length > 0 ? ` [Attempted: ${errorSummaries.join(", ")}]` : "";
+      const finalMsg = lastError ? `${lastError.message}${summaryStr}` : `All Gemini models in fallback sequence failed.${summaryStr}`;
+      throw new Error(finalMsg);
     }
 
     async evaluateHabitWithAI(habitTitle, habitId) {
@@ -7660,6 +7726,7 @@ Return ONLY a valid JSON object matching this schema:
             if (res.ok) {
               localStorage.setItem("aurora_gemini_api_key", val);
               this.geminiApiKey = val;
+              this.cachedGeminiModels = null;
               this.showToast("Gemini API key saved securely on device!", "success");
               this.renderSettingsUI();
             } else {
@@ -7696,6 +7763,7 @@ Return ONLY a valid JSON object matching this schema:
           if (confirm("Remove your stored Gemini API key from this device? AI coaching and health checks will require a key to function.")) {
             localStorage.removeItem("aurora_gemini_api_key");
             this.geminiApiKey = "";
+            this.cachedGeminiModels = null;
             this.showToast("Gemini API key removed from device.", "info");
             this.renderSettingsUI();
           }
