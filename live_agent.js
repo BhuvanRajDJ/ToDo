@@ -7,7 +7,7 @@
 (function () {
   const STORAGE_KEY_API_KEY = "aurora_gemini_api_key";
   const LIVE_MODEL = "models/gemini-3.8-live";
-  const WS_BASE_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent";
+  const WS_BASE_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
 
   let socket = null;
   let audioContext = null;
@@ -16,6 +16,10 @@
   let audioWorkletNode = null;
   let isSessionActive = false;
   let nextPlayTime = 0;
+  let activeAudioSources = [];
+  let currentTranscriptSender = null;
+  let currentTranscriptNode = null;
+  let interimUserNode = null;
 
   // DOM Elements
   const liveDialog = document.getElementById("gemini_live_dialog");
@@ -82,17 +86,56 @@
     }
   }
 
-  // Append Transcript
-  function appendTranscript(sender, text) {
+  // Transcript Management
+  function appendTranscript(sender, text, isChunk = false) {
     if (!transcriptBox || !text) return;
     const placeholder = transcriptBox.querySelector(".transcript_placeholder");
     if (placeholder) placeholder.remove();
 
-    const p = document.createElement("p");
-    p.className = "transcript_entry " + sender;
-    p.innerHTML = `<strong>${sender === "user" ? "You" : "Aurora"}:</strong> ${escapeHtml(text)}`;
-    transcriptBox.appendChild(p);
+    if (isChunk && currentTranscriptSender === sender && currentTranscriptNode) {
+      const textSpan = currentTranscriptNode.querySelector(".transcript_text");
+      if (textSpan) {
+        textSpan.textContent += text;
+      } else {
+        currentTranscriptNode.innerHTML += escapeHtml(text);
+      }
+    } else {
+      const p = document.createElement("p");
+      p.className = "transcript_entry " + sender;
+      const speaker = sender === "user" ? "You" : (sender === "system" ? "System" : "Aurora");
+      p.innerHTML = `<strong>${speaker}:</strong> <span class="transcript_text">${escapeHtml(text)}</span>`;
+      transcriptBox.appendChild(p);
+      currentTranscriptSender = sender;
+      currentTranscriptNode = p;
+    }
     transcriptBox.scrollTop = transcriptBox.scrollHeight;
+  }
+
+  function updateInterimUserTranscript(text) {
+    if (!transcriptBox || !text) return;
+    const placeholder = transcriptBox.querySelector(".transcript_placeholder");
+    if (placeholder) placeholder.remove();
+
+    if (!interimUserNode) {
+      interimUserNode = document.createElement("p");
+      interimUserNode.className = "transcript_entry user interim";
+      interimUserNode.style.opacity = "0.7";
+      transcriptBox.appendChild(interimUserNode);
+    }
+    interimUserNode.innerHTML = `<strong>You:</strong> <span class="transcript_text">${escapeHtml(text)}</span>`;
+    transcriptBox.scrollTop = transcriptBox.scrollHeight;
+  }
+
+  function clearInterimUserTranscript() {
+    if (interimUserNode) {
+      interimUserNode.remove();
+      interimUserNode = null;
+    }
+  }
+
+  function finalizeTranscriptTurn() {
+    currentTranscriptSender = null;
+    currentTranscriptNode = null;
   }
 
   function escapeHtml(str) {
@@ -136,6 +179,8 @@
                 }
               }
             },
+            inputAudioTranscription: {},
+            outputAudioTranscription: {},
             systemInstruction: {
               parts: [
                 {
@@ -217,25 +262,52 @@
   // Audio Playback & Server Message Handling
   function handleServerMessage(data) {
     if (data.serverContent) {
+      // 1. User speech transcription (interim hypothesis and final transcript)
+      if (data.serverContent.interimInputTranscription?.text) {
+        updateInterimUserTranscript(data.serverContent.interimInputTranscription.text);
+      }
+      if (data.serverContent.inputTranscription?.text) {
+        clearInterimUserTranscript();
+        finalizeTranscriptTurn();
+        appendTranscript("user", data.serverContent.inputTranscription.text, false);
+        finalizeTranscriptTurn();
+      }
+
+      // 2. Model speech output transcription (streaming from spoken audio)
+      if (data.serverContent.outputTranscription?.text) {
+        appendTranscript("model", data.serverContent.outputTranscription.text, true);
+      }
+
+      // 3. Model turn parts (text fallback or PCM 24kHz audio)
       const parts = data.serverContent.modelTurn?.parts || [];
       for (const part of parts) {
-        // Text transcript
         if (part.text) {
-          appendTranscript("model", part.text);
+          appendTranscript("model", part.text, true);
         }
-        // Audio stream (PCM 24kHz)
         if (part.inlineData && part.inlineData.mimeType?.startsWith("audio/")) {
           playAudioChunk(part.inlineData.data);
         }
       }
 
+      // 4. Interruption handling
+      if (data.serverContent.interrupted) {
+        clearInterimUserTranscript();
+        finalizeTranscriptTurn();
+        stopAudioPlayback();
+        setStatus("listening", "Listening... Speak anytime.");
+      }
+
+      // 5. Turn complete
       if (data.serverContent.turnComplete) {
+        clearInterimUserTranscript();
+        finalizeTranscriptTurn();
         setStatus("listening", "Listening... Speak anytime.");
       }
     }
 
     // Handle Function Call from Gemini
     if (data.toolCall) {
+      finalizeTranscriptTurn();
       handleToolCalls(data.toolCall);
     }
   }
@@ -380,6 +452,12 @@
       sourceNode.buffer = audioBuffer;
       sourceNode.connect(audioContext.destination);
 
+      sourceNode.onended = () => {
+        const idx = activeAudioSources.indexOf(sourceNode);
+        if (idx !== -1) activeAudioSources.splice(idx, 1);
+      };
+      activeAudioSources.push(sourceNode);
+
       const startTime = Math.max(audioContext.currentTime, nextPlayTime);
       sourceNode.start(startTime);
       nextPlayTime = startTime + audioBuffer.duration;
@@ -388,9 +466,22 @@
     }
   }
 
+  function stopAudioPlayback() {
+    while (activeAudioSources.length > 0) {
+      const src = activeAudioSources.pop();
+      try { src.stop(); src.disconnect(); } catch (e) {}
+    }
+    if (audioContext) {
+      nextPlayTime = audioContext.currentTime;
+    }
+  }
+
   // Stop Session
   function stopLiveSession() {
     isSessionActive = false;
+    finalizeTranscriptTurn();
+    clearInterimUserTranscript();
+    stopAudioPlayback();
 
     if (socket) {
       try { socket.close(); } catch (e) {}
