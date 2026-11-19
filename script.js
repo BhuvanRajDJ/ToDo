@@ -3530,44 +3530,10 @@ document.addEventListener("DOMContentLoaded", async function () {
       const defaultModels = [
         "gemini-2.5-flash",
         "gemini-2.5-flash-lite",
-        "gemini-3.8-flash",
-        "gemini-3.5-flash"
+        "gemini-3.8-flash"
       ];
 
-      if (!this.geminiApiKey) {
-        return defaultModels;
-      }
-
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 4000);
-
-      try {
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(this.geminiApiKey)}`, {
-          signal: controller.signal
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data.models)) {
-            const supported = data.models
-              .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
-              .map(m => m.name.replace(/^models\//, ""))
-              .filter(name => !name.includes("1.5") && !name.includes("1.0"));
-
-            const flashModels = supported.filter(name => name.includes("flash"));
-            const otherModels = supported.filter(name => !name.includes("flash"));
-            const resolved = [...flashModels, ...otherModels];
-            if (resolved.length > 0) {
-              this.cachedGeminiModels = resolved;
-              return resolved;
-            }
-          }
-        }
-      } catch (e) {
-        console.warn("[Gemini] Could not fetch dynamic models list:", e);
-      } finally {
-        clearTimeout(timer);
-      }
-
+      this.cachedGeminiModels = defaultModels;
       return defaultModels;
     }
 
@@ -3576,18 +3542,31 @@ document.addEventListener("DOMContentLoaded", async function () {
         throw new Error("Gemini API key is not configured.");
       }
 
+      // Clone payload and disable thinking budget by default for sub-second responses
+      const payload = {
+        ...bodyPayload,
+        generationConfig: {
+          thinkingConfig: { thinkingBudget: 0 },
+          ...(bodyPayload.generationConfig || {})
+        }
+      };
+
       const candidateModels = await this.getCandidateGeminiModels();
-      const models = candidateModels.slice(0, 4);
+      const models = candidateModels.slice(0, 3);
 
       let lastError = null;
       const errorSummaries = [];
 
       for (const model of models) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+
         try {
           const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(this.geminiApiKey)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(bodyPayload)
+            body: JSON.stringify(payload),
+            signal: controller.signal
           });
 
           if (response.ok) {
@@ -3614,9 +3593,13 @@ document.addEventListener("DOMContentLoaded", async function () {
             break;
           }
         } catch (err) {
-          console.warn(`[Gemini] Request failed for model ${model}:`, err);
-          lastError = err;
-          errorSummaries.push(`${model} (Network error)`);
+          const isTimeout = err.name === "AbortError";
+          const errLabel = isTimeout ? "Timeout (8s)" : "Network error";
+          console.warn(`[Gemini] Request failed for model ${model} (${errLabel}):`, err);
+          lastError = new Error(`${model}: ${errLabel}`);
+          errorSummaries.push(`${model} (${errLabel})`);
+        } finally {
+          clearTimeout(timeoutId);
         }
       }
 
