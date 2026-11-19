@@ -3527,7 +3527,19 @@ document.addEventListener("DOMContentLoaded", async function () {
         return this.cachedGeminiModels;
       }
 
+      try {
+        const stored = localStorage.getItem("aurora_gemini_models");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            this.cachedGeminiModels = parsed;
+            return parsed;
+          }
+        }
+      } catch (_) {}
+
       const defaultModels = [
+        "gemini-2.0-flash",
         "gemini-2.5-flash",
         "gemini-2.5-flash-lite",
         "gemini-3.8-flash"
@@ -3542,30 +3554,21 @@ document.addEventListener("DOMContentLoaded", async function () {
         throw new Error("Gemini API key is not configured.");
       }
 
-      // Clone payload and disable thinking budget by default for sub-second responses
-      const payload = {
-        ...bodyPayload,
-        generationConfig: {
-          thinkingConfig: { thinkingBudget: 0 },
-          ...(bodyPayload.generationConfig || {})
-        }
-      };
-
       const candidateModels = await this.getCandidateGeminiModels();
-      const models = candidateModels.slice(0, 3);
+      const models = candidateModels.slice(0, 4);
 
       let lastError = null;
       const errorSummaries = [];
 
       for (const model of models) {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
 
         try {
           const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(this.geminiApiKey)}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
+            body: JSON.stringify(bodyPayload),
             signal: controller.signal
           });
 
@@ -3594,7 +3597,7 @@ document.addEventListener("DOMContentLoaded", async function () {
           }
         } catch (err) {
           const isTimeout = err.name === "AbortError";
-          const errLabel = isTimeout ? "Timeout (8s)" : "Network error";
+          const errLabel = isTimeout ? "Timeout (10s)" : "Network error";
           console.warn(`[Gemini] Request failed for model ${model} (${errLabel}):`, err);
           lastError = new Error(`${model}: ${errLabel}`);
           errorSummaries.push(`${model} (${errLabel})`);
@@ -7707,9 +7710,22 @@ Return ONLY a valid JSON object matching this schema:
           try {
             const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(val)}`);
             if (res.ok) {
+              const modelData = await res.json().catch(() => ({}));
+              if (Array.isArray(modelData.models)) {
+                const supported = modelData.models
+                  .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
+                  .map(m => m.name.replace(/^models\//, ""))
+                  .filter(name => !name.includes("1.5") && !name.includes("1.0"));
+                const flashModels = supported.filter(name => name.includes("flash"));
+                const otherModels = supported.filter(name => !name.includes("flash"));
+                const resolved = [...flashModels, ...otherModels];
+                if (resolved.length > 0) {
+                  localStorage.setItem("aurora_gemini_models", JSON.stringify(resolved));
+                  this.cachedGeminiModels = resolved;
+                }
+              }
               localStorage.setItem("aurora_gemini_api_key", val);
               this.geminiApiKey = val;
-              this.cachedGeminiModels = null;
               this.showToast("Gemini API key saved securely on device!", "success");
               this.renderSettingsUI();
             } else {
@@ -7745,6 +7761,7 @@ Return ONLY a valid JSON object matching this schema:
         clearKeyBtn.addEventListener("click", () => {
           if (confirm("Remove your stored Gemini API key from this device? AI coaching and health checks will require a key to function.")) {
             localStorage.removeItem("aurora_gemini_api_key");
+            localStorage.removeItem("aurora_gemini_models");
             this.geminiApiKey = "";
             this.cachedGeminiModels = null;
             this.showToast("Gemini API key removed from device.", "info");

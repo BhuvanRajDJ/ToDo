@@ -3,21 +3,15 @@
  * Handles side panel behavior, extension action click, and inter-context messages.
  */
 
-// Register side panel behavior upon installation
-chrome.runtime.onInstalled.addListener(async () => {
-  try {
-    // Open the side panel when the toolbar action icon is clicked
-    if (chrome.sidePanel?.setPanelBehavior) {
-      await chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
-      console.log("Aurora Companion: Side panel behavior set to openPanelOnActionClick.");
-    }
-  } catch (error) {
-    console.error("Aurora Companion: Error setting side panel behavior:", error);
-  }
-});
+// Enable opening side panel on action click
+if (chrome.sidePanel?.setPanelBehavior) {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((err) => {
+    console.warn("Aurora Companion: Could not set panel behavior:", err);
+  });
+}
 
-// Fallback click listener in case setPanelBehavior is unavailable in certain environments
-if (chrome.action?.onClicked) {
+// Fallback click listener if setPanelBehavior is not supported
+if (chrome.action?.onClicked && !chrome.sidePanel?.setPanelBehavior) {
   chrome.action.onClicked.addListener(async (tab) => {
     try {
       if (chrome.sidePanel?.open && tab?.windowId) {
