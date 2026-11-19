@@ -153,6 +153,19 @@
     }
     await saveApiKey(apiKey);
 
+    // Initialize or resume AudioContext inside user activation gesture
+    try {
+      if (!audioContext || audioContext.state === "closed") {
+        audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+      }
+      if (audioContext.state === "suspended") {
+        await audioContext.resume();
+      }
+      nextPlayTime = audioContext.currentTime;
+    } catch (audioErr) {
+      console.warn("AudioContext init warning:", audioErr);
+    }
+
     setStatus("thinking", "Connecting to Gemini 3.8 Live...");
     if (toggleSessionBtn) toggleSessionBtn.innerText = "Connecting...";
 
@@ -161,7 +174,7 @@
       const wsUrl = `${WS_BASE_URL}?key=${encodeURIComponent(apiKey)}`;
       socket = new WebSocket(wsUrl);
 
-      socket.onopen = async () => {
+      socket.onopen = () => {
         console.log("Aurora Companion: Gemini Live WebSocket connected.");
         setStatus("thinking", "Configuring session parameters...");
 
@@ -215,15 +228,7 @@
         };
 
         socket.send(JSON.stringify(setupMessage));
-
-        // Start Audio Capture
-        await startAudioRecording();
-        isSessionActive = true;
-        setStatus("listening", "Listening... Speak to Aurora.");
-        if (toggleSessionBtn) {
-          toggleSessionBtn.innerText = "End Live Session";
-          toggleSessionBtn.classList.add("danger");
-        }
+        console.log("Aurora Companion: Setup frame sent. Awaiting setupComplete...");
       };
 
       socket.onmessage = async (event) => {
@@ -234,6 +239,21 @@
             data = JSON.parse(text);
           } else {
             data = JSON.parse(event.data);
+          }
+
+          console.log("Aurora Companion message received:", data);
+
+          // Handle Setup Completion from Gemini before starting microphone capture
+          if (data.setupComplete) {
+            console.log("Aurora Companion: Gemini Live setup completed.");
+            await startAudioRecording();
+            isSessionActive = true;
+            setStatus("listening", "Listening... Speak to Aurora.");
+            if (toggleSessionBtn) {
+              toggleSessionBtn.innerText = "End Live Session";
+              toggleSessionBtn.classList.add("danger");
+            }
+            return;
           }
 
           handleServerMessage(data);
@@ -250,6 +270,9 @@
 
       socket.onclose = (event) => {
         console.log("Gemini Live WebSocket closed:", event.code, event.reason);
+        if (event.code !== 1000 && event.code !== 1005) {
+          setStatus("error", `Disconnected: ${event.reason || "Code " + event.code}`);
+        }
         stopLiveSession();
       };
     } catch (err) {
@@ -366,7 +389,12 @@
 
   // Microphone Audio Capture (PCM 16kHz Mono)
   async function startAudioRecording() {
-    audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    if (!audioContext || audioContext.state === "closed") {
+      audioContext = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 });
+    }
+    if (audioContext.state === "suspended") {
+      await audioContext.resume();
+    }
     nextPlayTime = audioContext.currentTime;
 
     mediaStream = await navigator.mediaDevices.getUserMedia({
@@ -380,7 +408,7 @@
 
     audioInputSource = audioContext.createMediaStreamSource(mediaStream);
 
-    // Use ScriptProcessor / AudioWorklet for raw PCM extraction
+    // Use ScriptProcessor for raw PCM extraction
     const bufferSize = 4096;
     const processor = audioContext.createScriptProcessor(bufferSize, 1, 1);
 
@@ -398,22 +426,24 @@
       // Convert to Base64
       const base64Chunk = bufferToBase64(pcm16.buffer);
 
-      // Send realtime input
+      // Send realtime input using Gemini Live audio schema
       const realtimeInputMessage = {
         realtimeInput: {
-          mediaChunks: [
-            {
-              mimeType: "audio/pcm;rate=16000",
-              data: base64Chunk
-            }
-          ]
+          audio: {
+            mimeType: "audio/pcm;rate=16000",
+            data: base64Chunk
+          }
         }
       };
       socket.send(JSON.stringify(realtimeInputMessage));
     };
 
+    // Route processor to a muted gain node to prevent speaker feedback loop
+    const muteNode = audioContext.createGain();
+    muteNode.gain.value = 0;
     audioInputSource.connect(processor);
-    processor.connect(audioContext.destination);
+    processor.connect(muteNode);
+    muteNode.connect(audioContext.destination);
     audioWorkletNode = processor;
   }
 
@@ -431,6 +461,9 @@
   function playAudioChunk(base64Data) {
     try {
       if (!audioContext) return;
+      if (audioContext.state === "suspended") {
+        audioContext.resume();
+      }
       setStatus("speaking", "Aurora speaking...");
 
       const binaryStr = window.atob(base64Data);
@@ -440,8 +473,9 @@
         bytes[i] = binaryStr.charCodeAt(i);
       }
 
-      // 16-bit PCM Mono 24kHz
-      const pcm16 = new Int16Array(bytes.buffer);
+      // Safe 16-bit PCM Mono 24kHz buffer extraction
+      const sampleCount = Math.floor(len / 2);
+      const pcm16 = new Int16Array(bytes.buffer, bytes.byteOffset, sampleCount);
       const audioBuffer = audioContext.createBuffer(1, pcm16.length, 24000);
       const channelData = audioBuffer.getChannelData(0);
       for (let i = 0; i < pcm16.length; i++) {
@@ -455,6 +489,9 @@
       sourceNode.onended = () => {
         const idx = activeAudioSources.indexOf(sourceNode);
         if (idx !== -1) activeAudioSources.splice(idx, 1);
+        if (activeAudioSources.length === 0 && isSessionActive) {
+          setStatus("listening", "Listening... Speak to Aurora.");
+        }
       };
       activeAudioSources.push(sourceNode);
 
