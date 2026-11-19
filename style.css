@@ -7992,4 +7992,217 @@ body[data-style="neo-brutalism"] .personality_settings_card {
   box-shadow: var(--shadow-md-token) !important;
 }
 
+/* =========================================================================
+   CHROME EXTENSION DUAL-MODE & GEMINI LIVE COMPANION ENHANCEMENTS
+   ========================================================================= */
+
+.sidebar_header_actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.view_header_actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.header_action_icon_btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
+}
+
+.header_action_icon_btn:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
+}
+
+.header_action_icon_btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Gemini Live Voice Dialog Styling */
+.live_modal {
+  max-width: 440px !important;
+  width: 90% !important;
+}
+
+.live_modal_title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.live_status_dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #64748b;
+  display: inline-block;
+  transition: background-color 0.3s, box-shadow 0.3s;
+}
+
+.live_status_dot.listening {
+  background-color: #10b981;
+  box-shadow: 0 0 10px #10b981;
+}
+
+.live_status_dot.speaking {
+  background-color: #6366f1;
+  box-shadow: 0 0 10px #6366f1;
+}
+
+.live_status_dot.thinking {
+  background-color: #f59e0b;
+  box-shadow: 0 0 10px #f59e0b;
+}
+
+.live_status_dot.error {
+  background-color: #ef4444;
+}
+
+.live_waveform_container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 0 16px;
+}
+
+.live_orb {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  position: relative;
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.35);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.live_orb.listening {
+  animation: liveOrbPulse 1.8s infinite;
+}
+
+.live_orb.speaking {
+  animation: liveOrbSpeaking 1.2s infinite;
+  background: linear-gradient(135deg, #6366f1, #06b6d4);
+}
+
+.live_orb.thinking {
+  animation: liveOrbRotate 2s linear infinite;
+}
+
+@keyframes liveOrbPulse {
+  0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.5); }
+  50% { transform: scale(1.08); box-shadow: 0 0 0 16px rgba(99, 102, 241, 0); }
+}
+
+@keyframes liveOrbSpeaking {
+  0%, 100% { transform: scale(1); filter: brightness(1); }
+  50% { transform: scale(1.12); filter: brightness(1.25); }
+}
+
+@keyframes liveOrbRotate {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.05); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+.live_status_text {
+  margin-top: 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.live_transcript_box {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 12px 14px;
+  max-height: 140px;
+  min-height: 80px;
+  overflow-y: auto;
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin-top: 12px;
+}
+
+.transcript_placeholder {
+  color: var(--text-secondary);
+  font-style: italic;
+  margin: 0;
+}
+
+.transcript_entry {
+  margin: 6px 0;
+}
+
+.transcript_entry.user {
+  color: var(--text-primary);
+}
+
+.transcript_entry.model {
+  color: #818cf8;
+}
+
+.live_config_label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.live_config_hint {
+  font-size: 10.5px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+/* Side Panel Narrow Adaptation (350px - 450px) */
+@media (max-width: 500px) {
+  .main_content {
+    padding: 16px 12px 80px 12px !important;
+  }
+  .view_header {
+    margin-bottom: 16px !important;
+  }
+  .title_group h2 {
+    font-size: 18px !important;
+  }
+  .dash_metrics_grid {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  .dash_wisdom_box {
+    padding: 12px !important;
+  }
+  .header_action_icon_btn {
+    width: 32px;
+    height: 32px;
+  }
+  .header_action_icon_btn svg {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+
 

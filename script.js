@@ -8240,6 +8240,47 @@ Return ONLY a valid JSON object matching this schema:
   }
 
   // =========================================================================
+  // 4. CHROME EXTENSION DUAL-MODE CONTROLLER
+  // =========================================================================
+  function initExtensionControls() {
+    const openTab = () => {
+      if (typeof chrome !== "undefined" && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage({ type: "OPEN_FULL_TAB" }, (response) => {
+          if (chrome.runtime.lastError || !response?.success) {
+            if (chrome.tabs?.create) {
+              chrome.tabs.create({ url: chrome.runtime.getURL("index.html") });
+            } else {
+              window.open("index.html", "_blank");
+            }
+          }
+        });
+      } else {
+        window.open("index.html", "_blank");
+      }
+    };
+
+    const sidebarExpandBtn = document.getElementById("sidebar_expand_tab_btn");
+    const headerExpandBtn = document.getElementById("header_expand_tab_btn");
+
+    if (sidebarExpandBtn) {
+      sidebarExpandBtn.addEventListener("click", openTab);
+    }
+    if (headerExpandBtn) {
+      headerExpandBtn.addEventListener("click", openTab);
+    }
+
+    // Adapt expand button visibility based on viewport mode
+    const updateExpandButtonsVisibility = () => {
+      const isWideTab = window.innerWidth > 850;
+      if (sidebarExpandBtn) sidebarExpandBtn.style.display = isWideTab ? "none" : "flex";
+      if (headerExpandBtn) headerExpandBtn.style.display = isWideTab ? "none" : "flex";
+    };
+
+    window.addEventListener("resize", updateExpandButtonsVisibility);
+    updateExpandButtonsVisibility();
+  }
+
+  // =========================================================================
   // 5. ASYNCHRONOUS BOOTLOADER SEQUENCE
   // =========================================================================
   try {
@@ -8253,6 +8294,9 @@ Return ONLY a valid JSON object matching this schema:
     const store = new TaskStore(dbData);
     window.indigoApp = new AppController(store);
     console.log("Aurora Companion SPA Booted Flawlessly on Transactional IndexedDB!");
+
+    // 4. Initialize Chrome Extension Tab Expansion & Window Controls
+    initExtensionControls();
   } catch (err) {
     console.error("Critical failure during Aurora Companion database startup:", err);
     const appEl = document.getElementById("app") || document.body;

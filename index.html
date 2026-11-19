@@ -24,10 +24,16 @@
                 <span class="logo_accent"></span>
                 <h1>Aurora</h1>
             </div>
-            <!-- Collapsible trigger chevron button -->
-            <button id="sidebar_toggle_trigger" class="sidebar_collapse_btn" aria-label="Collapse Navigation">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 19l-7-7 7-7"/></svg>
-            </button>
+            <div class="sidebar_header_actions">
+                <!-- Expand to Full Browser Tab Button -->
+                <button id="sidebar_expand_tab_btn" class="sidebar_collapse_btn" aria-label="Open in Full Tab" title="Open in Full Browser Tab">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                </button>
+                <!-- Collapsible trigger chevron button -->
+                <button id="sidebar_toggle_trigger" class="sidebar_collapse_btn" aria-label="Collapse Navigation">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 19l-7-7 7-7"/></svg>
+                </button>
+            </div>
         </div>
 
         <nav class="sidebar_nav">
@@ -122,10 +128,21 @@
                 <span id="active_view_count" class="count_pill">(0)</span>
             </div>
 
-            <!-- Global Streak Flame Tracker -->
-            <div class="streak_badge" title="Highest consecutive habit completion streak">
-                <span class="streak_text">STREAK</span>
-                <span id="streak_count" class="streak_count_number">0</span>
+            <!-- View Header Actions & Streak Flame Tracker -->
+            <div class="view_header_actions">
+                <!-- Gemini Live Companion Button -->
+                <button id="header_gemini_live_btn" class="header_action_icon_btn" title="Gemini Live Voice Companion" aria-label="Gemini Live Voice Companion">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+                </button>
+                <!-- Expand to Full Tab Button -->
+                <button id="header_expand_tab_btn" class="header_action_icon_btn" title="Open in Full Tab" aria-label="Open in Full Tab">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                </button>
+                <!-- Global Streak Flame Tracker -->
+                <div class="streak_badge" title="Highest consecutive habit completion streak">
+                    <span class="streak_text">STREAK</span>
+                    <span id="streak_count" class="streak_count_number">0</span>
+                </div>
             </div>
         </header>
 
@@ -1138,8 +1155,46 @@
         </div>
     </div>
 
+    <!-- 10. GEMINI LIVE VOICE COMPANION DIALOG -->
+    <div id="gemini_live_dialog" class="modal_dialog_overlay" style="display: none;">
+        <div class="modal_dialog_content live_modal">
+            <div class="modal_dialog_header">
+                <div class="live_modal_title">
+                    <span class="live_status_dot" id="live_status_dot"></span>
+                    <h2>Aurora Live Voice Companion</h2>
+                </div>
+                <button type="button" id="close_live_dialog" class="sidebar_collapse_btn" aria-label="Close Voice Companion">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="modal_dialog_body live_modal_body">
+                <div class="live_waveform_container">
+                    <div class="live_orb" id="live_orb">
+                        <div class="orb_glow"></div>
+                        <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+                    </div>
+                    <div id="live_status_text" class="live_status_text">Ready to connect with Aurora</div>
+                </div>
+                
+                <div class="live_transcript_box" id="live_transcript_box">
+                    <p class="transcript_placeholder">Voice transcripts will appear here in real-time...</p>
+                </div>
+
+                <div class="live_api_config" id="live_api_config">
+                    <label class="live_config_label" for="gemini_api_key_input">Gemini API Key</label>
+                    <input type="password" id="gemini_api_key_input" placeholder="Enter your Gemini API key..." class="sheet_input" style="width: 100%;">
+                    <p class="live_config_hint">Key is saved locally in extension storage.</p>
+                </div>
+            </div>
+            <div class="modal_dialog_footer">
+                <button type="button" id="toggle_live_session_btn" class="modal_primary_btn">Start Live Session</button>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 <script src="script.js"></script>
+<script src="live_agent.js"></script>
 </body>
 </html>

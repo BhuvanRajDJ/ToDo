@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Aurora Companion",
+  "version": "1.0.0",
+  "description": "Executive circadian productivity companion for focus, habits, and daily flow.",
+  "permissions": [
+    "sidePanel",
+    "storage",
+    "tabs",
+    "alarms"
+  ],
+  "action": {},
+  "side_panel": {
+    "default_path": "index.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}
