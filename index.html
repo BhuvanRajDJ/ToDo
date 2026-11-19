@@ -1,1199 +1,1237 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Aurora Companion</title>
-    <!-- Professional Todo SVG Favicon -->
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><rect width=%22100%22 height=%22100%22 rx=%2222%22 fill=%22%236366f1%22/><path d=%22M30 52 l15 15 l28-28%22 fill=%22none%22 stroke=%22white%22 stroke-width=%2210%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/></svg>">
-    <!-- High-end Fonts & Icons -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
-    <meta name="theme-color" content="#06070a">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>Aurora Companion</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><defs><linearGradient id=%22g%22 x1=%220%25%22 y1=%220%25%22 x2=%22100%25%22 y2=%22100%25%22><stop offset=%220%25%22 stop-color=%22%236D5EF6%22/><stop offset=%22100%25%22 stop-color=%22%23F59E0B%22/></linearGradient></defs><rect width=%22100%22 height=%22100%22 rx=%2224%22 fill=%22url(%23g)%22/><circle cx=%2250%22 cy=%2250%22 r=%2222%22 fill=%22none%22 stroke=%22white%22 stroke-width=%228%22/><path d=%22M41 50 l6 6 l13-14%22 fill=%22none%22 stroke=%22white%22 stroke-width=%227%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22/></svg>">
+  <link rel="stylesheet" href="style.css">
 </head>
-<body class="theme-dark accent-indigo">
+<body data-style="atelier" data-phase="day" data-accent="aurora">
+
+<a href="#main_content" class="skip_link visually-hidden">Skip to content</a>
 
 <div id="app" class="app_shell">
-    
-    <!-- 1. COLLAPSIBLE SIDEBAR PANEL (DESKTOP NAVIGATION DRAWER) -->
-    <aside class="desktop_sidebar">
-        <div class="sidebar_header">
-            <div class="brand_logo">
-                <span class="logo_accent"></span>
-                <h1>Aurora</h1>
-            </div>
-            <div class="sidebar_header_actions">
-                <!-- Expand to Full Browser Tab Button -->
-                <button id="sidebar_expand_tab_btn" class="sidebar_collapse_btn" aria-label="Open in Full Tab" title="Open in Full Browser Tab">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                </button>
-                <!-- Collapsible trigger chevron button -->
-                <button id="sidebar_toggle_trigger" class="sidebar_collapse_btn" aria-label="Collapse Navigation">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 19l-7-7 7-7"/></svg>
-                </button>
-            </div>
+
+  <!-- 1. DESKTOP COLLAPSIBLE RAIL (>= 768px) -->
+  <aside id="desktop_sidebar" class="desktop_rail">
+    <div class="rail_header">
+      <div class="brand_logo">
+        <span class="logo_orb" aria-hidden="true"></span>
+        <span class="brand_wordmark">Aurora</span>
+      </div>
+      <div class="rail_header_actions">
+        <button type="button" id="sidebar_expand_tab_btn" class="icon_btn icon_btn_sm" aria-label="Open in Full Browser Tab" title="Open in Full Tab">
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        </button>
+        <button type="button" id="sidebar_toggle_trigger" class="icon_btn icon_btn_sm" aria-label="Collapse sidebar" aria-expanded="true" title="Toggle sidebar">
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <nav class="rail_nav" aria-label="Workspace">
+      <div class="nav_group">
+        <span class="nav_group_label">Daily Flow</span>
+        <button type="button" class="nav_tab active" data-view="today" aria-current="page">
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1"/></svg>
+          <span>Today</span>
+        </button>
+        <button type="button" class="nav_tab" data-view="plan">
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <span>Plan</span>
+        </button>
+        <button type="button" class="nav_tab" data-view="habits">
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2.1l4 4-4 4"/><path d="M3 12.2v-2a4 4 0 0 1 4-4h14"/><path d="M7 21.9l-4-4 4-4"/><path d="M21 11.8v2a4 4 0 0 1-4 4H3"/></svg>
+          <span>Habits</span>
+        </button>
+        <button type="button" class="nav_tab" data-view="focus">
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <span>Focus</span>
+        </button>
+      </div>
+
+      <div class="nav_group">
+        <span class="nav_group_label">Reflect &amp; Tune</span>
+        <button type="button" class="nav_tab" data-view="insights">
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          <span>Insights</span>
+        </button>
+        <button type="button" class="nav_tab" data-view="journal">
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          <span>Journal</span>
+        </button>
+        <button type="button" class="nav_tab" data-view="settings">
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span>Settings</span>
+        </button>
+      </div>
+    </nav>
+  </aside>
+
+  <!-- 2. WORKSPACE COLUMN -->
+  <div class="workspace_column">
+
+    <!-- COMPACT 48px TOP HEADER -->
+    <header class="app_header">
+      <div class="header_title_group">
+        <span id="circadian_phase_dot" class="phase_dot" aria-hidden="true"></span>
+        <span id="circadian_phase_label" class="visually-hidden">Day phase</span>
+        <h1 id="active_view_title" tabindex="-1">Today</h1>
+        <span id="active_view_count" class="header_count_pill" aria-label="Item count">0</span>
+        <span id="offline_status_badge" class="offline_pill" hidden>Offline</span>
+      </div>
+
+      <div class="header_actions">
+        <button type="button" id="header_momentum_btn" class="momentum_pill" aria-label="Daily momentum and streak" title="Daily alignment and streak">
+          <svg aria-hidden="true" focusable="false" class="mini_ring_svg" viewBox="0 0 24 24" width="18" height="18">
+            <circle class="mini_ring_bg" cx="12" cy="12" r="9"></circle>
+            <circle id="header_momentum_ring" class="mini_ring_fill" cx="12" cy="12" r="9" stroke-dasharray="56.55" stroke-dashoffset="56.55"></circle>
+          </svg>
+          <span id="header_momentum_pct" class="tabular_num">0%</span>
+          <span class="momentum_sep" aria-hidden="true">·</span>
+          <svg aria-hidden="true" focusable="false" class="streak_flame_svg" viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M13.5 2.2c.4 2.7-.8 4.9-2.2 6.5-1.2 1.4-2.3 2.7-2.3 4.8 0 1.7 1.3 3 3 3s3-1.3 3-3c0-1.2-.5-2.1-1-2.9 2.4 1.1 4 3.4 4 6.2 0 3.5-2.7 6.2-6 6.2s-6-2.7-6-6.2c0-2.7 1.3-5.1 3.1-7.2 1.6-1.9 3.6-4.1 4.4-7.4z"/></svg>
+          <span id="streak_count" class="tabular_num">0</span>
+        </button>
+
+        <button type="button" id="header_gemini_live_btn" class="icon_btn" aria-label="Voice Companion" title="Voice Companion">
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+        </button>
+
+        <button type="button" id="header_more_btn" class="icon_btn" popovertarget="more_nav_popover" aria-label="More views and tools" title="More">
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.2" fill="currentColor"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/><circle cx="12" cy="19" r="1.2" fill="currentColor"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- MORE OVERFLOW POPOVER MENU -->
+    <nav id="more_nav_popover" class="popover_menu" popover="auto" aria-label="More views">
+      <button type="button" class="popover_item nav_tab" data-view="insights">
+        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        <span>Insights</span>
+      </button>
+      <button type="button" class="popover_item nav_tab" data-view="journal">
+        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        <span>Journal</span>
+      </button>
+      <button type="button" class="popover_item nav_tab" data-view="settings">
+        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>Settings</span>
+      </button>
+      <hr class="popover_sep">
+      <button type="button" id="more_expand_tab_btn" class="popover_item">
+        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+        <span>Open in Full Tab</span>
+      </button>
+      <button type="button" id="more_shortcuts_btn" class="popover_item">
+        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M8 12h.01M12 12h.01M16 12h.01M7 16h10"/></svg>
+        <span>Keyboard Shortcuts</span>
+      </button>
+    </nav>
+
+    <!-- MAIN SCROLL VIEWPORT -->
+    <main id="main_content" class="main_content">
+
+      <!-- NON-BLOCKING INLINE ERROR ALERT -->
+      <div id="inline_error_banner" class="inline_alert" role="alert" hidden>
+        <div class="inline_alert_body">
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          <span id="inline_error_text"></span>
+        </div>
+        <div class="inline_alert_actions">
+          <button type="button" id="inline_error_action_btn" class="btn btn_sm btn_primary" hidden>Fix</button>
+          <button type="button" id="inline_error_dismiss_btn" class="icon_btn icon_btn_xs" aria-label="Dismiss alert">✕</button>
+        </div>
+      </div>
+
+      <!-- COMPACT NOTIFICATION PERMISSION BAR -->
+      <div id="notification_banner" class="notification_banner" hidden>
+        <p class="banner_text">Enable alerts for focus timer milestones.</p>
+        <div class="banner_actions">
+          <button type="button" id="grant_notifications" class="btn btn_sm btn_primary">Enable</button>
+          <button type="button" id="close_notification_banner" class="btn btn_sm btn_ghost" aria-label="Dismiss notification prompt">Later</button>
+        </div>
+      </div>
+
+      <!-- =================================================================
+           PANEL 1: TODAY COMMAND FEED (DEFAULT LANDING VIEW)
+           ================================================================= -->
+      <section id="today_panel" class="app_panel" data-panel="today">
+
+        <!-- BOOT SKELETON SHIMMER -->
+        <div id="boot_skeleton" class="boot_skeleton" aria-busy="true" aria-label="Loading workspace">
+          <div class="skel_block skel_capture"></div>
+          <div class="skel_block skel_hero"></div>
+          <div class="skel_block skel_card"></div>
+          <div class="skel_block skel_card"></div>
+          <div class="skel_block skel_card"></div>
         </div>
 
-        <nav class="sidebar_nav">
-            <div class="nav_group">
-                <span class="nav_group_label">Executive Command</span>
-                <button class="nav_tab active" data-view="dashboard">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
-                    <span>Dashboard</span>
-                </button>
-                <button class="nav_tab" data-view="today">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>
-                    <span>Focus Today</span>
-                </button>
-                <button class="nav_tab" data-view="all">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
-                    <span>Focus Pipeline</span>
-                </button>
-                <button class="nav_tab" data-view="later">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 2h14"></path><path d="M5 22h14"></path><path d="M19 2v4c0 3.86-3.14 7-7 7s-7-3.14-7-7V2"></path><path d="M5 22v-4c0-3.86 3.14-7 7-7s7 3.14 7 7v4"></path></svg>
-                    <span>Mindful Backlog</span>
-                </button>
-                <button class="nav_tab" data-view="completed">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-                    <span>Victory Archive</span>
-                </button>
+        <!-- NON-BLOCKING WELCOME / PRIVACY INLINE CARD (FIRST BOOT) -->
+        <article id="welcome_nudge_banner" class="welcome_inline_card" hidden>
+          <div class="welcome_inline_head">
+            <div>
+              <span class="kicker">Private &amp; Offline-First</span>
+              <h2>Welcome to Aurora</h2>
             </div>
+            <button type="button" id="welcome_dismiss_btn" class="icon_btn icon_btn_sm" aria-label="Dismiss welcome card">✕</button>
+          </div>
+          <p class="welcome_inline_copy">Your tasks, habits, and reflections stay locally in your browser. Zero tracking, zero accounts.</p>
+          <div class="welcome_inline_actions">
+            <button type="button" id="welcome_start_quiz_btn" class="btn btn_sm btn_primary">Tune Productivity DNA</button>
+          </div>
+        </article>
 
-            <div class="nav_group">
-                <span class="nav_group_label">Circadian Rhythm</span>
-                <button class="nav_tab" data-view="routine">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-                    <span>Energy Architecture</span>
-                </button>
-                <button class="nav_tab" data-view="consistency_history">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="M18.7 8l-5.1 5.2-2.8-2.7L7 14.3"></path></svg>
-                    <span>Momentum Trajectory</span>
-                </button>
-            </div>
+        <!-- PINNED ZERO-FRICTION QUICK-ADD FORM -->
+        <form id="quick_add_form" class="quick_add_bar" novalidate>
+          <div class="qa_input_row">
+            <label for="quick_add_input" class="visually-hidden">Add a task</label>
+            <input type="text" id="quick_add_input" class="qa_text_input" placeholder="Capture a task… (Press Enter)" autocomplete="off">
+            <button type="button" id="qa_capture_tab_btn" class="qa_tab_btn" aria-label="Attach active browser tab" title="Capture active tab URL">
+              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              <span class="qa_tab_label">Tab</span>
+            </button>
+            <button type="submit" id="qa_btn_commit" class="qa_commit_btn" aria-label="Add task">
+              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span class="qa_commit_label">Add</span>
+            </button>
+          </div>
 
-            <div class="nav_group">
-                <span class="nav_group_label">Neural Habits</span>
-                <button class="nav_tab" data-view="consistency">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2.1l4 4-4 4"></path><path d="M3 12.2v-2a4 4 0 0 1 4-4h14"></path><path d="M7 21.9l-4-4 4-4"></path><path d="M21 11.8v2a4 4 0 0 1-4 4H3"></path></svg>
-                    <span>Atomic Streaks</span>
-                </button>
-                <button class="nav_tab" data-view="timer">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                    <span>Flow State Timer</span>
-                </button>
-                <button class="nav_tab" data-view="insights">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
-                    <span>Cognitive Insights</span>
-                </button>
-            </div>
+          <div id="qa_attached_tab_chip" class="qa_attached_tab" hidden>
+            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            <span id="qa_attached_tab_title" class="qa_attached_tab_title"></span>
+            <button type="button" id="qa_clear_tab_btn" class="icon_btn icon_btn_xs" aria-label="Remove attached tab">✕</button>
+          </div>
 
-            <div class="nav_group">
-                <span class="nav_group_label">Mindful Closure</span>
-                <button class="nav_tab" data-view="journal">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path></svg>
-                    <span>Evening Reflection</span>
-                </button>
-                <button class="nav_tab" data-view="settings">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-                    <span>Settings</span>
-                </button>
-            </div>
-        </nav>
-    </aside>
+          <div class="qa_chips_row">
+            <button type="button" class="qa_chip" id="qa_chip_date" title="Cycle due date">
+              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              <span id="qa_date_text">Today</span>
+            </button>
+            <button type="button" class="qa_chip" id="qa_chip_priority" title="Cycle priority">
+              <span class="p_dot med" aria-hidden="true"></span>
+              <span id="qa_priority_text">Steady</span>
+            </button>
+            <button type="button" class="qa_chip" id="qa_chip_category" title="Cycle category">
+              <span id="qa_category_text">Inbox</span>
+            </button>
+            <button type="button" class="qa_chip qa_chip_subtle" id="qa_btn_advanced" title="Open detailed task editor">
+              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>
+              <span>Details</span>
+            </button>
+          </div>
+        </form>
 
-    <!-- 2. MAIN SCROLL CONTAINER PANEL -->
-    <main class="main_content">
-        
-        <!-- BROWSER NOTIFICATION REQUEST BANNER -->
-        <div id="notification_banner" class="notification_banner">
-            <div class="banner_content">
-                <p>Enable browser notifications to protect flow state sessions and anchor milestone horizons.</p>
-            </div>
-            <div class="banner_actions">
-                <button id="grant_notifications" class="banner_btn primary">Enable Flow Alerts</button>
-                <button id="close_notification_banner" class="banner_btn secondary" aria-label="Dismiss">Dismiss</button>
-            </div>
+        <!-- COMPACT FILTER PILLS & SEARCH POPOVER TRIGGER -->
+        <div class="today_toolbar">
+          <div id="today_filter_pills" class="filter_pill_strip" role="group" aria-label="Filter Today tasks">
+            <button type="button" class="filter_pill active" data-today-filter="all">All</button>
+            <button type="button" class="filter_pill" data-today-filter="high">Keystone</button>
+            <button type="button" class="filter_pill" data-today-filter="later">Backlog</button>
+            <button type="button" class="filter_pill" data-today-filter="completed">Done</button>
+          </div>
+          <button type="button" id="today_search_trigger" class="icon_btn icon_btn_sm" popovertarget="today_search_popover" aria-label="Search and filter tasks" title="Search &amp; Filter">
+            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+          </button>
         </div>
 
-        <!-- VIEW LANDMARK HEADER -->
-        <header class="view_header">
-            <div class="title_group">
-                <!-- Hamburger trigger for mobile sidebar slide out -->
-                <button id="mobile_hamburger_trigger" class="mobile_hamburger_btn" aria-label="Open Navigation Menu">
-                    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-                </button>
-                <h2 id="active_view_title">Today's Focus</h2>
-                <span id="active_view_count" class="count_pill">(0)</span>
+        <!-- SEARCH & ADVANCED FILTER POPOVER -->
+        <div id="today_search_popover" class="popover_panel search_popover" popover="auto">
+          <div class="search_popover_field">
+            <label for="search_bar" class="visually-hidden">Search tasks</label>
+            <svg aria-hidden="true" focusable="false" class="search_field_icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            <input type="search" id="search_bar" class="field_input search_input" placeholder="Search tasks or notes…" autocomplete="off">
+          </div>
+          <div class="search_popover_selects">
+            <div class="compact_select_wrap">
+              <label for="filter_priority" class="visually-hidden">Filter priority</label>
+              <select id="filter_priority" class="field_select">
+                <option value="All">All Priorities</option>
+                <option value="High">Keystone</option>
+                <option value="Medium">Steady</option>
+                <option value="Low">Gentle</option>
+              </select>
             </div>
-
-            <!-- View Header Actions & Streak Flame Tracker -->
-            <div class="view_header_actions">
-                <!-- Gemini Live Companion Button -->
-                <button id="header_gemini_live_btn" class="header_action_icon_btn" title="Gemini Live Voice Companion" aria-label="Gemini Live Voice Companion">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
-                </button>
-                <!-- Expand to Full Tab Button -->
-                <button id="header_expand_tab_btn" class="header_action_icon_btn" title="Open in Full Tab" aria-label="Open in Full Tab">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                </button>
-                <!-- Global Streak Flame Tracker -->
-                <div class="streak_badge" title="Highest consecutive habit completion streak">
-                    <span class="streak_text">STREAK</span>
-                    <span id="streak_count" class="streak_count_number">0</span>
-                </div>
+            <div class="compact_select_wrap">
+              <label for="filter_category" class="visually-hidden">Filter category</label>
+              <select id="filter_category" class="field_select">
+                <option value="All">All Tags</option>
+              </select>
             </div>
-        </header>
+          </div>
+          <div class="search_popover_footer">
+            <button type="button" id="search_clear_btn" class="btn btn_xs btn_ghost">Reset filters</button>
+          </div>
+        </div>
 
-        <!-- =====================================================================
-             A. PANEL: COMMAND CENTER DASHBOARD (LANDING SCREEN)
-             ===================================================================== -->
-        <section id="dashboard_panel" class="app_panel">
-            
-            <!-- Daily Quotes Prompt Block -->
-            <div class="dash_wisdom_box">
-                <div class="dash_wisdom_content">
-                    <p id="dash_wisdom_prompt_quote">"Simplify. Focus on the single next action."</p>
+        <!-- CONTAINER-ADAPTIVE TODAY WORKSPACE GRID -->
+        <div class="today_workspace_grid">
+
+          <!-- PRIMARY FEED COLUMN -->
+          <div class="today_feed_col">
+
+            <!-- NEXT UP / KEYSTONE HERO CARD -->
+            <section id="today_keystone_card" class="keystone_hero_card" aria-label="Next Up Focus">
+              <div id="morning_bridge_slot"></div>
+              <div id="dash_focus_nudge_area" class="dash_focus_nudge_container"></div>
+              <div class="circadian_inline_strip">
+                <div class="circadian_slot">
+                  <span class="slot_kicker">Now</span>
+                  <div id="dash_now_block" class="circadian_slot_body"></div>
                 </div>
-            </div>
-
-            <!-- Progression Rings Widgets -->
-            <div class="dash_metrics_grid">
-                <div class="dash_metric_card">
-                    <div class="dash_ring_visual">
-                        <svg viewBox="0 0 100 100">
-                            <circle class="ring_bg" cx="50" cy="50" r="40"></circle>
-                            <circle id="ring_tasks_today" class="ring_stroke stroke-indigo" cx="50" cy="50" r="40"></circle>
-                        </svg>
-                        <span id="dash_tasks_pct_label" class="ring_label">0%</span>
-                    </div>
-                    <div class="dash_ring_text">
-                        <h4>Active Intentions</h4>
-                        <p>Core focus completion</p>
-                    </div>
+                <div class="circadian_slot">
+                  <span class="slot_kicker">Next</span>
+                  <div id="dash_next_block" class="circadian_slot_body"></div>
                 </div>
+              </div>
+            </section>
 
-                <div class="dash_metric_card">
-                    <div class="dash_ring_visual">
-                        <svg viewBox="0 0 100 100">
-                            <circle class="ring_bg" cx="50" cy="50" r="40"></circle>
-                            <circle id="ring_habits_today" class="ring_stroke stroke-emerald" cx="50" cy="50" r="40"></circle>
-                        </svg>
-                        <span id="dash_habits_pct_label" class="ring_label">0%</span>
-                    </div>
-                    <div class="dash_ring_text">
-                        <h4>Daily Rituals</h4>
-                        <p>Neural consistency locked</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Focus Nudge recommendation widget -->
-            <div id="dash_focus_nudge_area" class="dash_focus_nudge_container"></div>
-
-            <div class="dash_split_columns_row">
-                <!-- Timeline: Now / Next scheduled block -->
-                <div class="dash_timeline_column">
-                    <h3>Circadian Flow</h3>
-                    <p class="dash_col_sub">Active energy block</p>
-                    <div class="dash_timeline_box">
-                        <span class="timeline_node_badge">CURRENT FLOW</span>
-                        <div id="dash_now_block"></div>
-                        
-                        <div class="timeline_connector_line"></div>
-                        
-                        <span class="timeline_node_badge secondary">IMMINENT FOCUS</span>
-                        <div id="dash_next_block"></div>
-                    </div>
-                </div>
-
-                <!-- Short Summary list of high priority deadlines -->
-                <div class="dash_tasks_column">
-                    <h3>High-Leverage Imperatives</h3>
-                    <p class="dash_col_sub">Keystone priorities requiring direct attention</p>
-                    <div id="dash_urgent_tasks" class="dash_tasks_list_box"></div>
-                </div>
-            </div>
-
-        </section>
-
-        <!-- =====================================================================
-             B. PANEL: STANDARD TASK SHEETS VIEW
-             ===================================================================== -->
-        <section id="tasks_panel" class="app_panel" style="display: none;">
-            <!-- Real-time filtering search deck -->
-            <div class="filter_deck">
-                <div class="search_wrapper">
-                    <svg class="search_icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-                    <input type="text" id="search_bar" placeholder="Search intentions, breakthroughs, or notes...">
-                </div>
-
-                <div class="filters_wrapper">
-                    <select id="filter_priority" class="pill_select" aria-label="Filter Priority">
-                        <option value="All">All Horizons</option>
-                        <option value="High">Keystone Priority</option>
-                        <option value="Medium">Steady Momentum</option>
-                        <option value="Low">Gentle Focus</option>
-                    </select>
-
-                    <select id="filter_category" class="pill_select" aria-label="Filter Category">
-                        <option value="All">All Tags</option>
-                    </select>
-                </div>
-            </div>
-
-            <!-- Focus Today AI Strategy Banner Deck -->
+            <!-- FOCUS TODAY AI STRATEGY SLOT -->
             <div id="today_ai_banner_container"></div>
 
-            <!-- Quick Add Task Deck (Zero-Click Fast Capture) -->
-            <div class="quick_add_container" id="quick_add_container">
-                <div class="quick_add_inner">
-                    <div class="quick_add_icon">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
-                    </div>
-                    <input type="text" id="quick_add_input" class="quick_add_text_input" placeholder="＋ Capture your next breakthrough intention... (Type and press Enter)" autocomplete="off" />
-                    <div class="quick_add_controls">
-                        <button type="button" class="quick_add_chip" id="qa_chip_date" title="Click to cycle horizon: Today / Tomorrow / Mindful Backlog">
-                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-                            <span id="qa_date_text">Today</span>
-                        </button>
-                        <button type="button" class="quick_add_chip" id="qa_chip_priority" title="Click to cycle priority: Steady / Keystone / Gentle">
-                            <span class="qa_p_dot med"></span>
-                            <span id="qa_priority_text">Steady</span>
-                        </button>
-                        <button type="button" class="quick_add_chip" id="qa_chip_category" title="Click to cycle category">
-                            <span id="qa_category_text">Inbox</span>
-                        </button>
-                        <button type="button" class="quick_add_adv_trigger" id="qa_btn_advanced" title="Configure execution parameters, duration & recurrence">
-                            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                            <span>Fine-Tune</span>
-                        </button>
-                        <button type="button" class="quick_add_commit_btn" id="qa_btn_commit" title="Commit Intention (Enter)">
-                            <span>Commit</span>
-                            <kbd>↵</kbd>
-                        </button>
-                    </div>
-                </div>
+            <!-- VIRTUALIZED TASK LIST VIEWPORT -->
+            <div id="task_list_viewport" class="virtual_list_viewport">
+              <div id="task_list_container" class="virtual_list_host"></div>
+              <div id="task_list_empty_state" class="empty_state" hidden></div>
             </div>
 
-            <!-- Active Card Container -->
-            <div id="task_list_container" class="card_stack"></div>
-        </section>
+          </div>
 
-        <!-- =====================================================================
-             C. PANEL: DAILY TIMETABLE ROUTINE PLANNER
-             ===================================================================== -->
-        <section id="routine_panel" class="app_panel" style="display: none;">
-            <div class="routine_header_row">
-                <div class="routine_header_text">
-                    <h3>Circadian Architecture</h3>
-                    <p>Intentional waking rhythm. Energy blocks aligned to natural cognitive peaks.</p>
+          <!-- SECONDARY RAIL COLUMN (BELOW FEED ON 360px, RIGHT RAIL ON >= 680px) -->
+          <div class="today_rail_col">
+
+            <!-- INLINE DAILY HABIT STRIP -->
+            <section id="today_habit_strip_section" class="surface_card habit_strip_card" aria-label="Daily Rituals">
+              <div class="section_row_head">
+                <div class="section_row_title">
+                  <h2>Daily Rituals</h2>
+                  <span id="today_habit_strip_count" class="count_chip tabular_num">0/0</span>
                 </div>
-                <button id="routine_quick_add_btn" class="routine_quick_add_btn">+ Anchor Energy Block</button>
-            </div>
+                <button type="button" id="today_habit_view_all_btn" class="link_btn">Manage</button>
+              </div>
+              <div id="today_habit_strip_list" class="habit_strip_list"></div>
+            </section>
 
-            <!-- Modern Weekday Switcher Tabs -->
-            <div class="routine_days_tabs_wrapper" id="routine_day_tabs_bar">
-                <button class="routine_day_tab" data-day="Mon">Mon</button>
-                <button class="routine_day_tab" data-day="Tue">Tue</button>
-                <button class="routine_day_tab" data-day="Wed">Wed</button>
-                <button class="routine_day_tab" data-day="Thu">Thu</button>
-                <button class="routine_day_tab" data-day="Fri">Fri</button>
-                <button class="routine_day_tab" data-day="Sat">Sat</button>
-                <button class="routine_day_tab" data-day="Sun">Sun</button>
-            </div>
-
-            <!-- View Layout Selectors -->
-            <div class="routine_layout_selector_row">
-                <div class="layout_toggle_pills" id="routine_layout_pills">
-                    <button class="pill_btn active" data-layout="timeline">Timeline Agenda</button>
-                    <button class="pill_btn" data-layout="grid">Hourly Grid</button>
-                </div>
-            </div>
-            
-            <div id="routine_timetable_scroller" class="routine_scroller"></div>
-        </section>
-
-        <!-- =====================================================================
-             D. PANEL: HABITS CONSISTENCY MATRIX AND HEATMAPS
-             ===================================================================== -->
-        <section id="consistency_panel" class="app_panel" style="display: none;">
-            
-            <!-- 1. Habit Motivation & Daily Momentum Deck -->
-            <div class="habit_motivation_card">
-                <div class="habit_motivation_stats_row">
-                    <div class="habit_stat_item">
-                        <span class="habit_stat_label">Today's Alignment</span>
-                        <div class="habit_stat_val_row">
-                            <span id="habit_today_score" class="habit_stat_val">0 / 0</span>
-                            <span id="habit_today_pct" class="habit_stat_badge">0%</span>
-                        </div>
-                        <div class="habit_progress_bar_track">
-                            <div id="habit_today_progress_bar" class="habit_progress_bar_fill" style="width: 0%;"></div>
-                        </div>
-                    </div>
-                    <div class="habit_stat_item">
-                        <span class="habit_stat_label">7-Day Momentum</span>
-                        <div class="habit_stat_val_row">
-                            <span id="habit_weekly_rate" class="habit_stat_val">0%</span>
-                            <span class="habit_stat_badge accent">Weekly</span>
-                        </div>
-                        <p class="habit_stat_sub">Rolling neural consistency</p>
-                    </div>
-                    <div class="habit_stat_item">
-                        <span class="habit_stat_label">Keystone Streak</span>
-                        <div class="habit_stat_val_row">
-                            <span id="habit_top_streak" class="habit_stat_val">0d</span>
-                            <span class="habit_stat_badge flame">🔥 Streak</span>
-                        </div>
-                        <p class="habit_stat_sub">Peak unbroken consistency</p>
-                    </div>
-                </div>
-                <div class="habit_motivation_quote_box">
-                    <span class="habit_quote_icon">⚡</span>
-                    <p id="habit_motivation_quote">"Small daily disciplines compound into massive life transformations. Check 1 habit to keep momentum alive."</p>
-                </div>
-            </div>
-
-            <!-- 2. Spontaneous Quick-Add & Preset Chips -->
-            <div class="habit_spontaneous_deck">
-                <form id="habit_quick_add_form" class="habit_quick_form">
-                    <div class="habit_quick_input_wrap">
-                        <span class="habit_quick_icon">⚡</span>
-                        <input type="text" id="habit_quick_input" class="habit_quick_input" placeholder="Anchor a new micro-habit (e.g. 15m Morning Walk, Read 10 Pages)..." autocomplete="off" required />
-                    </div>
-                    <select id="habit_quick_cat" class="habit_quick_cat_select">
-                        <option value="Routine">Routine</option>
-                        <option value="Health">Health</option>
-                        <option value="Mind">Mind</option>
-                        <option value="Fitness">Fitness</option>
-                        <option value="Focus">Focus</option>
-                    </select>
-                    <button type="submit" class="habit_quick_submit_btn">
-                        <span>+ Forge</span>
-                    </button>
-                    <button type="button" id="btn_consistency_add_habit" class="habit_custom_dialog_btn" title="Detailed Habit Settings">
-                        <span>⚙ Architecture</span>
-                    </button>
-                </form>
-
-                <!-- Spontaneous 1-Click Suggestions -->
-                <div class="habit_presets_row">
-                    <span class="presets_hint">Science-Backed Presets:</span>
-                    <div class="presets_scroll_area">
-                        <button type="button" class="habit_preset_chip" data-title="Drink 2.5L Water" data-cat="Health" data-color="emerald">💧 2.5L Hydration</button>
-                        <button type="button" class="habit_preset_chip" data-title="20m Daily Workout" data-cat="Fitness" data-color="rose">🏃 20m Physical Vitality</button>
-                        <button type="button" class="habit_preset_chip" data-title="Read 10 Pages" data-cat="Mind" data-color="indigo">📖 10 Pages Neural Growth</button>
-                        <button type="button" class="habit_preset_chip" data-title="10m Mindful Meditation" data-cat="Mind" data-color="indigo">🧘 10m Centering</button>
-                        <button type="button" class="habit_preset_chip" data-title="No Phone First 30m" data-cat="Focus" data-color="amber">🌅 Screen-Free Morning</button>
-                        <button type="button" class="habit_preset_chip" data-title="Sleep Before 11 PM" data-cat="Health" data-color="emerald">🌙 Circadian Sleep by 11 PM</button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 3. AI Health Alert / Intervention Banner (Shows on unhealthy habits) -->
-            <div id="habit_ai_advisory_card" class="habit_ai_advisory_card" style="display: none;">
-                <div class="ai_advisory_header">
-                    <div class="ai_advisory_badge">
-                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-                        <span>Gemini AI Health Advisory</span>
-                    </div>
-                    <button type="button" id="btn_dismiss_ai_advisory" class="ai_advisory_close" aria-label="Dismiss">✕</button>
-                </div>
-                <div class="ai_advisory_body">
-                    <h4 id="ai_advisory_title">Unhealthy Habit Detected</h4>
-                    <p id="ai_advisory_reason">This habit may undermine your long-term focus or well-being.</p>
-                    <div class="ai_advisory_alt_box">
-                        <span class="alt_label">Recommended Replacement:</span>
-                        <strong id="ai_advisory_alternative">5-minute mindful breathing</strong>
-                        <p id="ai_advisory_tip" class="alt_tip"></p>
-                    </div>
-                </div>
-                <div class="ai_advisory_actions">
-                    <button type="button" id="btn_ai_adopt_alternative" class="ai_action_btn primary">Adopt Healthy Replacement</button>
-                    <button type="button" id="btn_ai_keep_habit" class="ai_action_btn secondary">Keep As-Is</button>
-                </div>
-            </div>
-
-            <!-- 4. Weekly habit checklist matrix grid with full Date & Past Navigation -->
-            <div class="consistency_matrix_card">
-                <div class="matrix_header_row">
-                    <div>
-                        <div class="matrix_title_with_date">
-                            <h3>Weekly Consistency Matrix</h3>
-                            <span id="habit_week_range_badge" class="habit_date_range_pill">October 26 – November 1, 2026</span>
-                        </div>
-                        <p>Reinforce neural pathways daily to strengthen streaks. Click column headers to inspect past dates.</p>
-                    </div>
-                    <div class="matrix_week_navigator">
-                        <button type="button" id="btn_habit_prev_week" class="habit_nav_arrow_btn" title="Previous Week">
-                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-                            <span>Prev Week</span>
-                        </button>
-                        <button type="button" id="btn_habit_this_week" class="habit_nav_today_btn" title="Current Week">This Week</button>
-                        <button type="button" id="btn_habit_next_week" class="habit_nav_arrow_btn" title="Next Week">
-                            <span>Next Week</span>
-                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-                        </button>
-                    </div>
-                </div>
-
-                <div class="matrix_table_responsive_wrapper">
-                    <table class="matrix_table">
-                        <thead>
-                            <tr id="habit_matrix_thead_row">
-                                <th>Atomic Ritual</th>
-                                <th>Mon</th>
-                                <th>Tue</th>
-                                <th>Wed</th>
-                                <th>Thu</th>
-                                <th>Fri</th>
-                                <th>Sat</th>
-                                <th>Sun</th>
-                            </tr>
-                        </thead>
-                        <tbody id="habit_matrix_tbody"></tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- 5 & 6. Bottom Deck: Compact 1/4th Month Heatmap + 3/4th Gemini AI Habit Coach -->
-            <div class="consistency_deck_grid">
-
-                <!-- 5. Monthly Contribution Heatmap (Compact 1/4th Space Widget) -->
-                <div class="consistency_heatmap_card">
-                    <div class="heatmap_header_row compact">
-                        <div class="heatmap_title_stack">
-                            <h3>Monthly Heatmap</h3>
-                            <span id="heatmap_month_badge" class="habit_date_range_pill">October 2026</span>
-                        </div>
-                        <div class="matrix_week_navigator mini">
-                            <button type="button" id="btn_heatmap_prev_month" class="habit_nav_arrow_btn mini" title="Previous Month">
-                                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-                            </button>
-                            <button type="button" id="btn_heatmap_this_month" class="habit_nav_today_btn mini" title="Current Month">Now</button>
-                            <button type="button" id="btn_heatmap_next_month" class="habit_nav_arrow_btn mini" title="Next Month">
-                                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-                            </button>
-                        </div>
-                    </div>
-                    <p class="heatmap_sub">Hover or tap any date to inspect completions.</p>
-                    <div id="chart_heatmap_grid" class="heatmap_box"></div>
-                    <div class="heatmap_shades_legend compact">
-                        <span>Less</span>
-                        <div class="shades_swatches">
-                            <span class="shade_box shade-0"></span>
-                            <span class="shade_box shade-1"></span>
-                            <span class="shade_box shade-2"></span>
-                            <span class="shade_box shade-3"></span>
-                        </div>
-                        <span>More</span>
-                    </div>
-                </div>
-
-                <!-- 6. Gemini AI Habit Coach & Insights Deck -->
-                <div class="consistency_ai_card">
-                    <div class="ai_coach_header_row">
-                        <div class="ai_coach_title_group">
-                            <div class="ai_coach_icon_orb">✨</div>
-                            <div>
-                                <h3>Gemini AI Habit Coach</h3>
-                                <p>Intelligent consistency diagnosis, habit stacking advice, and weekly momentum coaching.</p>
-                            </div>
-                        </div>
-                        <button type="button" id="btn_ai_analyze_habits" class="ai_coach_trigger_btn">
-                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-                            <span>Analyze My Habits</span>
-                        </button>
-                    </div>
-                    <div id="habit_ai_coach_results" class="ai_coach_results_box">
-                        <div class="ai_coach_placeholder">
-                            <p>Click <strong>"Analyze My Habits"</strong> to get a personalized consistency diagnosis, identify break points, and receive Atomic Habit stacking strategies powered by Gemini AI.</p>
-                            <div class="ai_prompt_suggestion_chips">
-                                <button type="button" class="ai_prompt_chip" data-prompt="How should I stack my current habits for an effortless morning routine?">☕ How to stack my morning habits?</button>
-                                <button type="button" class="ai_prompt_chip" data-prompt="Why do I struggle with consistency on weekends and how do I fix it?">🏖️ Overcoming weekend consistency drops</button>
-                                <button type="button" class="ai_prompt_chip" data-prompt="Suggest 2 micro-habits that take under 2 minutes but produce huge results.">⚡ 2-minute high-leverage atomic habits</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-
-        </section>
-
-        <!-- =====================================================================
-             I. PANEL: DEDICATED CONSISTENCY HISTORY PAGE
-             ===================================================================== -->
-        <section id="consistency_history_panel" class="app_panel" style="display: none;">
-            <div class="consistency_history_header">
-                <h3>Consistency History</h3>
-                <p>Track your historical performance, streaks, and long-term habits progression.</p>
-            </div>
-
-            <div class="consistency_history_summary_grid">
-                <div class="stat_card">
-                    <div class="stat_label">Active Habits</div>
-                    <div id="history_active_habits_count" class="stat_value">0</div>
-                </div>
-                <div class="stat_card">
-                    <div class="stat_label">Average Streak</div>
-                    <div id="history_avg_streak" class="stat_value">0d</div>
-                </div>
-                <div class="stat_card">
-                    <div class="stat_label">All-time Completions</div>
-                    <div id="history_total_completions" class="stat_value">0</div>
-                </div>
-                <div class="stat_card">
-                    <div class="stat_label">Consistency Rate</div>
-                    <div id="history_overall_rate" class="stat_value">0%</div>
-                </div>
-            </div>
-
-            <!-- Streaks Progression List -->
-            <div class="history_section_card">
-                <h3>Habit Streaks & Progress</h3>
-                <p class="history_section_sub">Current vs. Best consecutive days</p>
-                <div id="history_streaks_container" class="history_streaks_list"></div>
-            </div>
-
-            <div class="charts_row">
-                <!-- Weekly Consistency Trend -->
-                <div class="chart_card half">
-                    <h3>7-Day Completion Trend</h3>
-                    <p class="chart_sub">Number of habits completed daily</p>
-                    <div id="chart_weekly_consistency_trend" class="chart_box"></div>
-                </div>
-
-                <!-- Monthly Consistency Rate -->
-                <div class="chart_card half">
-                    <h3>Category Mastery</h3>
-                    <p class="chart_sub">Completions by habit category</p>
-                    <div id="chart_category_consistency" class="chart_box"></div>
-                </div>
-            </div>
-
-            <!-- Chronological Timeline Log -->
-            <div class="history_section_card">
-                <h3>Chronological Completion Log</h3>
-                <p class="history_section_sub">Recent daily habit records</p>
-                <div id="history_chronological_log" class="history_log_timeline"></div>
-            </div>
-        </section>
-
-        <!-- =====================================================================
-             E. PANEL: POMODORO FOCUS TIMER — FUTURISTIC IMMERSIVE WORKSPACE
-             ===================================================================== -->
-        <section id="timer_panel" class="app_panel" style="display: none;">
-            
-            <!-- Ambient Glow Orb Background -->
-            <div class="timer_ambient_glow" id="timer_ambient_glow"></div>
-
-            <!-- Mode Selector Pills -->
-            <div class="timer_mode_selector">
-                <button id="timer_pomo_btn" class="timer_mode_pill active">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                    <span>Deep Flow</span>
-                    <small>25m</small>
-                </button>
-                <button id="timer_short_btn" class="timer_mode_pill">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-                    <span>Cognitive Reset</span>
-                    <small>5m</small>
-                </button>
-                <button id="timer_long_btn" class="timer_mode_pill">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.657 6.343A8 8 0 1 0 6.343 17.657"/><path d="M12 2v4"/><path d="M12 18v4"/><path d="M2 12h4"/><path d="M18 12h4"/></svg>
-                    <span>Deep Renewal</span>
-                    <small>15m</small>
-                </button>
-                <button id="timer_stopwatch_btn" class="timer_mode_pill">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5"/><path d="M10 2h4"/><path d="M12 2v2"/></svg>
-                    <span>Open Flow</span>
-                    <small>&infin;</small>
-                </button>
-            </div>
-
-            <!-- Task Detail / Session Context Pill -->
-            <div id="timer_task_details" class="timer_task_detail_container"></div>
-
-            <!-- Central Circular Timer Display -->
-            <div class="timer_ring_stage">
-                <svg class="timer_ring_svg" viewBox="0 0 300 300">
-                    <defs>
-                        <linearGradient id="ringGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" stop-color="var(--accent-primary)" style="stop-color: var(--accent-primary);"/>
-                            <stop offset="100%" stop-color="var(--accent-primary)" style="stop-color: var(--accent-primary); stop-opacity: 0.85;"/>
-                        </linearGradient>
-                        <linearGradient id="ringGradientUrgent" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" stop-color="#ef4444"/>
-                            <stop offset="50%" stop-color="#f43f5e"/>
-                            <stop offset="100%" stop-color="#e11d48"/>
-                        </linearGradient>
-                        <filter id="ringGlow">
-                            <feGaussianBlur stdDeviation="4" result="blur"/>
-                            <feMerge>
-                                <feMergeNode in="blur"/>
-                                <feMergeNode in="SourceGraphic"/>
-                            </feMerge>
-                        </filter>
-                    </defs>
-                    <!-- Track ring -->
-                    <circle cx="150" cy="150" r="125" fill="none" stroke="var(--border-color)" stroke-width="6" opacity="0.3"/>
-                    <!-- Progress ring -->
-                    <circle id="timer_ring_progress" cx="150" cy="150" r="125" fill="none" stroke="url(#ringGradient)" stroke-width="6" stroke-linecap="round"
-                        stroke-dasharray="785" stroke-dashoffset="0"
-                        filter="url(#ringGlow)"
-                        transform="rotate(-90 150 150)"/>
-                    <!-- Tick markers -->
-                    <g id="timer_ring_ticks" opacity="0.15"></g>
-                </svg>
-                
-                <!-- Center Content Stack -->
-                <div class="timer_ring_center">
-                    <span id="timer_countdown_text" class="timer_mega_display">25:00</span>
-                    <span id="timer_sub_msg" class="timer_state_label">Ready</span>
-                    
-                    <!-- Session Cycle Mini Dots -->
-                    <div class="timer_mini_cycle" id="timer_mini_cycle">
-                        <span class="mini_dot active" data-s="1"></span>
-                        <span class="mini_dot" data-s="2"></span>
-                        <span class="mini_dot" data-s="3"></span>
-                        <span class="mini_dot" data-s="4"></span>
-                    </div>
-                    <span class="timer_cycle_text" id="cycle_counter_text">Focus 1/4</span>
-                </div>
-            </div>
-
-            <!-- Controls Deck: Unified Interactive Action Hub -->
-            <div class="timer_controls_deck" id="timer_adjuster">
-                <button class="timer_dur_btn" id="btn_timer_dec" title="Decrease 5 minutes (min 5m)">-5m</button>
-                <button id="timer_restart_btn" class="timer_sec_btn" aria-label="Restart" title="Restart (R)">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-                </button>
-                <div class="timer_primary_action">
-                    <button id="timer_play_btn" class="timer_play_pause_btn" aria-label="Start Timer" title="Start (Space)">
-                        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
-                    </button>
-                    <button id="timer_pause_btn" class="timer_play_pause_btn" aria-label="Pause Timer" title="Pause (Space)" style="display:none;">
-                        <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><rect x="5" y="3" width="5" height="18" rx="1.5"/><rect x="14" y="3" width="5" height="18" rx="1.5"/></svg>
-                    </button>
-                </div>
-                <button id="timer_skip_btn" class="timer_sec_btn" aria-label="Skip" title="Skip Session">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
-                </button>
-                <button id="timer_stop_btn" class="timer_sec_btn danger" aria-label="Stop" title="Stop (Esc)">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
-                </button>
-                <button id="timer_pip_toggle_btn" class="timer_sec_btn" aria-label="Picture in Picture" title="Picture in Picture (PiP)">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-                        <rect x="11" y="9" width="9" height="6" rx="1" ry="1"/>
+            <!-- DAILY MOMENTUM & ALIGNMENT SUMMARY -->
+            <section id="today_progress_summary" class="surface_card momentum_summary_card" aria-label="Daily Alignment">
+              <div class="momentum_rings_row">
+                <div class="ring_stat_item">
+                  <div class="ring_visual">
+                    <svg aria-hidden="true" focusable="false" viewBox="0 0 100 100">
+                      <circle class="ring_bg" cx="50" cy="50" r="40"></circle>
+                      <circle id="ring_tasks_today" class="ring_stroke stroke_accent" cx="50" cy="50" r="40"></circle>
                     </svg>
+                    <span id="dash_tasks_pct_label" class="ring_label tabular_num">0%</span>
+                  </div>
+                  <div class="ring_meta">
+                    <h3>Tasks</h3>
+                    <p>Today cleared</p>
+                  </div>
+                </div>
+
+                <div class="ring_stat_item">
+                  <div class="ring_visual">
+                    <svg aria-hidden="true" focusable="false" viewBox="0 0 100 100">
+                      <circle class="ring_bg" cx="50" cy="50" r="40"></circle>
+                      <circle id="ring_habits_today" class="ring_stroke stroke_success" cx="50" cy="50" r="40"></circle>
+                    </svg>
+                    <span id="dash_habits_pct_label" class="ring_label tabular_num">0%</span>
+                  </div>
+                  <div class="ring_meta">
+                    <h3>Rituals</h3>
+                    <p>Habits logged</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="momentum_score_row">
+                <span class="momentum_score_label">Daily Momentum</span>
+                <strong id="dash_momentum_score" class="momentum_score_val tabular_num">0 pts</strong>
+              </div>
+              <p id="dash_wisdom_prompt_quote" class="wisdom_quote">"Simplify. Focus on the single next action."</p>
+            </section>
+
+            <!-- CONTEXTUAL EVENING CLOSURE RITUAL (SHOWN EVENING OR >= 80% DONE) -->
+            <section id="evening_closure_card" class="surface_card evening_closure_card" hidden aria-label="Evening Closure">
+              <div class="section_row_head">
+                <div>
+                  <span class="kicker">30-Second Shutdown</span>
+                  <h2>Close Your Day</h2>
+                </div>
+                <button type="button" id="evening_closure_dismiss_btn" class="icon_btn icon_btn_xs" aria-label="Dismiss evening closure">✕</button>
+              </div>
+              <div class="form_group">
+                <label for="evening_closure_win_input" class="field_label">One win worth keeping</label>
+                <input type="text" id="evening_closure_win_input" class="field_input" placeholder="What moved the needle today?" autocomplete="off">
+              </div>
+              <div id="evening_closure_mood_group" class="mood_pills_row" role="group" aria-label="Evening mood">
+                <button type="button" class="mood_pill" data-mood="Energized">Energized</button>
+                <button type="button" class="mood_pill active" data-mood="Steady">Steady</button>
+                <button type="button" class="mood_pill" data-mood="Stretched">Stretched</button>
+                <button type="button" class="mood_pill" data-mood="Drained">Drained</button>
+              </div>
+              <button type="button" id="evening_closure_commit_btn" class="btn btn_primary btn_block">Save Closure &amp; Unwind</button>
+            </section>
+
+          </div>
+        </div>
+
+      </section>
+
+      <!-- =================================================================
+           PANEL 2: PLAN (PIPELINE + CIRCADIAN ROUTINE BLOCKS)
+           ================================================================= -->
+      <section id="plan_panel" class="app_panel" data-panel="plan" hidden>
+
+        <div id="plan_mode_tabs" class="segmented_bar" role="tablist" aria-label="Plan view mode">
+          <button type="button" class="seg_tab active" role="tab" aria-selected="true" data-plan-mode="pipeline">Pipeline</button>
+          <button type="button" class="seg_tab" role="tab" aria-selected="false" data-plan-mode="routine">Circadian Blocks</button>
+        </div>
+
+        <!-- SUB-VIEW 2A: TASK PIPELINE -->
+        <div id="plan_pipeline_view" class="plan_subview">
+          <div id="plan_filter_bar" class="filter_pill_strip" role="group" aria-label="Task horizon filters">
+            <button type="button" class="filter_pill active" data-plan-filter="all">All Active</button>
+            <button type="button" class="filter_pill" data-plan-filter="today">Today</button>
+            <button type="button" class="filter_pill" data-plan-filter="tomorrow">Tomorrow</button>
+            <button type="button" class="filter_pill" data-plan-filter="upcoming">Upcoming</button>
+            <button type="button" class="filter_pill" data-plan-filter="overdue">Overdue</button>
+            <button type="button" class="filter_pill" data-plan-filter="later">Backlog</button>
+            <button type="button" class="filter_pill" data-plan-filter="completed">Completed</button>
+          </div>
+
+          <div class="plan_filter_controls">
+            <div class="search_popover_field">
+              <label for="plan_search_input" class="visually-hidden">Search pipeline tasks</label>
+              <svg aria-hidden="true" focusable="false" class="search_field_icon" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+              <input type="search" id="plan_search_input" class="field_input search_input" placeholder="Search tasks…" autocomplete="off">
+            </div>
+            <div class="plan_selects_row">
+              <label for="plan_filter_priority" class="visually-hidden">Filter priority</label>
+              <select id="plan_filter_priority" class="field_select">
+                <option value="All">All Priorities</option>
+                <option value="High">Keystone</option>
+                <option value="Medium">Steady</option>
+                <option value="Low">Gentle</option>
+              </select>
+              <label for="plan_filter_category" class="visually-hidden">Filter category</label>
+              <select id="plan_filter_category" class="field_select">
+                <option value="All">All Tags</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="plan_task_list_viewport" class="virtual_list_viewport">
+            <div id="plan_task_list_container" class="virtual_list_host"></div>
+            <div id="plan_empty_state" class="empty_state" hidden></div>
+          </div>
+
+          <div class="load_more_wrap">
+            <button type="button" id="plan_completed_load_more_btn" class="btn btn_secondary" hidden>Load older completed tasks</button>
+          </div>
+        </div>
+
+        <!-- SUB-VIEW 2B: CIRCADIAN ROUTINE BLOCKS -->
+        <div id="plan_routine_view" class="plan_subview" hidden>
+          <div class="section_row_head routine_top_bar">
+            <div>
+              <h2>Circadian Blocks</h2>
+              <p class="section_sub">Match deep work and rest to your daily energy curve.</p>
+            </div>
+            <button type="button" id="routine_quick_add_btn" class="btn btn_sm btn_primary">+ Add Block</button>
+          </div>
+
+          <div id="routine_day_tabs_bar" class="day_tabs_bar" role="group" aria-label="Weekday selector">
+            <button type="button" class="day_tab" data-day="Mon">Mon</button>
+            <button type="button" class="day_tab" data-day="Tue">Tue</button>
+            <button type="button" class="day_tab" data-day="Wed">Wed</button>
+            <button type="button" class="day_tab" data-day="Thu">Thu</button>
+            <button type="button" class="day_tab" data-day="Fri">Fri</button>
+            <button type="button" class="day_tab" data-day="Sat">Sat</button>
+            <button type="button" class="day_tab" data-day="Sun">Sun</button>
+          </div>
+
+          <div class="routine_layout_bar">
+            <div id="routine_layout_pills" class="segmented_bar segmented_sm">
+              <button type="button" class="seg_tab active" data-layout="timeline">Agenda</button>
+              <button type="button" class="seg_tab" data-layout="grid">Hourly Grid</button>
+            </div>
+          </div>
+
+          <div id="routine_timetable_scroller" class="routine_scroller"></div>
+        </div>
+
+      </section>
+
+      <!-- =================================================================
+           PANEL 3: HABITS (TRACKER + TRAJECTORY)
+           ================================================================= -->
+      <section id="habits_panel" class="app_panel" data-panel="habits" hidden>
+
+        <div id="habits_mode_tabs" class="segmented_bar" role="tablist" aria-label="Habits view mode">
+          <button type="button" class="seg_tab active" role="tab" aria-selected="true" data-habits-mode="tracker">Daily &amp; Weekly</button>
+          <button type="button" class="seg_tab" role="tab" aria-selected="false" data-habits-mode="history">Trajectory</button>
+        </div>
+
+        <!-- SUB-VIEW 3A: DAILY & WEEKLY TRACKER -->
+        <div id="habits_tracker_view" class="habits_subview">
+
+          <!-- Momentum Summary -->
+          <div class="surface_card habit_motivation_card">
+            <div class="habit_stats_grid">
+              <div class="habit_stat_tile">
+                <span class="stat_kicker">Today</span>
+                <div class="stat_val_row">
+                  <strong id="habit_today_score" class="stat_num tabular_num">0 / 0</strong>
+                  <span id="habit_today_pct" class="stat_chip tabular_num">0%</span>
+                </div>
+                <div class="progress_track" aria-hidden="true">
+                  <div id="habit_today_progress_bar" class="progress_fill"></div>
+                </div>
+              </div>
+              <div class="habit_stat_tile">
+                <span class="stat_kicker">7-Day Rate</span>
+                <div class="stat_val_row">
+                  <strong id="habit_weekly_rate" class="stat_num tabular_num">0%</strong>
+                  <span class="stat_chip chip_success">Weekly</span>
+                </div>
+              </div>
+              <div class="habit_stat_tile">
+                <span class="stat_kicker">Top Streak</span>
+                <div class="stat_val_row">
+                  <strong id="habit_top_streak" class="stat_num tabular_num">0d</strong>
+                  <span class="stat_chip chip_warm">Active</span>
+                </div>
+              </div>
+            </div>
+            <p id="habit_motivation_quote" class="habit_quote">"Small daily disciplines compound. Check one habit to keep momentum alive."</p>
+          </div>
+
+          <!-- Quick-Add Habit & Presets -->
+          <div class="surface_card habit_add_card">
+            <form id="habit_quick_add_form" class="habit_quick_form">
+              <div class="habit_quick_input_wrap">
+                <label for="habit_quick_input" class="visually-hidden">New habit title</label>
+                <input type="text" id="habit_quick_input" class="field_input" placeholder="Add a micro-habit (e.g. Read 10 pages)…" autocomplete="off" required>
+              </div>
+              <div class="habit_quick_actions">
+                <label for="habit_quick_cat" class="visually-hidden">Habit category</label>
+                <select id="habit_quick_cat" class="field_select">
+                  <option value="Routine">Routine</option>
+                  <option value="Health">Health</option>
+                  <option value="Mind">Mind</option>
+                  <option value="Fitness">Fitness</option>
+                  <option value="Focus">Focus</option>
+                </select>
+                <button type="submit" class="btn btn_sm btn_primary">+ Add</button>
+                <button type="button" id="btn_consistency_add_habit" class="btn btn_sm btn_secondary" aria-label="Custom habit options">Options</button>
+              </div>
+            </form>
+
+            <div class="presets_strip" aria-label="Habit suggestions">
+              <button type="button" class="preset_chip habit_preset_chip" data-title="Drink 2.5L Water" data-cat="Health" data-color="emerald">Hydrate 2.5L</button>
+              <button type="button" class="preset_chip habit_preset_chip" data-title="20m Daily Walk" data-cat="Fitness" data-color="rose">20m Walk</button>
+              <button type="button" class="preset_chip habit_preset_chip" data-title="Read 10 Pages" data-cat="Mind" data-color="indigo">Read 10 Pages</button>
+              <button type="button" class="preset_chip habit_preset_chip" data-title="10m Breathing" data-cat="Mind" data-color="indigo">10m Breathing</button>
+              <button type="button" class="preset_chip habit_preset_chip" data-title="No Phone First 30m" data-cat="Focus" data-color="amber">Screen-Free AM</button>
+            </div>
+          </div>
+
+          <!-- AI Health Advisory Banner -->
+          <article id="habit_ai_advisory_card" class="surface_card advisory_card" hidden>
+            <div class="section_row_head">
+              <span class="advisory_badge">Habit Health Check</span>
+              <button type="button" id="btn_dismiss_ai_advisory" class="icon_btn icon_btn_xs" aria-label="Dismiss advisory">✕</button>
+            </div>
+            <h3 id="ai_advisory_title">Habit Check</h3>
+            <p id="ai_advisory_reason" class="section_sub"></p>
+            <div class="advisory_alt_box">
+              <span class="kicker">Suggested Swap</span>
+              <strong id="ai_advisory_alternative"></strong>
+              <p id="ai_advisory_tip" class="section_sub"></p>
+            </div>
+            <div class="advisory_actions">
+              <button type="button" id="btn_ai_adopt_alternative" class="btn btn_sm btn_primary">Use Swap</button>
+              <button type="button" id="btn_ai_keep_habit" class="btn btn_sm btn_ghost">Keep Original</button>
+            </div>
+          </article>
+
+          <!-- Adaptive Weekly Check-in (Compact Cards <520px / Full Table >=520px) -->
+          <div class="surface_card consistency_matrix_card">
+            <div class="matrix_top_bar">
+              <div>
+                <h2>Weekly Check-In</h2>
+                <span id="habit_week_range_badge" class="date_range_pill">This Week</span>
+              </div>
+              <div class="week_nav_controls">
+                <button type="button" id="btn_habit_prev_week" class="icon_btn icon_btn_sm" aria-label="Previous week" title="Previous week">
+                  <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="15 18 9 12 15 6"/></svg>
                 </button>
-                <button class="timer_dur_btn" id="btn_timer_inc" title="Increase 5 minutes (max 120m)">+5m</button>
+                <button type="button" id="btn_habit_this_week" class="btn btn_xs btn_secondary">Today</button>
+                <button type="button" id="btn_habit_next_week" class="icon_btn icon_btn_sm" aria-label="Next week" title="Next week">
+                  <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+              </div>
             </div>
 
-            <!-- Alarm Dismiss Card -->
-            <div id="timer_alarm_dismiss" class="timer_alarm_banner" style="display:none;">
-                <div class="timer_alarm_body">
-                    <div class="timer_alarm_icon_wrap">
-                        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                    </div>
-                    <div>
-                        <h4 id="alarm_dismiss_title">Session Complete!</h4>
-                        <p id="alarm_dismiss_desc">Great work! Time for a break.</p>
-                    </div>
+            <!-- Narrow Side Panel Compact Cards -->
+            <div id="habit_cards_list" class="habit_cards_list"></div>
+
+            <!-- Wide Panel / Full Tab Accessible Table -->
+            <div class="matrix_table_wrapper">
+              <table id="habit_matrix_table" class="matrix_table">
+                <caption class="visually-hidden">Weekly habit completion matrix</caption>
+                <thead>
+                  <tr id="habit_matrix_thead_row">
+                    <th scope="col">Habit</th>
+                    <th scope="col">Mon</th>
+                    <th scope="col">Tue</th>
+                    <th scope="col">Wed</th>
+                    <th scope="col">Thu</th>
+                    <th scope="col">Fri</th>
+                    <th scope="col">Sat</th>
+                    <th scope="col">Sun</th>
+                  </tr>
+                </thead>
+                <tbody id="habit_matrix_tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Heatmap & AI Habit Coach Split Deck -->
+          <div class="consistency_deck_grid">
+            <div class="surface_card consistency_heatmap_card">
+              <div class="section_row_head">
+                <div>
+                  <h3>Monthly Heatmap</h3>
+                  <span id="heatmap_month_badge" class="date_range_pill">Current Month</span>
                 </div>
-                <div class="timer_alarm_actions">
-                    <button id="timer_dismiss_alarm_btn" class="timer_alarm_btn primary">Dismiss</button>
-                    <button id="timer_start_next_btn" class="timer_alarm_btn secondary" style="display:none;">Start Next</button>
+                <div class="week_nav_controls">
+                  <button type="button" id="btn_heatmap_prev_month" class="icon_btn icon_btn_xs" aria-label="Previous month">
+                    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="15 18 9 12 15 6"/></svg>
+                  </button>
+                  <button type="button" id="btn_heatmap_this_month" class="btn btn_xs btn_secondary">Now</button>
+                  <button type="button" id="btn_heatmap_next_month" class="icon_btn icon_btn_xs" aria-label="Next month">
+                    <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4"><polyline points="9 18 15 12 9 6"/></svg>
+                  </button>
                 </div>
+              </div>
+              <div id="chart_heatmap_grid" class="heatmap_box"></div>
+              <div class="heatmap_legend" aria-hidden="true">
+                <span>Less</span>
+                <div class="shades_swatches">
+                  <span class="shade_box shade-0"></span>
+                  <span class="shade_box shade-1"></span>
+                  <span class="shade_box shade-2"></span>
+                  <span class="shade_box shade-3"></span>
+                </div>
+                <span>More</span>
+              </div>
             </div>
 
-            <!-- Keyboard Shortcuts -->
-            <div class="timer_kbd_hints">
-                <span><kbd>Space</kbd> Play/Pause</span>
-                <span><kbd>R</kbd> Restart</span>
-                <span><kbd>Esc</kbd> Stop</span>
-                <span><kbd>Click</kbd> Set custom</span>
+            <div class="surface_card consistency_ai_card">
+              <div class="section_row_head">
+                <div>
+                  <h3>Habit Coach</h3>
+                  <p class="section_sub">Streak diagnosis &amp; habit stacking advice.</p>
+                </div>
+                <button type="button" id="btn_ai_analyze_habits" class="btn btn_sm btn_primary">Analyze</button>
+              </div>
+              <div id="habit_ai_coach_results" class="ai_coach_results_box">
+                <p class="section_sub">Run an analysis or tap a prompt to spot friction points.</p>
+                <div class="ai_prompt_chips">
+                  <button type="button" class="preset_chip ai_prompt_chip" data-prompt="How should I stack my current habits for an effortless morning routine?">Morning stack</button>
+                  <button type="button" class="preset_chip ai_prompt_chip" data-prompt="Why do I struggle with consistency on weekends and how do I fix it?">Weekend dips</button>
+                  <button type="button" class="preset_chip ai_prompt_chip" data-prompt="Suggest 2 micro-habits that take under 2 minutes but produce huge results.">2-min habits</button>
+                </div>
+              </div>
             </div>
-        </section>
+          </div>
 
-        <!-- =====================================================================
-             F. PANEL: BULLET JOURNAL SELF-REFLECTION
-             ===================================================================== -->
-        <section id="journal_panel" class="app_panel" style="display: none;">
-            <div class="journal_header_row">
-                <h3>Mindful Reflection Journal</h3>
-                <p>Morning intentions ground your focus; evening closure clears cognitive residue.</p>
+        </div>
+
+        <!-- SUB-VIEW 3B: TRAJECTORY / CONSISTENCY HISTORY -->
+        <div id="habits_history_view" class="habits_subview" hidden>
+          <div class="kpi_grid_4">
+            <div class="surface_card stat_card">
+              <span class="stat_kicker">Active</span>
+              <strong id="history_active_habits_count" class="stat_num tabular_num">0</strong>
             </div>
-            <div id="journal_entries_container"></div>
-        </section>
-
-        <!-- =====================================================================
-             G. PANEL: HISTORICAL ANALYTICS SCREEN
-             ===================================================================== -->
-        <section id="insights_panel" class="app_panel" style="display: none;">
-            <div class="stats_grid">
-                <div class="stat_card">
-                    <div class="stat_label">Milestones Cleared Today</div>
-                    <div id="stat_completed_today" class="stat_value">0</div>
-                </div>
-                <div class="stat_card">
-                    <div class="stat_label">Execution Ratio</div>
-                    <div id="stat_weekly_completion_pct" class="stat_value">0%</div>
-                </div>
-                <div class="stat_card">
-                    <div class="stat_label">Deep Flow Logged</div>
-                    <div id="stat_total_focus_hours" class="stat_value">0.0h</div>
-                </div>
-                <div class="stat_card">
-                    <div class="stat_label">Momentum Streaks</div>
-                    <div id="stat_total_active_streak" class="stat_value">0d</div>
-                </div>
+            <div class="surface_card stat_card">
+              <span class="stat_kicker">Avg Streak</span>
+              <strong id="history_avg_streak" class="stat_num tabular_num">0d</strong>
             </div>
-
-            <div class="charts_column">
-                <div class="chart_card">
-                    <h3>Completion Velocity</h3>
-                    <p class="chart_sub">Daily tasks achieved over last 7 days</p>
-                    <div id="chart_weekly_productivity" class="chart_box"></div>
-                </div>
-
-                <div class="charts_row">
-                    <div class="chart_card half">
-                        <h3>Category Focus Distribution</h3>
-                        <div id="chart_category_breakdown" class="chart_box"></div>
-                    </div>
-                    <div class="chart_card half">
-                        <h3>Pomodoro Intensity Time</h3>
-                        <p class="chart_sub">Daily logged focus minutes</p>
-                        <div id="chart_focus_distribution" class="chart_box"></div>
-                    </div>
-                </div>
+            <div class="surface_card stat_card">
+              <span class="stat_kicker">Completions</span>
+              <strong id="history_total_completions" class="stat_num tabular_num">0</strong>
             </div>
-        </section>
+            <div class="surface_card stat_card">
+              <span class="stat_kicker">30d Rate</span>
+              <strong id="history_overall_rate" class="stat_num tabular_num">0%</strong>
+            </div>
+          </div>
 
-        <!-- =====================================================================
-             H. PANEL: SYSTEM SETTINGS AND PREFERENCES
-             ===================================================================== -->
-        <section id="settings_panel" class="app_panel" style="display: none;"></section>
+          <div class="surface_card">
+            <h3>Streaks &amp; Consistency</h3>
+            <p class="section_sub">Current vs. personal best consecutive days</p>
+            <div id="history_streaks_container" class="history_streaks_list"></div>
+          </div>
+
+          <div class="charts_pair">
+            <div class="surface_card chart_card">
+              <h3>7-Day Trend</h3>
+              <div id="chart_weekly_consistency_trend" class="chart_box"></div>
+            </div>
+            <div class="surface_card chart_card">
+              <h3>Category Mastery</h3>
+              <div id="chart_category_consistency" class="chart_box"></div>
+            </div>
+          </div>
+
+          <div class="surface_card">
+            <h3>Recent Log</h3>
+            <div id="history_chronological_log" class="history_log_timeline"></div>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- =================================================================
+           PANEL 4: FOCUS STATE TIMER
+           ================================================================= -->
+      <section id="focus_panel" class="app_panel" data-panel="focus" hidden>
+        <div id="timer_ambient_glow" class="timer_ambient_glow" aria-hidden="true"></div>
+
+        <div class="timer_mode_selector" role="group" aria-label="Timer modes">
+          <button type="button" id="timer_pomo_btn" class="timer_mode_pill active">
+            <span>Focus</span><small>25m</small>
+          </button>
+          <button type="button" id="timer_short_btn" class="timer_mode_pill">
+            <span>Short</span><small>5m</small>
+          </button>
+          <button type="button" id="timer_long_btn" class="timer_mode_pill">
+            <span>Long</span><small>15m</small>
+          </button>
+          <button type="button" id="timer_stopwatch_btn" class="timer_mode_pill">
+            <span>Open</span><small>∞</small>
+          </button>
+        </div>
+
+        <div id="timer_task_details" class="timer_task_detail_container"></div>
+
+        <div class="timer_ring_stage">
+          <svg aria-hidden="true" focusable="false" class="timer_ring_svg" viewBox="0 0 300 300">
+            <circle class="timer_ring_track" cx="150" cy="150" r="126"></circle>
+            <circle id="timer_ring_progress" class="timer_ring_progress" cx="150" cy="150" r="126" stroke-dasharray="791.68" stroke-dashoffset="0" transform="rotate(-90 150 150)"></circle>
+            <g id="timer_ring_ticks" class="timer_ring_ticks"></g>
+          </svg>
+
+          <div class="timer_ring_center">
+            <button type="button" id="timer_custom_duration_btn" class="timer_display_btn" aria-label="Set custom timer duration" title="Click to set custom minutes">
+              <span id="timer_countdown_text" class="timer_mega_display tabular_num">25:00</span>
+            </button>
+            <span id="timer_sub_msg" class="timer_state_label">Ready</span>
+            <div id="timer_mini_cycle" class="timer_mini_cycle" aria-hidden="true">
+              <span class="mini_dot active" data-s="1"></span>
+              <span class="mini_dot" data-s="2"></span>
+              <span class="mini_dot" data-s="3"></span>
+              <span class="mini_dot" data-s="4"></span>
+            </div>
+            <span id="cycle_counter_text" class="timer_cycle_text">Session 1 of 4</span>
+          </div>
+        </div>
+
+        <!-- COMPACT 2-ROW CONTROLS DECK (NEVER OVERFLOWS 320px) -->
+        <div id="timer_adjuster" class="timer_controls_wrap">
+          <div class="timer_primary_row">
+            <button type="button" id="btn_timer_dec" class="timer_dur_btn" aria-label="Decrease 5 minutes">-5m</button>
+            <button type="button" id="timer_play_btn" class="timer_play_pause_btn" aria-label="Start focus timer" title="Start (Space)">
+              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+            </button>
+            <button type="button" id="timer_pause_btn" class="timer_play_pause_btn" aria-label="Pause focus timer" title="Pause (Space)" hidden>
+              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><rect x="5" y="3" width="5" height="18" rx="1.5"/><rect x="14" y="3" width="5" height="18" rx="1.5"/></svg>
+            </button>
+            <button type="button" id="btn_timer_inc" class="timer_dur_btn" aria-label="Increase 5 minutes">+5m</button>
+          </div>
+
+          <div class="timer_secondary_row">
+            <button type="button" id="timer_restart_btn" class="timer_sec_btn" aria-label="Restart timer" title="Restart (R)">
+              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+            </button>
+            <button type="button" id="timer_skip_btn" class="timer_sec_btn" aria-label="Skip session" title="Skip session">
+              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+            </button>
+            <button type="button" id="timer_stop_btn" class="timer_sec_btn danger" aria-label="Stop timer" title="Stop (Esc)">
+              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+            </button>
+            <button type="button" id="timer_pip_toggle_btn" class="timer_sec_btn" aria-label="Picture in Picture" title="Mini floating timer">
+              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><rect x="11" y="9" width="9" height="6" rx="1"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div id="timer_alarm_dismiss" class="timer_alarm_banner" role="alert" hidden>
+          <div>
+            <h3 id="alarm_dismiss_title">Session Complete</h3>
+            <p id="alarm_dismiss_desc">Take a breath before your next block.</p>
+          </div>
+          <div class="timer_alarm_actions">
+            <button type="button" id="timer_dismiss_alarm_btn" class="btn btn_sm btn_secondary">Dismiss</button>
+            <button type="button" id="timer_start_next_btn" class="btn btn_sm btn_primary" hidden>Start Next</button>
+          </div>
+        </div>
+
+        <div class="timer_kbd_hints" aria-hidden="true">
+          <span><kbd>Space</kbd> Play</span>
+          <span><kbd>R</kbd> Reset</span>
+          <span><kbd>Esc</kbd> Stop</span>
+        </div>
+      </section>
+
+      <!-- =================================================================
+           PANEL 5: INSIGHTS
+           ================================================================= -->
+      <section id="insights_panel" class="app_panel" data-panel="insights" hidden>
+        <div class="kpi_grid_4">
+          <div class="surface_card stat_card">
+            <span class="stat_kicker">Done Today</span>
+            <strong id="stat_completed_today" class="stat_num tabular_num">0</strong>
+          </div>
+          <div class="surface_card stat_card">
+            <span class="stat_kicker">Completion</span>
+            <strong id="stat_weekly_completion_pct" class="stat_num tabular_num">0%</strong>
+          </div>
+          <div class="surface_card stat_card">
+            <span class="stat_kicker">Focus Logged</span>
+            <strong id="stat_total_focus_hours" class="stat_num tabular_num">0.0h</strong>
+          </div>
+          <div class="surface_card stat_card">
+            <span class="stat_kicker">Top Streak</span>
+            <strong id="stat_total_active_streak" class="stat_num tabular_num">0d</strong>
+          </div>
+        </div>
+
+        <div class="charts_stack">
+          <div class="surface_card chart_card">
+            <h2>7-Day Completion Velocity</h2>
+            <p class="section_sub">Tasks completed each day</p>
+            <div id="chart_weekly_productivity" class="chart_box"></div>
+          </div>
+
+          <div class="charts_pair">
+            <div class="surface_card chart_card">
+              <h3>Category Mix</h3>
+              <div id="chart_category_breakdown" class="chart_box"></div>
+            </div>
+            <div class="surface_card chart_card">
+              <h3>Focus Minutes</h3>
+              <p class="section_sub">Daily logged deep work</p>
+              <div id="chart_focus_distribution" class="chart_box"></div>
+            </div>
+          </div>
+
+          <!-- SEPARATE CONTAINER FOR TODAY'S FOCUS SESSIONS TABLE -->
+          <div class="surface_card chart_card">
+            <h3>Today's Focus Sessions</h3>
+            <p class="section_sub">Logged timer intervals and task links</p>
+            <div id="focus_sessions_table" class="sessions_table_box"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =================================================================
+           PANEL 6: JOURNAL
+           ================================================================= -->
+      <section id="journal_panel" class="app_panel" data-panel="journal" hidden>
+        <div class="journal_intro">
+          <h2>Daily Reflection</h2>
+          <p class="section_sub">Morning clarity sets direction; evening closure clears mental residue.</p>
+        </div>
+        <div id="journal_entries_container"></div>
+      </section>
+
+      <!-- =================================================================
+           PANEL 7: SETTINGS
+           ================================================================= -->
+      <section id="settings_panel" class="app_panel" data-panel="settings" hidden></section>
 
     </main>
 
-    <!-- 3. RESPONSIVE MOBILE NAVIGATION TAB BAR (BOTTOM DRAWER NAV) -->
-    <nav class="mobile_bottom_nav">
-        <button class="nav_tab active" data-view="dashboard">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
-            <span>Dashboard</span>
+    <!-- PERSISTENT DOCKED MINI-TIMER BAR (VISIBLE WHEN TIMER RUNS OUTSIDE FOCUS VIEW) -->
+    <aside id="mini_timer_bar" class="mini_timer_bar" aria-label="Active focus session" hidden>
+      <div class="mini_timer_info">
+        <span id="mini_timer_mode_dot" class="mini_timer_dot" aria-hidden="true"></span>
+        <span id="mini_timer_task_title" class="mini_timer_title">Deep Focus</span>
+      </div>
+      <div class="mini_timer_controls">
+        <span id="mini_timer_countdown" class="mini_timer_time tabular_num">25:00</span>
+        <button type="button" id="mini_timer_toggle_btn" class="icon_btn icon_btn_xs" aria-label="Pause or resume timer">
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg>
         </button>
-        <button class="nav_tab" data-view="today">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>
-            <span>Focus</span>
+        <button type="button" id="mini_timer_open_btn" class="icon_btn icon_btn_xs" aria-label="Open focus timer view">
+          <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
         </button>
-        <button class="nav_tab" data-view="routine">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-            <span>Rhythm</span>
-        </button>
-        <button class="nav_tab" data-view="consistency">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2.1l4 4-4 4"></path><path d="M3 12.2v-2a4 4 0 0 1 4-4h14"></path><path d="M7 21.9l-4-4 4-4"></path><path d="M21 11.8v2a4 4 0 0 1-4 4H3"></path></svg>
-            <span>Habits</span>
-        </button>
-        <button class="nav_tab" data-view="timer">
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-            <span>Flow</span>
-        </button>
+        <button type="button" id="mini_timer_stop_btn" class="icon_btn icon_btn_xs" aria-label="Stop focus timer">✕</button>
+      </div>
+    </aside>
+
+    <!-- COMPACT 52px BOTTOM NAVIGATION DOCK (< 768px) -->
+    <nav id="mobile_bottom_nav" class="bottom_dock" aria-label="Primary">
+      <button type="button" class="nav_tab active" data-view="today" aria-current="page">
+        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1"/></svg>
+        <span>Today</span>
+      </button>
+      <button type="button" class="nav_tab" data-view="plan">
+        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <span>Plan</span>
+      </button>
+      <button type="button" class="nav_tab" data-view="habits">
+        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 2.1l4 4-4 4"/><path d="M3 12.2v-2a4 4 0 0 1 4-4h14"/><path d="M7 21.9l-4-4 4-4"/><path d="M21 11.8v2a4 4 0 0 1-4 4H3"/></svg>
+        <span>Habits</span>
+      </button>
+      <button type="button" class="nav_tab" data-view="focus">
+        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span>Focus</span>
+      </button>
     </nav>
 
-    <!-- 4. THUMB-FRIENDLY FLOATING ACTION BUTTON (FAB) -->
-    <button id="fab_add" class="fab_action_trigger" aria-label="Quick-Add Goal">
-        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-        </svg>
-    </button>
-
-    <!-- 5. TASK SLIDE-UP BOTTOM SHEET (MODAL CREATOR & EDITOR DRAWER) -->
-    <div id="bottom_sheet_overlay" class="bottom_sheet_overlay"></div>
-    <div id="bottom_sheet" class="bottom_sheet_drawer" role="dialog" aria-labelledby="sheet_form_title">
-        <div class="sheet_drag_bar"></div>
-        <div class="sheet_header">
-            <div class="sheet_title_group">
-                <div class="sheet_title_icon">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M12 5v14M5 12h14"/>
-                    </svg>
-                </div>
-                <div>
-                    <h3 id="sheet_form_title">Architect New Milestone</h3>
-                    <p class="sheet_subtitle" id="sheet_subtitle">Define your core intention and execution parameters.</p>
-                </div>
-            </div>
-            <div class="sheet_header_actions">
-                <button type="button" id="sheet_delete_btn" class="sheet_delete_btn" title="Delete Task" aria-label="Delete Task" style="display: none;">
-                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                        <line x1="10" y1="11" x2="10" y2="17"></line>
-                        <line x1="14" y1="11" x2="14" y2="17"></line>
-                    </svg>
-                </button>
-                <button type="button" id="close_sheet" class="sheet_close_btn" aria-label="Dismiss Sheet">✕</button>
-            </div>
-        </div>
-
-        <form id="sheet_form" class="sheet_form_body">
-            <div class="form_group main_title_group">
-                <label for="task_title" class="control_label">Core Intention</label>
-                <input type="text" id="task_title" class="sheet_main_title_input" placeholder="What is your primary milestone?" required autocomplete="off">
-            </div>
-
-            <div class="form_group notes_group">
-                <label for="task_desc" class="control_label">Cognitive Notes & Clarity</label>
-                <textarea id="task_desc" class="sheet_notes_input" rows="2" placeholder="Add friction-busters, reference links, or execution details (optional)..."></textarea>
-            </div>
-
-            <div class="sheet_controls_row">
-                <div class="form_group flex_grow_date">
-                    <label class="control_label">Target Horizon</label>
-                    <div class="quick_date_chips">
-                        <button type="button" class="date_chip active" data-days="0">Today</button>
-                        <button type="button" class="date_chip" data-days="1">Tomorrow</button>
-                        <button type="button" class="date_chip" data-days="7">Next Wk</button>
-                        <button type="button" class="date_chip" id="chip_do_later">Backlog</button>
-                        <button type="button" class="date_chip" id="chip_custom_date">Custom</button>
-                    </div>
-                    <input type="date" id="task_due_date" class="sheet_custom_date_input" style="display: none;">
-                </div>
-
-                <div class="form_group">
-                    <label class="control_label">Leverage Impact</label>
-                    <div class="priority_pill_group" id="priority_pill_group">
-                        <button type="button" class="priority_pill_option" data-priority="Low">
-                            <span class="p_dot low"></span> Gentle
-                        </button>
-                        <button type="button" class="priority_pill_option active" data-priority="Medium">
-                            <span class="p_dot med"></span> Steady
-                        </button>
-                        <button type="button" class="priority_pill_option" data-priority="High">
-                            <span class="p_dot high"></span> Keystone
-                        </button>
-                    </div>
-                    <select id="task_priority" style="display: none;" required>
-                        <option value="Low">Low Priority</option>
-                        <option value="Medium" selected>Medium Priority</option>
-                        <option value="High">High Priority</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="sheet_controls_row">
-                <div class="form_group">
-                    <label class="control_label" for="task_category">Category Tag</label>
-                    <div class="select_icon_wrapper">
-                        <select id="task_category" class="sheet_select" required>
-                            <option value="Inbox">Inbox</option>
-                            <option value="Work">Work</option>
-                            <option value="Personal">Personal</option>
-                            <option value="Health">Health</option>
-                            <option value="Finance">Finance</option>
-                            <option value="custom">+ Create Tag...</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="form_group">
-                    <label class="control_label" for="task_duration">Estimated Deep Work</label>
-                    <div class="select_icon_wrapper">
-                        <select id="task_duration" class="sheet_select" required>
-                            <option value="15">15 mins (Micro-Flow)</option>
-                            <option value="25" selected>25 mins (Pomodoro Focus)</option>
-                            <option value="40">40 mins (Deep Sprint)</option>
-                            <option value="60">60 mins (Extended Flow)</option>
-                            <option value="90">90 mins (Ultradian Peak)</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Expandable Advanced Options Section (Keeps modal compact and clean) -->
-            <div class="sheet_advanced_accordion">
-                <button type="button" id="btn_toggle_sheet_adv" class="sheet_adv_toggle_btn">
-                    <div class="adv_toggle_left">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                        <span>Advanced Setup (Repetition Recurrence)</span>
-                    </div>
-                    <span id="sheet_adv_chevron" class="sheet_adv_chevron">▾</span>
-                </button>
-                <div id="sheet_adv_content" class="sheet_adv_content" style="display: none;">
-                    <div class="form_group">
-                        <label class="control_label" for="task_recurring">Repetitive Recurrence</label>
-                        <select id="task_recurring" class="sheet_select" required>
-                            <option value="none" selected>Do not repeat</option>
-                            <option value="daily">Repeat Daily</option>
-                            <option value="weekly">Repeat Weekly</option>
-                            <option value="monthly">Repeat Monthly</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <div class="sheet_footer">
-                <div class="sheet_keyboard_hints">
-                    <span>Press <kbd>↵</kbd> to commit · <kbd>Esc</kbd> to close</span>
-                </div>
-                <div class="sheet_footer_buttons">
-                    <button type="button" id="btn_cancel_sheet" class="sheet_secondary_btn">Cancel</button>
-                    <button type="submit" id="sheet_submit" class="sheet_primary_commit">Commit Intention</button>
-                </div>
-            </div>
-        </form>
-    </div>
-
-    <!-- 6. ROUTINE SLIDE-UP BOTTOM SHEET (DAILY TIMETABLE TIMEBLOCK CREATOR) -->
-    <div id="routine_sheet_overlay" class="bottom_sheet_overlay"></div>
-    <div id="routine_sheet" class="bottom_sheet_drawer" role="dialog" aria-labelledby="routine_sheet_title">
-        <div class="sheet_drag_bar"></div>
-        <div class="sheet_header">
-            <h3 id="routine_sheet_title">Anchor Energy Block</h3>
-            <button type="button" id="close_routine_sheet" class="sheet_close_btn" aria-label="Dismiss Sheet">✕</button>
-        </div>
-
-        <form id="routine_sheet_form" class="sheet_form_body">
-            <div class="form_group">
-                <label for="routine_title">Focus Block Objective</label>
-                <input type="text" id="routine_title" placeholder="e.g., Deep Creative Flow, Mindful Workout, Morning Startup..." required autocomplete="off">
-            </div>
-
-            <div class="form_grid_row">
-                <div class="form_group">
-                    <label for="routine_start_time">Start Time</label>
-                    <input type="time" id="routine_start_time" required>
-                </div>
-
-                <div class="form_group">
-                    <label for="routine_end_time">End Time</label>
-                    <input type="time" id="routine_end_time" required>
-                </div>
-            </div>
-
-            <div class="form_grid_row">
-                <div class="form_group">
-                    <label for="routine_category">Category</label>
-                    <select id="routine_category" required>
-                        <option value="Routine" selected>Routine</option>
-                        <option value="Work">Work</option>
-                        <option value="Health">Health</option>
-                        <option value="Personal">Personal</option>
-                    </select>
-                </div>
-
-                <div class="form_group">
-                    <label for="routine_color">Color Tag</label>
-                    <select id="routine_color" required>
-                        <option value="indigo" selected>Indigo</option>
-                        <option value="emerald">Emerald</option>
-                        <option value="rose">Rose</option>
-                        <option value="amber">Amber</option>
-                    </select>
-                </div>
-            </div>
-
-            <div class="form_group">
-                <label>Recurrent Weekdays</label>
-                <div class="routine_days_checkboxes_row">
-                    <label class="day_checkbox_wrapper"><input type="checkbox" name="routine_days" value="Mon" checked><span>M</span></label>
-                    <label class="day_checkbox_wrapper"><input type="checkbox" name="routine_days" value="Tue" checked><span>T</span></label>
-                    <label class="day_checkbox_wrapper"><input type="checkbox" name="routine_days" value="Wed" checked><span>W</span></label>
-                    <label class="day_checkbox_wrapper"><input type="checkbox" name="routine_days" value="Thu" checked><span>T</span></label>
-                    <label class="day_checkbox_wrapper"><input type="checkbox" name="routine_days" value="Fri" checked><span>F</span></label>
-                    <label class="day_checkbox_wrapper"><input type="checkbox" name="routine_days" value="Sat"><span>S</span></label>
-                    <label class="day_checkbox_wrapper"><input type="checkbox" name="routine_days" value="Sun"><span>S</span></label>
-                </div>
-            </div>
-
-            <button type="submit" id="routine_sheet_submit" class="sheet_primary_commit">Anchor Energy Block</button>
-        </form>
-    </div>
-
-    <!-- 7. HABIT SLIDE-UP BOTTOM SHEET (MODAL ATOMIC HABIT CREATOR) -->
-    <div id="habit_sheet_overlay" class="bottom_sheet_overlay"></div>
-    <div id="habit_sheet" class="bottom_sheet_drawer" role="dialog" aria-labelledby="habit_sheet_title">
-        <div class="sheet_drag_bar"></div>
-        <div class="sheet_header">
-            <h3 id="habit_sheet_title">Forge Atomic Ritual</h3>
-            <button type="button" id="close_habit_sheet" class="sheet_close_btn" aria-label="Dismiss Sheet">✕</button>
-        </div>
-
-        <form id="habit_sheet_form" class="sheet_form_body">
-            <div class="form_group">
-                <label for="habit_title">Ritual Anchor</label>
-                <input type="text" id="habit_title" placeholder="e.g., Drink 3L Water, 15m Reading, 10m Meditation..." required autocomplete="off">
-            </div>
-
-            <div class="form_grid_row">
-                <div class="form_group">
-                    <label for="habit_category">Category</label>
-                    <select id="habit_category" required>
-                        <option value="Routine" selected>Routine</option>
-                        <option value="Mind">Mind</option>
-                        <option value="Health">Health</option>
-                        <option value="Skill">Skill</option>
-                        <option value="Work">Work</option>
-                    </select>
-                </div>
-
-                <div class="form_group">
-                    <label for="habit_color">Accent Color</label>
-                    <select id="habit_color" required>
-                        <option value="indigo" selected>Indigo</option>
-                        <option value="emerald">Emerald</option>
-                        <option value="rose">Rose</option>
-                        <option value="amber">Amber</option>
-                    </select>
-                </div>
-            </div>
-
-            <!-- Recommended Habit Templates Section -->
-            <div class="form_group" style="margin-top: 12px;">
-                <label>Science-Backed Ritual Blueprints</label>
-                <div class="habit_templates_chips" id="habit_templates">
-                    <button type="button" class="template_chip" data-title="Drink 3L Water" data-cat="Health" data-color="emerald">Hydrate</button>
-                    <button type="button" class="template_chip" data-title="15m Mindful Breathing" data-cat="Mind" data-color="indigo">Centering</button>
-                    <button type="button" class="template_chip" data-title="Read 10 Pages" data-cat="Skill" data-color="amber">Neural Growth</button>
-                    <button type="button" class="template_chip" data-title="Stretch & Mobility" data-cat="Health" data-color="rose">Physical Vitality</button>
-                    <button type="button" class="template_chip" data-title="Write Evening Journal" data-cat="Mind" data-color="indigo">Cognitive Closure</button>
-                </div>
-            </div>
-
-            <button type="submit" class="sheet_primary_commit" style="margin-top: 16px;">Forge Ritual</button>
-        </form>
-    </div>
-
-    <!-- 8. WELCOME PRIVACY DIALOG (FIRST TIME BOOT) -->
-    <div id="welcome_dialog" class="modal_dialog_overlay" style="display: none;">
-        <div class="modal_dialog_content welcome_modal">
-            <div class="modal_dialog_header">
-                <h2>Welcome to Aurora</h2>
-            </div>
-            <div class="modal_dialog_body">
-                <p>Welcome to <strong>Aurora</strong>, your personal companion for productivity and atomic habit building. Your privacy and security are our absolute priority.</p>
-                <div class="privacy_principles_list">
-                    <div class="privacy_principle_item">
-                        <div class="principle_icon_container">
-                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-                        </div>
-                        <div class="principle_text">
-                            <h4>Local Storage Only</h4>
-                            <p>All your tasks, routines, habits, and journal entries are saved locally on your device's secure browser database (IndexedDB).</p>
-                        </div>
-                    </div>
-                    <div class="privacy_principle_item">
-                        <div class="principle_icon_container">
-                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                        </div>
-                        <div class="principle_text">
-                            <h4>Zero Server Transmissions</h4>
-                            <p>Absolutely no data is ever uploaded, transmitted, or stored on any remote servers. Your thoughts and records are for your eyes only.</p>
-                        </div>
-                    </div>
-                    <div class="privacy_principle_item">
-                        <div class="principle_icon_container">
-                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M14.31 8l5.74 9.94M9.69 8h11.48M7.38 12l5.74-9.94M9.69 16L3.95 6.06M14.31 16H2.83M16.62 12L10.88 21"/></svg>
-                        </div>
-                        <div class="principle_text">
-                            <h4>No Tracking or Sharing</h4>
-                            <p>This application does not collect, track, analyze, or share any personal details, metrics, or usage behavior. It is completely tracking-free.</p>
-                        </div>
-                    </div>
-                    <div class="privacy_principle_item">
-                        <div class="principle_icon_container">
-                            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                        </div>
-                        <div class="principle_text">
-                            <h4>Completely Offline</h4>
-                            <p>Aurora functions entirely offline, without requiring an active internet connection. Focus without distractions, completely private.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="modal_dialog_footer">
-                <button id="welcome_dismiss_btn" class="modal_primary_btn">Let's Begin</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 9. PERSONALITY PROFILING & PRODUCTIVITY DNA MODAL -->
-    <div id="personality_quiz_dialog" class="modal_dialog_overlay" style="display: none;">
-        <div class="modal_dialog_content personality_modal">
-            <div class="modal_dialog_header">
-                <div class="personality_header_meta">
-                    <span class="personality_kicker">Behavioral Science Profiler</span>
-                    <h2 id="personality_dialog_title">Productivity DNA</h2>
-                </div>
-                <button type="button" id="close_personality_dialog" class="sheet_close_btn" aria-label="Dismiss Dialog">✕</button>
-            </div>
-            <div class="personality_stepper_bar" id="personality_stepper_bar">
-                <div class="stepper_dot active" data-step="1"></div>
-                <div class="stepper_dot" data-step="2"></div>
-                <div class="stepper_dot" data-step="3"></div>
-                <div class="stepper_dot" data-step="4"></div>
-                <div class="stepper_dot" data-step="5"></div>
-            </div>
-            <div id="personality_step_content" class="modal_dialog_body personality_body">
-                <!-- Dynamically populated step cards -->
-            </div>
-            <div class="modal_dialog_footer personality_footer">
-                <button type="button" id="personality_prev_btn" class="modal_secondary_btn" style="display: none;">Back</button>
-                <div class="footer_spacer"></div>
-                <button type="button" id="personality_skip_btn" class="modal_ghost_btn">Skip for Now</button>
-                <button type="button" id="personality_next_btn" class="modal_primary_btn">Continue</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- 10. GEMINI LIVE VOICE COMPANION DIALOG -->
-    <div id="gemini_live_dialog" class="modal_dialog_overlay" style="display: none;">
-        <div class="modal_dialog_content live_modal">
-            <div class="modal_dialog_header">
-                <div class="live_modal_title">
-                    <span class="live_status_dot" id="live_status_dot"></span>
-                    <h2>Aurora Live Voice Companion</h2>
-                </div>
-                <button type="button" id="close_live_dialog" class="sidebar_collapse_btn" aria-label="Close Voice Companion">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                </button>
-            </div>
-            <div class="modal_dialog_body live_modal_body">
-                <div class="live_waveform_container">
-                    <div class="live_orb" id="live_orb">
-                        <div class="orb_glow"></div>
-                        <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
-                    </div>
-                    <div id="live_status_text" class="live_status_text">Ready to connect with Aurora</div>
-                </div>
-                
-                <div class="live_transcript_box" id="live_transcript_box">
-                    <p class="transcript_placeholder">Voice transcripts will appear here in real-time...</p>
-                </div>
-
-                <div class="live_api_config" id="live_api_config">
-                    <label class="live_config_label" for="gemini_api_key_input">Gemini API Key</label>
-                    <input type="password" id="gemini_api_key_input" placeholder="Enter your Gemini API key..." class="sheet_input" style="width: 100%;">
-                    <p class="live_config_hint">Key is saved locally in extension storage.</p>
-                </div>
-            </div>
-            <div class="modal_dialog_footer">
-                <button type="button" id="toggle_live_session_btn" class="modal_primary_btn">Start Live Session</button>
-            </div>
-        </div>
-    </div>
-
+  </div>
 </div>
 
+<!-- =======================================================================
+     NATIVE <dialog closedby="any"> MODALS (TOP-LAYER, AUTO FOCUS TRAP)
+     ======================================================================= -->
+
+<!-- 1. TASK CREATE / EDIT DIALOG -->
+<dialog id="task_dialog" class="aurora_dialog sheet_dialog" closedby="any" aria-labelledby="sheet_form_title">
+  <div class="dialog_header">
+    <div>
+      <h2 id="sheet_form_title">New Task</h2>
+      <p id="sheet_subtitle" class="dialog_subtitle">Set priority, horizon, and estimated focus time.</p>
+    </div>
+    <div class="dialog_header_actions">
+      <button type="button" id="sheet_delete_btn" class="icon_btn icon_btn_sm danger_ghost" aria-label="Delete task" title="Delete task" hidden>
+        <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+      </button>
+      <button type="button" id="close_sheet" class="icon_btn icon_btn_sm" aria-label="Close task editor">✕</button>
+    </div>
+  </div>
+
+  <form id="sheet_form" class="dialog_form">
+    <div class="form_group">
+      <label for="task_title" class="field_label">Task Title</label>
+      <input type="text" id="task_title" class="field_input field_input_lg" placeholder="What needs your focus?" required autocomplete="off">
+    </div>
+
+    <div class="form_group">
+      <label for="task_desc" class="field_label">Notes</label>
+      <textarea id="task_desc" class="field_textarea" rows="2" placeholder="Context, first step, or checklist notes…"></textarea>
+    </div>
+
+    <div class="form_group">
+      <label for="task_url" class="field_label">Reference Link (optional)</label>
+      <input type="url" id="task_url" class="field_input" placeholder="https://…" autocomplete="off">
+    </div>
+
+    <div class="form_group">
+      <span class="field_label">Horizon</span>
+      <div class="quick_date_chips" role="group" aria-label="Quick due date">
+        <button type="button" class="date_chip active" data-days="0">Today</button>
+        <button type="button" class="date_chip" data-days="1">Tomorrow</button>
+        <button type="button" class="date_chip" data-days="7">Next Wk</button>
+        <button type="button" class="date_chip" id="chip_do_later">Backlog</button>
+        <button type="button" class="date_chip" id="chip_custom_date">Custom</button>
+      </div>
+      <label for="task_due_date" class="visually-hidden">Custom due date</label>
+      <input type="date" id="task_due_date" class="field_input" hidden>
+    </div>
+
+    <div class="form_group">
+      <span class="field_label">Priority</span>
+      <div id="priority_pill_group" class="priority_pill_group" role="group" aria-label="Task priority">
+        <button type="button" class="priority_pill_option" data-priority="Low"><span class="p_dot low" aria-hidden="true"></span>Gentle</button>
+        <button type="button" class="priority_pill_option active" data-priority="Medium"><span class="p_dot med" aria-hidden="true"></span>Steady</button>
+        <button type="button" class="priority_pill_option" data-priority="High"><span class="p_dot high" aria-hidden="true"></span>Keystone</button>
+      </div>
+      <label for="task_priority" class="visually-hidden">Priority value</label>
+      <select id="task_priority" hidden>
+        <option value="Low">Low</option>
+        <option value="Medium" selected>Medium</option>
+        <option value="High">High</option>
+      </select>
+    </div>
+
+    <div class="form_row_2">
+      <div class="form_group">
+        <label for="task_category" class="field_label">Tag</label>
+        <select id="task_category" class="field_select" required>
+          <option value="Inbox">Inbox</option>
+          <option value="Work">Work</option>
+          <option value="Personal">Personal</option>
+          <option value="Health">Health</option>
+          <option value="Finance">Finance</option>
+          <option value="custom">+ New Tag…</option>
+        </select>
+      </div>
+
+      <div class="form_group">
+        <label for="task_duration" class="field_label">Focus Block</label>
+        <select id="task_duration" class="field_select" required>
+          <option value="15">15 mins</option>
+          <option value="25" selected>25 mins</option>
+          <option value="40">40 mins</option>
+          <option value="60">60 mins</option>
+          <option value="90">90 mins</option>
+        </select>
+      </div>
+    </div>
+
+    <details id="sheet_advanced_details" class="disclosure_box">
+      <summary>Recurrence options</summary>
+      <div class="disclosure_body">
+        <div class="form_group">
+          <label for="task_recurring" class="field_label">Repeat</label>
+          <select id="task_recurring" class="field_select">
+            <option value="none" selected>Does not repeat</option>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
+      </div>
+    </details>
+
+    <div class="dialog_footer">
+      <button type="button" id="btn_cancel_sheet" class="btn btn_secondary">Cancel</button>
+      <button type="submit" id="sheet_submit" class="btn btn_primary">Save Task</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- 2. CIRCADIAN ROUTINE BLOCK DIALOG -->
+<dialog id="routine_dialog" class="aurora_dialog sheet_dialog" closedby="any" aria-labelledby="routine_sheet_title">
+  <div class="dialog_header">
+    <h2 id="routine_sheet_title">Add Circadian Block</h2>
+    <button type="button" id="close_routine_sheet" class="icon_btn icon_btn_sm" aria-label="Close block editor">✕</button>
+  </div>
+
+  <form id="routine_sheet_form" class="dialog_form">
+    <div class="form_row_icon">
+      <div class="form_group">
+        <label for="routine_icon" class="field_label">Icon</label>
+        <select id="routine_icon" class="field_select">
+          <option value="⚡">⚡ Focus</option>
+          <option value="🌅">🌅 Dawn</option>
+          <option value="🧠">🧠 Deep</option>
+          <option value="🏃">🏃 Move</option>
+          <option value="☕">☕ Break</option>
+          <option value="📖">📖 Learn</option>
+          <option value="🌙">🌙 Wind-down</option>
+        </select>
+      </div>
+      <div class="form_group">
+        <label for="routine_title" class="field_label">Block Name</label>
+        <input type="text" id="routine_title" class="field_input" placeholder="e.g. Deep Work Sprint" required autocomplete="off">
+      </div>
+    </div>
+
+    <div class="form_row_2">
+      <div class="form_group">
+        <label for="routine_start_time" class="field_label">Start</label>
+        <input type="time" id="routine_start_time" class="field_input" required>
+      </div>
+      <div class="form_group">
+        <label for="routine_end_time" class="field_label">End</label>
+        <input type="time" id="routine_end_time" class="field_input" required>
+      </div>
+    </div>
+
+    <div class="form_row_2">
+      <div class="form_group">
+        <label for="routine_category" class="field_label">Category</label>
+        <select id="routine_category" class="field_select" required>
+          <option value="Routine" selected>Routine</option>
+          <option value="Work">Work</option>
+          <option value="Health">Health</option>
+          <option value="Personal">Personal</option>
+        </select>
+      </div>
+      <div class="form_group">
+        <label for="routine_color" class="field_label">Color</label>
+        <select id="routine_color" class="field_select" required>
+          <option value="indigo" selected>Violet</option>
+          <option value="emerald">Pine</option>
+          <option value="rose">Terracotta</option>
+          <option value="amber">Solar</option>
+        </select>
+      </div>
+    </div>
+
+    <fieldset class="form_fieldset">
+      <legend class="field_label">Weekdays</legend>
+      <div class="weekday_checks_row">
+        <label class="day_check"><input type="checkbox" name="routine_days" value="Mon" checked><span>M</span></label>
+        <label class="day_check"><input type="checkbox" name="routine_days" value="Tue" checked><span>T</span></label>
+        <label class="day_check"><input type="checkbox" name="routine_days" value="Wed" checked><span>W</span></label>
+        <label class="day_check"><input type="checkbox" name="routine_days" value="Thu" checked><span>T</span></label>
+        <label class="day_check"><input type="checkbox" name="routine_days" value="Fri" checked><span>F</span></label>
+        <label class="day_check"><input type="checkbox" name="routine_days" value="Sat"><span>S</span></label>
+        <label class="day_check"><input type="checkbox" name="routine_days" value="Sun"><span>S</span></label>
+      </div>
+    </fieldset>
+
+    <div class="dialog_footer">
+      <button type="submit" id="routine_sheet_submit" class="btn btn_primary btn_block">Save Block</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- 3. HABIT CREATE / EDIT DIALOG -->
+<dialog id="habit_dialog" class="aurora_dialog sheet_dialog" closedby="any" aria-labelledby="habit_sheet_title">
+  <div class="dialog_header">
+    <h2 id="habit_sheet_title">New Daily Ritual</h2>
+    <button type="button" id="close_habit_sheet" class="icon_btn icon_btn_sm" aria-label="Close habit editor">✕</button>
+  </div>
+
+  <form id="habit_sheet_form" class="dialog_form">
+    <div class="form_group">
+      <label for="habit_title" class="field_label">Habit Name</label>
+      <input type="text" id="habit_title" class="field_input" placeholder="e.g. Drink 2.5L Water" required autocomplete="off">
+    </div>
+
+    <div class="form_row_2">
+      <div class="form_group">
+        <label for="habit_category" class="field_label">Category</label>
+        <select id="habit_category" class="field_select" required>
+          <option value="Routine" selected>Routine</option>
+          <option value="Mind">Mind</option>
+          <option value="Health">Health</option>
+          <option value="Skill">Skill</option>
+          <option value="Work">Work</option>
+        </select>
+      </div>
+      <div class="form_group">
+        <label for="habit_color" class="field_label">Color</label>
+        <select id="habit_color" class="field_select" required>
+          <option value="indigo" selected>Violet</option>
+          <option value="emerald">Pine</option>
+          <option value="rose">Terracotta</option>
+          <option value="amber">Solar</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form_group">
+      <span class="field_label">Quick Blueprints</span>
+      <div id="habit_templates" class="presets_strip">
+        <button type="button" class="preset_chip template_chip" data-title="Drink 2.5L Water" data-cat="Health" data-color="emerald">Hydrate</button>
+        <button type="button" class="preset_chip template_chip" data-title="10m Breathing" data-cat="Mind" data-color="indigo">Breathing</button>
+        <button type="button" class="preset_chip template_chip" data-title="Read 10 Pages" data-cat="Skill" data-color="amber">Read 10p</button>
+        <button type="button" class="preset_chip template_chip" data-title="Stretch &amp; Mobility" data-cat="Health" data-color="rose">Mobility</button>
+        <button type="button" class="preset_chip template_chip" data-title="Evening Reflection" data-cat="Mind" data-color="indigo">Reflect</button>
+      </div>
+    </div>
+
+    <div class="dialog_footer">
+      <button type="submit" id="habit_sheet_submit" class="btn btn_primary btn_block">Save Ritual</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- 4. PRODUCTIVITY DNA PROFILER DIALOG -->
+<dialog id="personality_quiz_dialog" class="aurora_dialog center_dialog" closedby="any" aria-labelledby="personality_dialog_title">
+  <div class="dialog_header">
+    <div>
+      <span class="kicker">Behavioral Profiler</span>
+      <h2 id="personality_dialog_title">Productivity DNA</h2>
+    </div>
+    <button type="button" id="close_personality_dialog" class="icon_btn icon_btn_sm" aria-label="Close profiler">✕</button>
+  </div>
+
+  <div id="personality_stepper_bar" class="stepper_bar" aria-hidden="true">
+    <div class="stepper_dot active" data-step="1"></div>
+    <div class="stepper_dot" data-step="2"></div>
+    <div class="stepper_dot" data-step="3"></div>
+    <div class="stepper_dot" data-step="4"></div>
+    <div class="stepper_dot" data-step="5"></div>
+  </div>
+
+  <div id="personality_step_content" class="personality_body"></div>
+
+  <div class="dialog_footer footer_spread">
+    <button type="button" id="personality_prev_btn" class="btn btn_secondary" hidden>Back</button>
+    <div class="footer_end_group">
+      <button type="button" id="personality_skip_btn" class="btn btn_ghost">Skip</button>
+      <button type="button" id="personality_next_btn" class="btn btn_primary">Continue</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- 5. GEMINI LIVE VOICE COMPANION DIALOG -->
+<dialog id="gemini_live_dialog" class="aurora_dialog center_dialog live_modal" closedby="any" aria-labelledby="live_dialog_title">
+  <div class="dialog_header">
+    <div class="live_title_row">
+      <span id="live_status_dot" class="live_status_dot" aria-hidden="true"></span>
+      <h2 id="live_dialog_title">Voice Companion</h2>
+    </div>
+    <button type="button" id="close_live_dialog" class="icon_btn icon_btn_sm" aria-label="Close voice companion">✕</button>
+  </div>
+
+  <div class="live_modal_body">
+    <div class="live_stage">
+      <div id="live_orb" class="live_orb" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+      </div>
+      <div id="live_status_text" class="live_status_text">Ready to connect</div>
+    </div>
+
+    <div id="live_mic_permission_cta" class="inline_alert" hidden>
+      <span class="inline_alert_body">Microphone permission is blocked in Side Panel.</span>
+      <button type="button" id="live_open_tab_for_mic_btn" class="btn btn_xs btn_primary">Open Tab to Grant Mic</button>
+    </div>
+
+    <div id="live_transcript_box" class="live_transcript_box" aria-live="polite">
+      <p class="transcript_placeholder">Live voice transcripts appear here…</p>
+    </div>
+
+    <div id="live_api_config" class="form_group">
+      <label for="gemini_api_key_input" class="field_label">Gemini API Key</label>
+      <input type="password" id="gemini_api_key_input" class="field_input" placeholder="Paste your Gemini API key…" autocomplete="off">
+      <p class="field_hint">Stored locally in extension storage only.</p>
+    </div>
+  </div>
+
+  <div class="dialog_footer">
+    <button type="button" id="toggle_live_session_btn" class="btn btn_primary btn_block">Start Live Session</button>
+  </div>
+</dialog>
+
+<!-- 6. GENERIC NON-BLOCKING CONFIRM / PROMPT DIALOG (REPLACES alert/confirm/prompt) -->
+<dialog id="confirm_dialog" class="aurora_dialog center_dialog compact_dialog" closedby="any" aria-labelledby="confirm_dialog_title">
+  <form id="confirm_dialog_form" class="dialog_form">
+    <div class="dialog_header">
+      <h2 id="confirm_dialog_title">Confirm Action</h2>
+    </div>
+    <p id="confirm_dialog_message" class="dialog_message"></p>
+    <div id="confirm_input_group" class="form_group" hidden>
+      <label id="confirm_input_label" for="confirm_dialog_input" class="field_label">Value</label>
+      <input type="text" id="confirm_dialog_input" class="field_input" autocomplete="off">
+    </div>
+    <div class="dialog_footer">
+      <button type="button" id="confirm_cancel_btn" class="btn btn_secondary">Cancel</button>
+      <button type="submit" id="confirm_ok_btn" class="btn btn_primary">Confirm</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- CENTRALIZED ACCESSIBLE LIVE REGIONS -->
+<div id="toast_region" class="toast_region" role="status" aria-live="polite" aria-atomic="true"></div>
+<div id="sr_assertive_region" class="visually-hidden" role="alert" aria-live="assertive" aria-atomic="true"></div>
+
+<!-- STRICT MV3-SAFE CLASSIC SCRIPT LOAD ORDER -->
+<script src="storage.js"></script>
+<script src="virtual_list.js"></script>
 <script src="script.js"></script>
 <script src="live_agent.js"></script>
 </body>

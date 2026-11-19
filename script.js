@@ -1,40 +1,163 @@
 /**
- * Aurora Companion - Premium Psychology-Driven Productivity SPA Engine
- * Architecture: Central Event-Driven State Store, Touch Swipe, SVG Analytics & Habit Streaks
- * Storage Engine: Transactional IndexedDB with Synchronous Memory Caching
+ * Aurora Companion - High-Performance Circadian Productivity Engine
+ * Powered by window.AuroraStorage (IndexedDB v2) & window.AuroraVirtualList.
+ * MV3-safe: zero inline handlers, zero blocking prompt/confirm/alert dialogs,
+ * zero raw LLM HTML injection, full event delegation, and windowed rendering.
  */
-
 document.addEventListener("DOMContentLoaded", async function () {
+  "use strict";
+
+  const Storage = window.AuroraStorage;
+  const VirtualList = window.AuroraVirtualList;
+
   // =========================================================================
-  // 0. DATE HELPER (LOCAL CALENDAR CONSISTENCY)
+  // 0. PURE UTILITIES (LOCAL DATES, SANITIZATION, CIRCADIAN PHASE, CONFIGS)
   // =========================================================================
-  function getLocalDateString(d = new Date()) {
-    if (typeof d === "string") {
-      if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
-      d = new Date(d);
+  function getLocalDateString(input = new Date()) {
+    if (typeof input === "string") {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(input)) return input;
+      const parsed = new Date(input);
+      if (Number.isNaN(parsed.getTime())) return getLocalDateString(new Date());
+      input = parsed;
+    } else if (!(input instanceof Date) || Number.isNaN(input.getTime())) {
+      input = new Date();
     }
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
+    const y = input.getFullYear();
+    const m = String(input.getMonth() + 1).padStart(2, "0");
+    const d = String(input.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
   }
 
-  // =========================================================================
-  // 0. SYSTEM CONFIGURATIONS (DYNAMIC DATA DRIVERS)
-  // =========================================================================
+  function parseLocalDate(dateStr) {
+    if (typeof dateStr === "string" && /^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+      const parts = dateStr.slice(0, 10).split("-").map(Number);
+      return new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0, 0);
+    }
+    const d = new Date(dateStr);
+    return Number.isNaN(d.getTime()) ? new Date() : d;
+  }
+
+  function getNDaysFromNow(n) {
+    const d = new Date();
+    d.setDate(d.getDate() + n);
+    return getLocalDateString(d);
+  }
+
+  function getISOWeekKey(date = new Date()) {
+    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const dayNum = d.getDay() || 7;
+    d.setDate(d.getDate() + 4 - dayNum);
+    const yearStart = new Date(d.getFullYear(), 0, 1);
+    const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    return `${d.getFullYear()}-W${String(weekNo).padStart(2, "0")}`;
+  }
+
+  function getCircadianPhase(hour = new Date().getHours()) {
+    if (hour >= 5 && hour < 9) return { id: "dawn", label: "Dawn Clarity" };
+    if (hour >= 9 && hour < 17) return { id: "day", label: "Solar Peak" };
+    if (hour >= 17 && hour < 21) return { id: "dusk", label: "Dusk Wind-Down" };
+    return { id: "night", label: "Night Restoration" };
+  }
+
+  function escapeHTML(str) {
+    if (str === null || str === undefined) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function sanitizeUrl(raw) {
+    if (!raw || typeof raw !== "string") return "";
+    const trimmed = raw.trim();
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+        return parsed.href;
+      }
+    } catch (_) {}
+    return "";
+  }
+
+  function renderMarkdownLite(text) {
+    if (!text || !text.trim()) {
+      return `<p class="muted_italic">Nothing to preview yet. Start writing in the Write tab.</p>`;
+    }
+    const escaped = escapeHTML(text)
+      .replace(/^### (.*)$/gm, "<h3>$1</h3>")
+      .replace(/^## (.*)$/gm, "<h2>$1</h2>")
+      .replace(/^# (.*)$/gm, "<h1>$1</h1>")
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      .replace(/\*(.+?)\*/g, "<em>$1</em>");
+
+    const lines = escaped.split("\n");
+    const out = [];
+    let inList = false;
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) {
+        if (inList) { out.push("</ul>"); inList = false; }
+        continue;
+      }
+      if (line.startsWith("- ")) {
+        if (!inList) { out.push("<ul>"); inList = true; }
+        out.push(`<li>${line.slice(2)}</li>`);
+      } else {
+        if (inList) { out.push("</ul>"); inList = false; }
+        if (line.startsWith("<h")) out.push(line);
+        else out.push(`<p>${line}</p>`);
+      }
+    }
+    if (inList) out.push("</ul>");
+    return out.join("");
+  }
+
+  function prefersReducedMotion() {
+    return typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }
+
+  function isIMEComposing(e) {
+    return Boolean(e && (e.isComposing || e.keyCode === 229));
+  }
+
+  function sendExtensionMessage(message) {
+    return new Promise((resolve) => {
+      if (typeof chrome !== "undefined" && chrome.runtime && typeof chrome.runtime.sendMessage === "function") {
+        try {
+          chrome.runtime.sendMessage(message, (response) => {
+            if (chrome.runtime.lastError) {
+              resolve(null);
+            } else {
+              resolve(response || null);
+            }
+          });
+        } catch (_) {
+          resolve(null);
+        }
+      } else {
+        resolve(null);
+      }
+    });
+  }
+
+  const DEFAULT_CATEGORIES = ["Inbox", "Work", "Personal", "Health", "Finance"];
+
   const CONFIG_CAPTURE_NEW_GOAL = {
     priorities: [
-      { value: "Low", label: "Low Priority" },
-      { value: "Medium", label: "Medium Priority" },
-      { value: "High", label: "High Priority" }
+      { value: "Low", label: "Gentle Focus" },
+      { value: "Medium", label: "Steady Momentum" },
+      { value: "High", label: "Keystone Priority" }
     ],
-    categories: ["Inbox", "Work", "Personal", "Health", "Finance"],
+    categories: [...DEFAULT_CATEGORIES],
     durations: [
-      { value: "15", label: "15 mins" },
-      { value: "25", label: "25 mins" },
-      { value: "40", label: "40 mins" },
-      { value: "60", label: "60 mins" },
-      { value: "90", label: "90 mins" }
+      { value: "15", label: "15 mins (Micro-Flow)" },
+      { value: "25", label: "25 mins (Pomodoro)" },
+      { value: "40", label: "40 mins (Deep Sprint)" },
+      { value: "60", label: "60 mins (Extended Flow)" },
+      { value: "90", label: "90 mins (Ultradian Peak)" }
     ],
     recurrences: [
       { value: "none", label: "Do not repeat" },
@@ -47,434 +170,372 @@ document.addEventListener("DOMContentLoaded", async function () {
   const CONFIG_SCHEDULE_ROUTINE = {
     categories: ["Routine", "Work", "Health", "Personal"],
     colors: [
-      { value: "indigo", label: "Indigo" },
-      { value: "emerald", label: "Emerald" },
-      { value: "rose", label: "Rose" },
-      { value: "amber", label: "Amber" }
-    ],
-    weekdays: [
-      { value: "Mon", label: "M" },
-      { value: "Tue", label: "T" },
-      { value: "Wed", label: "W" },
-      { value: "Thu", label: "T" },
-      { value: "Fri", label: "F" },
-      { value: "Sat", label: "S" },
-      { value: "Sun", label: "S" }
+      { value: "indigo", label: "Aurora Indigo" },
+      { value: "emerald", label: "Pine Emerald" },
+      { value: "rose", label: "Terracotta Rose" },
+      { value: "amber", label: "Solar Amber" }
     ]
   };
 
   const CONFIG_CREATE_HABIT = {
-    categories: ["Routine", "Mind", "Health", "Skill", "Work"],
+    categories: ["Routine", "Mind", "Health", "Skill", "Work", "Fitness", "Focus"],
     colors: [
-      { value: "indigo", label: "Indigo" },
-      { value: "emerald", label: "Emerald" },
-      { value: "rose", label: "Rose" },
-      { value: "amber", label: "Amber" }
+      { value: "indigo", label: "Aurora Indigo" },
+      { value: "emerald", label: "Pine Emerald" },
+      { value: "rose", label: "Terracotta Rose" },
+      { value: "amber", label: "Solar Amber" }
     ],
     templates: [
-      {
-        title: "Drink 3L Water",
-        cat: "Health",
-        color: "emerald",
-        label: "Hydrate",
-        svg: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>`
-      },
-      {
-        title: "15m Mindful Breathing",
-        cat: "Mind",
-        color: "indigo",
-        label: "Meditate",
-        svg: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/></svg>`
-      },
-      {
-        title: "Read 10 Pages",
-        cat: "Skill",
-        color: "amber",
-        label: "Read",
-        svg: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 19.5A2.5 2.5 0 0 0 6.5 22H20M4 19.5V4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-2.5-2.5z"/></svg>`
-      },
-      {
-        title: "Stretch & Mobility",
-        cat: "Health",
-        color: "rose",
-        label: "Stretch",
-        svg: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 10.5h11M18.5 6.5v8M5.5 6.5v8M12 5.5v13"/></svg>`
-      },
-      {
-        title: "Write Evening Journal",
-        cat: "Mind",
-        color: "indigo",
-        label: "Reflect",
-        svg: `<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>`
-      }
+      { title: "Drink 3L Water", cat: "Health", color: "emerald", label: "Hydrate" },
+      { title: "15m Mindful Breathing", cat: "Mind", color: "indigo", label: "Center" },
+      { title: "Read 10 Pages", cat: "Skill", color: "amber", label: "Read" },
+      { title: "Stretch & Mobility", cat: "Health", color: "rose", label: "Move" },
+      { title: "Write Evening Journal", cat: "Mind", color: "indigo", label: "Reflect" }
     ]
   };
 
-  // =========================================================================
-  // 1. TRANSACTIONAL INDEXEDDB STORAGE SERVICE
-  // =========================================================================
-  class StorageService {
-    static DB_NAME = "aurora_companion_db";
-    static DB_VERSION = 1;
-    static dbPromise = null;
-
-    static openDB() {
-      if (!StorageService.dbPromise) {
-        StorageService.dbPromise = new Promise((resolve, reject) => {
-          const request = indexedDB.open(StorageService.DB_NAME, StorageService.DB_VERSION);
-          
-          request.onupgradeneeded = (e) => {
-            const db = e.target.result;
-            if (!db.objectStoreNames.contains("tasks")) {
-              db.createObjectStore("tasks", { keyPath: "id" });
-            }
-            if (!db.objectStoreNames.contains("routines")) {
-              db.createObjectStore("routines", { keyPath: "id" });
-            }
-            if (!db.objectStoreNames.contains("habits")) {
-              db.createObjectStore("habits", { keyPath: "id" });
-            }
-            if (!db.objectStoreNames.contains("journal")) {
-              db.createObjectStore("journal", { keyPath: "dateStr" });
-            }
-            if (!db.objectStoreNames.contains("preferences")) {
-              db.createObjectStore("preferences", { keyPath: "key" });
-            }
-          };
-
-          request.onsuccess = (e) => resolve(e.target.result);
-          request.onerror = (e) => {
-            StorageService.dbPromise = null;
-            reject(e.target.error);
-          };
-        });
-      }
-      return StorageService.dbPromise;
+  const PERSONALITY_QUESTIONS = [
+    {
+      id: "chronotype",
+      kicker: "Pillar 1 · Circadian Energy",
+      title: "When is your mind at its peak analytical clarity?",
+      subtitle: "Deep focus work sticks best when matched to your natural energy peak.",
+      options: [
+        { value: "early_falcon", icon: "🌅", label: "Early Falcon (06:00 – 10:00)", desc: "Highest clarity at dawn. Energy tapers in late afternoon." },
+        { value: "midday_climber", icon: "☀️", label: "Midday Climber (10:00 – 14:00)", desc: "Gradual morning warm-up, peaking around midday." },
+        { value: "twilight_owl", icon: "🌙", label: "Twilight Owl (18:00 – 23:00)", desc: "Slow start. Deep creative flow unlocks after dusk." },
+        { value: "variable", icon: "⚡", label: "Wave Surfer (Variable)", desc: "Energy shifts by day. Thrives on adaptive micro-sprints." }
+      ]
+    },
+    {
+      id: "procrastination",
+      kicker: "Pillar 2 · Friction Pattern",
+      title: "When you delay an important task, what causes the friction?",
+      subtitle: "Aurora crafts 2-minute micro-starters tuned to dissolve this trigger.",
+      options: [
+        { value: "perfectionism", icon: "🎯", label: "Perfectionist Resistance", desc: "Waiting for ideal conditions or fearing imperfect output." },
+        { value: "overwhelm", icon: "🌪️", label: "Cognitive Overwhelm", desc: "Too many open loops; unsure which single thread to pull." },
+        { value: "boredom", icon: "🥱", label: "Low-Stimulation Boredom", desc: "Task feels repetitive or lacks urgency and novelty." },
+        { value: "fatigue", icon: "🔋", label: "Mental Fatigue", desc: "Depleted energy or overcommitment across too many goals." }
+      ]
+    },
+    {
+      id: "pacing",
+      kicker: "Pillar 3 · Flow Pacing",
+      title: "How do you sustain execution momentum best?",
+      subtitle: "Shapes default focus block lengths and daily sequencing.",
+      options: [
+        { value: "sprints", icon: "🏃", label: "Interval Sprints (20–25m)", desc: "Punchy Pomodoro bursts with quick reset breaks." },
+        { value: "deep_dive", icon: "🧘", label: "Deep Immersion (60–90m)", desc: "Long unbroken blocks with minimal context switching." },
+        { value: "rule_of_three", icon: "3️⃣", label: "Rule of Three", desc: "Exactly 3 daily keystones; shelter everything else." },
+        { value: "momentum", icon: "🔥", label: "Micro-Win Chain", desc: "Start with a 2-minute win to ignite snowball momentum." }
+      ]
+    },
+    {
+      id: "coach_voice",
+      kicker: "Pillar 4 · Coaching Voice",
+      title: "Which coaching tone keeps you moving?",
+      subtitle: "Tunes daily nudges, celebration toasts, and Live Voice.",
+      options: [
+        { value: "stoic", icon: "🥋", label: "Stoic Strategist", desc: "Calm, concise, disciplined, zero fluff." },
+        { value: "scientist", icon: "🧠", label: "Behavioral Scientist", desc: "Evidence-based, clear, focused on cognitive ergonomics." },
+        { value: "empathetic", icon: "🌿", label: "Empathetic Anchor", desc: "Warm, steady, guards energy against burnout." },
+        { value: "hype", icon: "⚡", label: "High-Energy Coach", desc: "Upbeat, gamified, enthusiastic for every win." }
+      ]
+    },
+    {
+      id: "capacity_limit",
+      kicker: "Pillar 5 · Daily Capacity Guard",
+      title: "How many critical goals can you sustainably finish per day?",
+      subtitle: "Protects against overplanning by flagging overflow items.",
+      options: [
+        { value: "2", icon: "🎯", label: "1 to 2 Keystone Goals", desc: "Heavy creative, research, or engineering work." },
+        { value: "3", icon: "⚖️", label: "3 to 4 Balanced Priorities", desc: "1 anchor milestone plus 2–3 supporting steps." },
+        { value: "5", icon: "🚀", label: "5+ High-Velocity Tasks", desc: "Fast operational execution across many threads." }
+      ]
     }
+  ];
 
-    static async putItem(storeName, item) {
-      const db = await StorageService.openDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(storeName, "readwrite");
-        const store = tx.objectStore(storeName);
-        const request = store.put(item);
-        request.onsuccess = () => resolve(true);
-        request.onerror = (e) => reject(e.target.error);
-      });
-    }
-
-    static async deleteItem(storeName, id) {
-      const db = await StorageService.openDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(storeName, "readwrite");
-        const store = tx.objectStore(storeName);
-        const request = store.delete(id);
-        request.onsuccess = () => resolve(true);
-        request.onerror = (e) => reject(e.target.error);
-      });
-    }
-
-    static async getAllItems(storeName) {
-      const db = await StorageService.openDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction(storeName, "readonly");
-        const store = tx.objectStore(storeName);
-        const request = store.getAll();
-        request.onsuccess = (e) => resolve(e.target.result);
-        request.onerror = (e) => reject(e.target.error);
-      });
-    }
-
-    static async getPreference(key, defaultValue) {
-      const db = await StorageService.openDB();
-      return new Promise((resolve, reject) => {
-        const tx = db.transaction("preferences", "readonly");
-        const store = tx.objectStore("preferences");
-        const request = store.get(key);
-        request.onsuccess = (e) => {
-          const res = e.target.result;
-          resolve(res ? res.value : defaultValue);
-        };
-        request.onerror = (e) => reject(e.target.error);
-      });
-    }
-
-    static async savePreference(key, value) {
-      await StorageService.putItem("preferences", { key, value });
-    }
-
-    static async init() {
-      await StorageService.openDB();
-
-      // Check for legacy migration from Local Storage
-      const legacyTasksExist = localStorage.getItem("aurora_tasks") !== null;
-      if (legacyTasksExist) {
-        console.log("Migrating Local Storage tables to IndexedDB...");
-        
-        const oldTasks = JSON.parse(localStorage.getItem("aurora_tasks")) || [];
-        const oldRoutines = JSON.parse(localStorage.getItem("aurora_routines")) || [];
-        const oldHabits = JSON.parse(localStorage.getItem("aurora_habits")) || [];
-        const oldJournal = JSON.parse(localStorage.getItem("aurora_journal")) || {};
-        const oldNextId = parseInt(localStorage.getItem("aurora_next_id") || 1);
-        const oldPrefs = JSON.parse(localStorage.getItem("aurora_routines_prefs")) || { wakeUpTime: "06:00", sleepTime: "23:00" };
-        const oldTheme = localStorage.getItem("aurora_theme") || "dark";
-        const oldAccent = localStorage.getItem("aurora_accent") || "indigo";
-        const oldSidebarCollapsed = localStorage.getItem("aurora_sidebar_collapsed") === "true";
-        const oldNotifsEnabled = localStorage.getItem("aurora_notifications_enabled") !== "false";
-        const oldBannerDismissed = localStorage.getItem("aurora_banner_dismissed") === "true";
-
-        // Write batch
-        for (const t of oldTasks) await StorageService.putItem("tasks", t);
-        for (const r of oldRoutines) await StorageService.putItem("routines", r);
-        for (const h of oldHabits) await StorageService.putItem("habits", h);
-        for (const dateStr of Object.keys(oldJournal)) {
-          await StorageService.putItem("journal", { dateStr, ...oldJournal[dateStr] });
-        }
-
-        // Save preferences
-        await StorageService.savePreference("next_id", oldNextId);
-        await StorageService.savePreference("routine_prefs", oldPrefs);
-        await StorageService.savePreference("theme", oldTheme);
-        await StorageService.savePreference("accent", oldAccent);
-        await StorageService.savePreference("sidebar_collapsed", oldSidebarCollapsed);
-        await StorageService.savePreference("notifications_enabled", oldNotifsEnabled);
-        await StorageService.savePreference("banner_dismissed", oldBannerDismissed);
-
-        // Cleanup Local Storage so migrator only triggers once
-        const keysToRemove = [
-          "aurora_tasks", "aurora_next_id", "aurora_theme", "aurora_accent", 
-          "aurora_routines", "aurora_routines_prefs", "aurora_habits", "aurora_journal", 
-          "aurora_sidebar_collapsed", "aurora_notifications_enabled", "aurora_banner_dismissed",
-          "indigo_tasks", "indigo_next_id", "indigo_theme", "indigo_accent", "indigo_notifications_enabled"
-        ];
-        keysToRemove.forEach(k => localStorage.removeItem(k));
-        console.log("IndexedDB Migration Successful! Local Storage cleaned up.");
-        return;
-      }
-
-      // Check if DB stores are fully empty, and initialize default data if so
-      const routineCount = (await StorageService.getAllItems("routines")).length;
-      const habitCount = (await StorageService.getAllItems("habits")).length;
-
-      if (routineCount === 0) {
-        const defaultRoutines = [
-          {
-            id: "rout_1",
-            title: "Morning Mindfulness",
-            startTime: "06:30",
-            endTime: "07:00",
-            category: "Health",
-            color: "emerald",
-            icon: "",
-            days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-          },
-          {
-            id: "rout_2",
-            title: "Deep Focus Block",
-            startTime: "09:00",
-            endTime: "11:30",
-            category: "Work",
-            color: "indigo",
-            icon: "",
-            days: ["Mon", "Tue", "Wed", "Thu", "Fri"]
-          },
-          {
-            id: "rout_3",
-            title: "Strength Training",
-            startTime: "17:30",
-            endTime: "18:30",
-            category: "Health",
-            color: "rose",
-            icon: "",
-            days: ["Mon", "Wed", "Fri"]
-          },
-          {
-            id: "rout_4",
-            title: "Read Habit Stacking",
-            startTime: "21:30",
-            endTime: "22:15",
-            category: "Personal",
-            color: "amber",
-            icon: "",
-            days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-          }
-        ];
-        for (const r of defaultRoutines) {
-          await StorageService.putItem("routines", r);
-        }
-      }
-
-      if (habitCount === 0) {
-        const defaultHabits = [
-          {
-            id: "hab_1",
-            title: "Wake up before 6:00 AM",
-            category: "Routine",
-            color: "amber",
-            streak: 0,
-            maxStreak: 0,
-            history: {},
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: "hab_2",
-            title: "Daily Meditation Routine",
-            category: "Mind",
-            color: "emerald",
-            streak: 0,
-            maxStreak: 0,
-            history: {},
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: "hab_3",
-            title: "Learn programming daily",
-            category: "Skill",
-            color: "indigo",
-            streak: 0,
-            maxStreak: 0,
-            history: {},
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: "hab_4",
-            title: "50 Push-ups Exercise",
-            category: "Health",
-            color: "rose",
-            streak: 0,
-            maxStreak: 0,
-            history: {},
-            createdAt: new Date().toISOString()
-          }
-        ];
-        for (const h of defaultHabits) {
-          await StorageService.putItem("habits", h);
-        }
-      }
-
-      // Initialize system default preferences
-      const nextId = await StorageService.getPreference("next_id", null);
-      if (nextId === null) await StorageService.savePreference("next_id", 1);
-
-      const routinePrefs = await StorageService.getPreference("routine_prefs", null);
-      if (routinePrefs === null) {
-        await StorageService.savePreference("routine_prefs", { wakeUpTime: "06:00", sleepTime: "23:00" });
-      }
-
-      const theme = await StorageService.getPreference("theme", null);
-      if (theme === null) await StorageService.savePreference("theme", "dark");
-
-      const accent = await StorageService.getPreference("accent", null);
-      if (accent === null) await StorageService.savePreference("accent", "indigo");
-
-      const uiStyle = await StorageService.getPreference("ui_style", null);
-      if (uiStyle === null) await StorageService.savePreference("ui_style", "neo-brutalism");
-    }
-
-    static async loadAllData() {
-      const [
-        tasks,
-        routines,
-        habits,
-        journalList,
-        nextId,
-        routinePrefs,
-        theme,
-        accent,
-        sidebarCollapsed,
-        notificationsEnabled,
-        bannerDismissed,
-        uiStyle,
-        alarmSound,
-        personalityProfile
-      ] = await Promise.all([
-        StorageService.getAllItems("tasks"),
-        StorageService.getAllItems("routines"),
-        StorageService.getAllItems("habits"),
-        StorageService.getAllItems("journal"),
-        StorageService.getPreference("next_id", 1),
-        StorageService.getPreference("routine_prefs", { wakeUpTime: "06:00", sleepTime: "23:00" }),
-        StorageService.getPreference("theme", "dark"),
-        StorageService.getPreference("accent", "indigo"),
-        StorageService.getPreference("sidebar_collapsed", false),
-        StorageService.getPreference("notifications_enabled", true),
-        StorageService.getPreference("banner_dismissed", false),
-        StorageService.getPreference("ui_style", "neo-brutalism"),
-        StorageService.getPreference("alarm_sound", "default_beeps"),
-        StorageService.getPreference("personality_profile", null)
-      ]);
-
-      const journal = {};
-      journalList.forEach(item => {
-        const { dateStr, ...entry } = item;
-        journal[dateStr] = entry;
-      });
-
+  function computeArchetype(answers) {
+    const { procrastination, pacing } = answers || {};
+    if (procrastination === "perfectionism") {
       return {
-        tasks,
-        routines,
-        habits,
-        journal,
-        preferences: {
-          nextId,
-          routinePrefs,
-          theme,
-          accent,
-          sidebarCollapsed,
-          notificationsEnabled,
-          bannerDismissed,
-          uiStyle,
-          alarmSound,
-          personalityProfile
-        }
+        archetype: "The Perfectionist",
+        heroIcon: "🎯",
+        superpower: "Exacting craftsmanship and high quality standards.",
+        blindspot: "Hesitating to start until every detail feels certain.",
+        strategyTip: "Use strict 2-minute rough-draft starters and timeboxes."
       };
     }
+    if (procrastination === "boredom" || pacing === "sprints") {
+      return {
+        archetype: "The Dopamine Sprinter",
+        heroIcon: "⚡",
+        superpower: "Fast creative bursts and rapid problem-solving.",
+        blindspot: "Losing interest during repetitive maintenance work.",
+        strategyTip: "Pair 20–25m countdown sprints with immediate visual wins."
+      };
+    }
+    if (procrastination === "overwhelm" || pacing === "rule_of_three") {
+      return {
+        archetype: "The Overwhelmed Strategist",
+        heroIcon: "🌪️",
+        superpower: "Broad vision and multi-threaded architectural thinking.",
+        blindspot: "Freezing when facing an unfiltered backlog.",
+        strategyTip: "Isolate 1 keystone target and park overflow in Backlog."
+      };
+    }
+    if (pacing === "deep_dive") {
+      return {
+        archetype: "The Methodical Architect",
+        heroIcon: "📐",
+        superpower: "High stamina for uninterrupted deep-state work.",
+        blindspot: "Friction after unexpected context switches.",
+        strategyTip: "Batch deep blocks inside your peak circadian window."
+      };
+    }
+    return {
+      archetype: "The Compassionate Balancer",
+      heroIcon: "🌿",
+      superpower: "Sustainable pacing and long-term resilience.",
+      blindspot: "Over-allocating energy to low-leverage requests.",
+      strategyTip: "Protect your top milestone before saying yes to extras."
+    };
   }
 
+  const ACCENT_MAP = {
+    indigo: "aurora",
+    aurora: "aurora",
+    emerald: "pine",
+    pine: "pine",
+    rose: "terracotta",
+    terracotta: "terracotta",
+    amber: "solar",
+    solar: "solar"
+  };
+
+  const LEGACY_ACCENT_CLASS = {
+    aurora: "indigo",
+    pine: "emerald",
+    terracotta: "rose",
+    solar: "amber"
+  };
+
   // =========================================================================
-  // 2. CENTRAL REACTIVE STATE STORE
+  // 1. NOTIFICATION & SUBTLE AUDIO CHIME SERVICES
+  // =========================================================================
+  const NotificationService = {
+    isSupported() {
+      return "Notification" in window;
+    },
+    async requestPermission() {
+      if (this.isSupported() && Notification.permission !== "granted") {
+        const res = await Notification.requestPermission();
+        return res === "granted";
+      }
+      return this.isSupported() && Notification.permission === "granted";
+    },
+    send(title, options = {}, enabled = true) {
+      if (enabled && this.isSupported() && Notification.permission === "granted") {
+        try {
+          new Notification(title, options);
+        } catch (_) {}
+      }
+    }
+  };
+
+  const SoundEffects = {
+    _ctx: null,
+    playCompletionChime() {
+      if (prefersReducedMotion()) return;
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        if (!this._ctx || this._ctx.state === "closed") {
+          this._ctx = new AudioCtx();
+        }
+        if (this._ctx.state === "suspended") {
+          this._ctx.resume().catch(() => {});
+        }
+        const now = this._ctx.currentTime;
+        const notes = [523.25, 659.25]; // C5 -> E5 soft chime
+        notes.forEach((freq, idx) => {
+          const osc = this._ctx.createOscillator();
+          const gain = this._ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(freq, now + idx * 0.065);
+          gain.gain.setValueAtTime(0.0001, now + idx * 0.065);
+          gain.gain.linearRampToValueAtTime(0.06, now + idx * 0.065 + 0.015);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.065 + 0.18);
+          osc.connect(gain);
+          gain.connect(this._ctx.destination);
+          osc.start(now + idx * 0.065);
+          osc.stop(now + idx * 0.065 + 0.2);
+        });
+      } catch (_) {}
+    }
+  };
+
+  // =========================================================================
+  // 2. CENTRAL HIGH-PERFORMANCE REACTIVE STATE STORE
   // =========================================================================
   class TaskStore {
-    constructor(dbData) {
-      this.tasks = dbData.tasks;
-      this.routines = dbData.routines;
-      this.routinePrefs = dbData.preferences.routinePrefs;
-      this.habits = dbData.habits;
-      this.journal = dbData.journal;
-      this.nextId = dbData.preferences.nextId;
+    constructor(initialData) {
+      this.tasks = [];
+      this.taskMap = new Map();
+      this.categoryCounts = new Map();
+      this.completedCount = initialData.completedCount || 0;
+      this.completedPageCache = {
+        items: [],
+        total: this.completedCount,
+        hasMore: this.completedCount > 0,
+        nextOffset: 0,
+        queryKey: "",
+        loaded: false
+      };
+      this.allCompletedCache = null; // Lazy-loaded for Insights / Tomorrow metrics
 
-      this.currentView = localStorage.getItem("indigo_redirect_view") || "dashboard";
-      localStorage.removeItem("indigo_redirect_view");
+      this.routines = Array.isArray(initialData.routines) ? initialData.routines : [];
+      this.routineMap = new Map(this.routines.map((r) => [String(r.id), r]));
+      this.habits = Array.isArray(initialData.habits) ? initialData.habits : [];
+      this.habitMap = new Map(this.habits.map((h) => [String(h.id), h]));
+      this.journal = initialData.journal || {};
 
-      this.theme = dbData.preferences.theme;
-      this.accent = dbData.preferences.accent;
-      this.uiStyle = dbData.preferences.uiStyle || "neo-brutalism";
-      this.sidebarCollapsed = dbData.preferences.sidebarCollapsed;
-      this.alarmSound = dbData.preferences.alarmSound || "default_beeps";
-      this.personalityProfile = dbData.preferences.personalityProfile || null;
-      console.log("State Store Loaded Visual Vibe Style:", this.uiStyle);
+      const prefs = initialData.preferences || {};
+      this.nextId = Number(prefs.nextId) || 1;
+      this.routinePrefs = prefs.routinePrefs || { wakeUpTime: "06:00", sleepTime: "23:00" };
+      this.theme = prefs.theme || "dark"; // "system" | "dark" | "light"
+      this.accent = ACCENT_MAP[prefs.accent] || "aurora";
+      this.uiStyle = prefs.uiStyle === "neo-brutalism" ? "neo-brutalism" : "atelier";
+      this.sidebarCollapsed = Boolean(prefs.sidebarCollapsed);
+      this.notificationsEnabled = prefs.notificationsEnabled !== false;
+      this.bannerDismissed = Boolean(prefs.bannerDismissed);
+      this.alarmSound = prefs.alarmSound || "default_beeps";
+      this.personalityProfile = prefs.personalityProfile || null;
+      this.welcomeDialogShown = Boolean(prefs.welcomeDialogShown);
+      this.tomorrowPlan = prefs.tomorrowPlan || null;
 
+      // Real XP & Grace Shield state
+      this.xpTotal = 0;
+      this.graceShieldWeek = "";
+      this.graceShieldUsed = false;
+
+      // Navigation state (supports legacy redirect view)
+      let initialRedirect = "";
+      try {
+        initialRedirect = localStorage.getItem("indigo_redirect_view") || "";
+        if (initialRedirect) localStorage.removeItem("indigo_redirect_view");
+      } catch (_) {}
+
+      this.currentView = "today";
+      this.planMode = "pipeline"; // "pipeline" | "routine"
+      this.planFilter = "all"; // "all"|"today"|"tomorrow"|"upcoming"|"overdue"|"later"|"completed"
+      this.habitsMode = "tracker"; // "tracker" | "history"
+      this.todayFilter = "all"; // "all"|"high"|"later"|"completed"
+
+      this.filters = { search: "", priority: "All", category: "All" };
+      this.listeners = Object.create(null);
+
+      // Hydrate active tasks with O(1) index & precomputed search text
+      const rawTasks = Array.isArray(initialData.tasks) ? initialData.tasks : [];
+      let maxNumericId = this.nextId - 1;
+      for (let i = 0; i < rawTasks.length; i++) {
+        const t = this._prepareTaskInMemory(rawTasks[i]);
+        this.tasks.push(t);
+        this.taskMap.set(String(t.id), t);
+        if (t.id !== "general_focus") {
+          this._incCategory(t.category || "Inbox", 1);
+          const numId = Number(t.id);
+          if (Number.isFinite(numId) && numId > maxNumericId) maxNumericId = numId;
+        }
+      }
+      if (maxNumericId >= this.nextId) {
+        this.nextId = maxNumericId + 1;
+      }
+
+      // Timer state (synced with background.js)
       this.timer = {
         isRunning: false,
-        type: "pomodoro", // pomodoro, shortBreak, longBreak, stopwatch
+        type: "pomodoro",
         duration: 25 * 60,
         totalDuration: 25 * 60,
         activeTaskId: null,
+        activeTaskTitle: "",
         targetEndTime: null,
         stopwatchStartTime: null,
         elapsedSeconds: 0,
-        completedSessions: 0
+        completedSessions: 0,
+        alarmActive: false
       };
-
-      this.filters = { search: "", priority: "All", category: "All" };
-      this.listeners = {};
+      this.savedFocusTaskId = null;
       this.timerInterval = null;
       this.isAlarmActive = false;
       this.alarmInterval = null;
       this.audioCtx = null;
+      this.alarmAudio = null;
 
-      // Update streaks on boot
-      this.verifyHabitsStreaksOnBoot();
+      if (initialRedirect) {
+        this._applyViewTarget(initialRedirect);
+      }
+    }
+
+    async loadExtraPreferences() {
+      const [xpTotal, graceWeek, graceUsed] = await Promise.all([
+        Storage.getPreference("xp_total", 0),
+        Storage.getPreference("grace_shield_week", ""),
+        Storage.getPreference("grace_shield_used", false)
+      ]);
+      this.xpTotal = Number(xpTotal) || 0;
+      const thisWeek = getISOWeekKey();
+      if (graceWeek !== thisWeek) {
+        this.graceShieldWeek = thisWeek;
+        this.graceShieldUsed = false;
+      } else {
+        this.graceShieldWeek = graceWeek;
+        this.graceShieldUsed = Boolean(graceUsed);
+      }
+      await this.verifyHabitsStreaksOnBoot();
+    }
+
+    _prepareTaskInMemory(task) {
+      const normalized = Storage.normalizeTask({
+        ...task,
+        priority: task.priority && ["High", "Medium", "Low"].includes(task.priority) ? task.priority : "Medium",
+        category: task.category || "Inbox",
+        title: task.title || "",
+        description: task.description || "",
+        subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
+        focusSessions: Array.isArray(task.focusSessions) ? task.focusSessions : [],
+        estimatedDuration: parseInt(task.estimatedDuration, 10) || 25,
+        recurring: task.recurring || "none",
+        url: sanitizeUrl(task.url || "")
+      });
+      normalized._searchText = `${normalized.title.toLowerCase()} ${normalized.description.toLowerCase()} ${normalized.category.toLowerCase()} ${(normalized.url || "").toLowerCase()}`;
+      normalized._createdAtMs = normalized.createdAt ? (Date.parse(normalized.createdAt) || Number(normalized.id) || 0) : (Number(normalized.id) || 0);
+      return normalized;
+    }
+
+    _stripInternalFields(task) {
+      const { _searchText, _createdAtMs, ...clean } = task;
+      return clean;
+    }
+
+    _incCategory(cat, delta) {
+      const key = cat || "Inbox";
+      const prev = this.categoryCounts.get(key) || 0;
+      const next = Math.max(0, prev + delta);
+      const structureChanged = (prev === 0 && next > 0) || (prev > 0 && next === 0);
+      if (next === 0) this.categoryCounts.delete(key);
+      else this.categoryCounts.set(key, next);
+      return structureChanged;
+    }
+
+    getCategories() {
+      const list = [...DEFAULT_CATEGORIES];
+      for (const key of this.categoryCounts.keys()) {
+        if (!list.includes(key)) list.push(key);
+      }
+      return list;
     }
 
     subscribe(event, callback) {
@@ -485,101 +546,396 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     unsubscribe(event, callback) {
       if (this.listeners[event]) {
-        this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
+        this.listeners[event] = this.listeners[event].filter((cb) => cb !== callback);
       }
     }
 
     emit(event, data) {
-      if (this.listeners[event]) {
-        this.listeners[event].forEach(cb => cb(data));
+      const list = this.listeners[event];
+      if (!list || list.length === 0) return;
+      for (let i = 0; i < list.length; i++) {
+        try {
+          list[i](data);
+        } catch (err) {
+          console.error(`Aurora TaskStore listener error [${event}]:`, err);
+        }
       }
     }
 
-    // -------------------------------------------------------------------------
-    // Tasks Operations
-    // -------------------------------------------------------------------------
-    addTask(data) {
-      const task = {
-        id: this.nextId,
-        title: data.title.trim(),
-        description: (data.description || "").trim(),
+    awardXP(delta) {
+      if (!delta) return;
+      this.xpTotal = Math.max(0, (this.xpTotal || 0) + delta);
+      Storage.savePreference("xp_total", this.xpTotal).catch(() => {});
+      this.emit("xpUpdated", this.xpTotal);
+    }
+
+    // -----------------------------------------------------------------------
+    // Navigation & Legacy Aliases
+    // -----------------------------------------------------------------------
+    _applyViewTarget(rawView) {
+      const v = String(rawView || "today").toLowerCase();
+      if (v === "dashboard" || v === "today") {
+        this.currentView = "today";
+      } else if (v === "focus" || v === "timer") {
+        this.currentView = "focus";
+      } else if (v === "routine") {
+        this.currentView = "plan";
+        this.planMode = "routine";
+      } else if (v === "plan") {
+        this.currentView = "plan";
+      } else if (["all", "tomorrow", "upcoming", "overdue", "later", "completed"].includes(v)) {
+        this.currentView = "plan";
+        this.planMode = "pipeline";
+        this.planFilter = v;
+      } else if (v === "habits" || v === "consistency") {
+        this.currentView = "habits";
+        this.habitsMode = "tracker";
+      } else if (v === "consistency_history") {
+        this.currentView = "habits";
+        this.habitsMode = "history";
+      } else if (["insights", "journal", "settings"].includes(v)) {
+        this.currentView = v;
+      } else {
+        this.currentView = "today";
+      }
+    }
+
+    setView(view, subOptions = {}) {
+      this._applyViewTarget(view);
+      if (subOptions.planMode) this.planMode = subOptions.planMode;
+      if (subOptions.planFilter) this.planFilter = subOptions.planFilter;
+      if (subOptions.habitsMode) this.habitsMode = subOptions.habitsMode;
+      if (subOptions.todayFilter) this.todayFilter = subOptions.todayFilter;
+
+      this.emit("viewChanged", {
+        view: this.currentView,
+        planMode: this.planMode,
+        planFilter: this.planFilter,
+        habitsMode: this.habitsMode,
+        todayFilter: this.todayFilter
+      });
+    }
+
+    setPlanMode(mode) {
+      if (mode !== "pipeline" && mode !== "routine") return;
+      this.planMode = mode;
+      this.emit("viewChanged", {
+        view: this.currentView,
+        planMode: this.planMode,
+        planFilter: this.planFilter,
+        habitsMode: this.habitsMode,
+        todayFilter: this.todayFilter
+      });
+    }
+
+    setPlanFilter(filter) {
+      this.planFilter = filter;
+      this.emit("planFilterChanged", filter);
+    }
+
+    setHabitsMode(mode) {
+      if (mode !== "tracker" && mode !== "history") return;
+      this.habitsMode = mode;
+      this.emit("viewChanged", {
+        view: this.currentView,
+        planMode: this.planMode,
+        planFilter: this.planFilter,
+        habitsMode: this.habitsMode,
+        todayFilter: this.todayFilter
+      });
+    }
+
+    setTodayFilter(filter) {
+      this.todayFilter = filter;
+      this.emit("todayFilterChanged", filter);
+    }
+
+    setFilters(search, priority, category) {
+      const nextSearch = search !== undefined ? String(search) : this.filters.search;
+      const nextPriority = priority !== undefined ? String(priority) : this.filters.priority;
+      const nextCategory = category !== undefined ? String(category) : this.filters.category;
+      if (
+        nextSearch === this.filters.search &&
+        nextPriority === this.filters.priority &&
+        nextCategory === this.filters.category
+      ) {
+        return;
+      }
+      this.filters.search = nextSearch;
+      this.filters.priority = nextPriority;
+      this.filters.category = nextCategory;
+      this.emit("filtersChanged", this.filters);
+    }
+
+    // -----------------------------------------------------------------------
+    // Tasks CRUD (O(1) Map Lookups, Batched Writes, Granular Events)
+    // -----------------------------------------------------------------------
+    getTaskById(id) {
+      return this.taskMap.get(String(id)) || null;
+    }
+
+    addTask(data, opts = {}) {
+      const title = String(data.title || "").trim();
+      if (!title) return null;
+
+      const id = data.id !== undefined ? data.id : this.nextId++;
+      if (Number(id) >= this.nextId) this.nextId = Number(id) + 1;
+
+      const task = this._prepareTaskInMemory({
+        id,
+        title,
+        description: String(data.description || "").trim(),
+        url: sanitizeUrl(data.url || ""),
         dueDate: data.dueDate || getLocalDateString(),
         priority: data.priority || "Medium",
         category: data.category || "Inbox",
-        isLater: data.isLater || false,
-        subtasks: data.subtasks || [],
-        completed: false,
-        completedDate: null,
+        isLater: Boolean(data.isLater),
+        subtasks: Array.isArray(data.subtasks) ? data.subtasks : [],
+        completed: Boolean(data.completed),
+        completedDate: data.completed ? (data.completedDate || new Date().toISOString()) : null,
         recurring: data.recurring || "none",
-        estimatedDuration: parseInt(data.estimatedDuration) || 25,
-        focusSessions: [],
-        createdAt: new Date().toISOString()
-      };
-      
-      this.nextId += 1;
-      StorageService.savePreference("next_id", this.nextId);
+        estimatedDuration: parseInt(data.estimatedDuration, 10) || 25,
+        focusSessions: Array.isArray(data.focusSessions) ? data.focusSessions : [],
+        createdAt: data.createdAt || new Date().toISOString()
+      });
 
-      this.tasks.push(task);
-      
-      // Async Background Persist
-      StorageService.putItem("tasks", task);
-      
+      this.taskMap.set(String(task.id), task);
+      if (task.completed) {
+        this.completedCount += 1;
+        this._invalidateCompletedCaches();
+      } else {
+        this.tasks.push(task);
+      }
+
+      const catChanged = task.id !== "general_focus" && this._incCategory(task.category, 1);
+
+      // Persist task & next_id asynchronously
+      Storage.putItem("tasks", this._stripInternalFields(task))
+        .then(() => Storage.savePreference("next_id", this.nextId))
+        .then(() => Storage.broadcastDataChanged("tasks"))
+        .catch((err) => this.emit("storageError", err));
+
+      if (catChanged) this.emit("categoriesChanged", this.getCategories());
+      this.emit("taskAdded", { task });
       this.emit("tasksUpdated", this.tasks);
-      this.emit("notification", { message: `"${task.title}" captured!`, type: "success" });
+      if (!opts.silent) {
+        this.emit("notification", { message: `"${task.title}" captured`, type: "success" });
+      }
       return task;
     }
 
-    updateTask(id, updatedData) {
-      const index = this.tasks.findIndex(t => t.id === id);
-      if (index !== -1) {
-        this.tasks[index] = { ...this.tasks[index], ...updatedData };
-        
-        // Async Background Persist
-        StorageService.putItem("tasks", this.tasks[index]);
+    updateTask(id, updatedData, opts = {}) {
+      const key = String(id);
+      const existing = this.taskMap.get(key);
+      if (!existing) return null;
 
-        this.emit("tasksUpdated", this.tasks);
-        this.emit("notification", { message: "Task successfully saved", type: "success" });
+      const prev = { ...existing };
+      const next = this._prepareTaskInMemory({ ...existing, ...updatedData, id: existing.id });
+      this.taskMap.set(key, next);
+
+      const idx = this.tasks.findIndex((t) => String(t.id) === key);
+      if (!next.completed) {
+        if (idx !== -1) this.tasks[idx] = next;
+        else this.tasks.push(next);
+      } else if (idx !== -1) {
+        this.tasks.splice(idx, 1);
       }
-    }
 
-    deleteTask(id) {
-      const task = this.tasks.find(t => t.id === id);
-      this.tasks = this.tasks.filter(t => t.id !== id);
-      if (this.timer.activeTaskId === id) this.resetTimer();
-      
-      // Async Background Persist
-      StorageService.deleteItem("tasks", id);
+      if (prev.completed !== next.completed) {
+        this.completedCount = Math.max(0, this.completedCount + (next.completed ? 1 : -1));
+        this._invalidateCompletedCaches();
+      } else if (next.completed) {
+        this._patchCompletedCacheItem(next);
+      }
 
+      let catChanged = false;
+      if (prev.category !== next.category && existing.id !== "general_focus") {
+        const a = this._incCategory(prev.category, -1);
+        const b = this._incCategory(next.category, 1);
+        catChanged = a || b;
+      }
+
+      Storage.putItem("tasks", this._stripInternalFields(next))
+        .then(() => Storage.broadcastDataChanged("tasks"))
+        .catch((err) => this.emit("storageError", err));
+
+      if (catChanged) this.emit("categoriesChanged", this.getCategories());
+      this.emit("taskUpdated", { task: next, prev });
       this.emit("tasksUpdated", this.tasks);
-      this.emit("notification", { message: `Released "${task ? task.title : 'intention'}"`, type: "info" });
+      if (!opts.silent) {
+        this.emit("notification", { message: "Task saved", type: "success" });
+      }
+      return next;
     }
 
-    toggleTaskComplete(id) {
-      const task = this.tasks.find(t => t.id === id);
-      if (task) {
-        task.completed = !task.completed;
-        if (task.completed) {
-          task.completedDate = new Date().toISOString();
-          this.emit("celebrate", { taskId: id });
-          if (task.recurring !== "none") this.handleRecurringRecreation(task);
-        } else {
-          task.completedDate = null;
+    updateTasksBatch(updates, toastMessage = null) {
+      if (!Array.isArray(updates) || updates.length === 0) return [];
+      const toPersist = [];
+      const changedIds = [];
+      let catChanged = false;
+      let completedMutated = false;
+
+      for (let i = 0; i < updates.length; i++) {
+        const { id, data } = updates[i];
+        const key = String(id);
+        const existing = this.taskMap.get(key);
+        if (!existing) continue;
+
+        const prev = existing;
+        const next = this._prepareTaskInMemory({ ...existing, ...data, id: existing.id });
+        this.taskMap.set(key, next);
+
+        const idx = this.tasks.findIndex((t) => String(t.id) === key);
+        if (!next.completed) {
+          if (idx !== -1) this.tasks[idx] = next;
+          else this.tasks.push(next);
+        } else if (idx !== -1) {
+          this.tasks.splice(idx, 1);
         }
 
-        // Async Background Persist
-        StorageService.putItem("tasks", task);
+        if (prev.completed !== next.completed) {
+          this.completedCount = Math.max(0, this.completedCount + (next.completed ? 1 : -1));
+          completedMutated = true;
+        }
+        if (prev.category !== next.category && existing.id !== "general_focus") {
+          catChanged = this._incCategory(prev.category, -1) || catChanged;
+          catChanged = this._incCategory(next.category, 1) || catChanged;
+        }
 
-        this.emit("tasksUpdated", this.tasks);
+        toPersist.push(this._stripInternalFields(next));
+        changedIds.push(next.id);
+      }
+
+      if (toPersist.length === 0) return [];
+      if (completedMutated) this._invalidateCompletedCaches();
+
+      Storage.putBatch("tasks", toPersist)
+        .then(() => Storage.broadcastDataChanged("tasks"))
+        .catch((err) => this.emit("storageError", err));
+
+      if (catChanged) this.emit("categoriesChanged", this.getCategories());
+      this.emit("tasksBatchUpdated", { ids: changedIds });
+      this.emit("tasksUpdated", this.tasks);
+      if (toastMessage) {
+        this.emit("notification", { message: toastMessage, type: "success" });
+      }
+      return changedIds;
+    }
+
+    deleteTask(id, opts = {}) {
+      const key = String(id);
+      const task = this.taskMap.get(key);
+      if (!task) return null;
+
+      this.taskMap.delete(key);
+      const idx = this.tasks.findIndex((t) => String(t.id) === key);
+      if (idx !== -1) this.tasks.splice(idx, 1);
+
+      if (task.completed) {
+        this.completedCount = Math.max(0, this.completedCount - 1);
+        this._invalidateCompletedCaches();
+      }
+
+      const catChanged = task.id !== "general_focus" && this._incCategory(task.category, -1);
+
+      if (String(this.timer.activeTaskId) === key) {
+        this.resetTimer();
+      }
+
+      Storage.deleteItem("tasks", task.id)
+        .then(() => Storage.broadcastDataChanged("tasks"))
+        .catch((err) => this.emit("storageError", err));
+
+      if (catChanged) this.emit("categoriesChanged", this.getCategories());
+      this.emit("taskDeleted", { id: task.id, task });
+      this.emit("tasksUpdated", this.tasks);
+
+      if (!opts.silent) {
+        const snapshot = this._stripInternalFields(task);
         this.emit("notification", {
-          message: task.completed ? "Intention achieved! Neural momentum expanding." : "Intention returned to active pipeline",
-          type: task.completed ? "success" : "info"
+          message: `Deleted "${task.title}"`,
+          type: "info",
+          undoLabel: "Undo",
+          onUndo: () => this.restoreTask(snapshot)
         });
       }
+      return task;
+    }
+
+    restoreTask(snapshot) {
+      if (!snapshot) return null;
+      const task = this._prepareTaskInMemory(snapshot);
+      this.taskMap.set(String(task.id), task);
+      if (task.completed) {
+        this.completedCount += 1;
+        this._invalidateCompletedCaches();
+      } else {
+        this.tasks.push(task);
+      }
+      const catChanged = task.id !== "general_focus" && this._incCategory(task.category, 1);
+      Storage.putItem("tasks", this._stripInternalFields(task))
+        .then(() => Storage.broadcastDataChanged("tasks"))
+        .catch((err) => this.emit("storageError", err));
+      if (catChanged) this.emit("categoriesChanged", this.getCategories());
+      this.emit("taskAdded", { task });
+      this.emit("tasksUpdated", this.tasks);
+      return task;
+    }
+
+    toggleTaskComplete(id, opts = {}) {
+      const key = String(id);
+      const task = this.taskMap.get(key);
+      if (!task) return null;
+
+      const prev = { ...task };
+      const nowCompleted = !task.completed;
+      const next = this._prepareTaskInMemory({
+        ...task,
+        completed: nowCompleted,
+        completedDate: nowCompleted ? new Date().toISOString() : null
+      });
+
+      this.taskMap.set(key, next);
+      const idx = this.tasks.findIndex((t) => String(t.id) === key);
+
+      if (nowCompleted) {
+        if (idx !== -1) this.tasks.splice(idx, 1);
+        this.completedCount += 1;
+        const xpDelta = (next.estimatedDuration || 25) * 4;
+        this.awardXP(xpDelta);
+        SoundEffects.playCompletionChime();
+        this.emit("celebrate", { taskId: next.id });
+        if (next.recurring && next.recurring !== "none") {
+          this.handleRecurringRecreation(next);
+        }
+      } else {
+        if (idx === -1) this.tasks.push(next);
+        this.completedCount = Math.max(0, this.completedCount - 1);
+        this.awardXP(-((next.estimatedDuration || 25) * 4));
+      }
+
+      this._invalidateCompletedCaches();
+
+      Storage.putItem("tasks", this._stripInternalFields(next))
+        .then(() => Storage.broadcastDataChanged("tasks"))
+        .catch((err) => this.emit("storageError", err));
+
+      this.emit("taskUpdated", { task: next, prev });
+      this.emit("tasksUpdated", this.tasks);
+
+      if (!opts.silent) {
+        this.emit("notification", {
+          message: nowCompleted ? `Completed "${next.title}" (+${(next.estimatedDuration || 25) * 4} XP)` : `Restored "${next.title}"`,
+          type: nowCompleted ? "success" : "info",
+          undoLabel: opts.noUndo ? "" : "Undo",
+          onUndo: opts.noUndo ? null : () => this.toggleTaskComplete(next.id, { noUndo: true })
+        });
+      }
+      return next;
     }
 
     handleRecurringRecreation(task) {
-      const parts = (task.dueDate || "").split("-").map(Number);
-      const nextDate = parts.length === 3 ? new Date(parts[0], parts[1] - 1, parts[2]) : new Date();
+      const nextDate = parseLocalDate(task.dueDate || getLocalDateString());
       if (task.recurring === "daily") nextDate.setDate(nextDate.getDate() + 1);
       else if (task.recurring === "weekly") nextDate.setDate(nextDate.getDate() + 7);
       else if (task.recurring === "monthly") nextDate.setMonth(nextDate.getMonth() + 1);
@@ -588,123 +944,196 @@ document.addEventListener("DOMContentLoaded", async function () {
         this.addTask({
           title: task.title,
           description: task.description,
+          url: task.url || "",
           dueDate: getLocalDateString(nextDate),
           priority: task.priority,
           category: task.category,
           recurring: task.recurring,
           estimatedDuration: task.estimatedDuration,
-          subtasks: task.subtasks.map(s => ({ ...s, completed: false }))
-        });
-      }, 500);
+          subtasks: (task.subtasks || []).map((s) => ({ ...s, completed: false }))
+        }, { silent: true });
+      }, 350);
     }
 
     addSubtask(taskId, title) {
-      const task = this.tasks.find(t => t.id == taskId);
-      if (task && title.trim()) {
-        if (!task.subtasks) task.subtasks = [];
-        task.subtasks.push({
-          id: `${taskId}_sub_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-          title: title.trim(),
-          completed: false
-        });
-
-        // Async Background Persist
-        StorageService.putItem("tasks", task);
-
-        this.emit("tasksUpdated", this.tasks);
-      }
+      const task = this.getTaskById(taskId);
+      const clean = String(title || "").trim();
+      if (!task || !clean) return;
+      const subtasks = [...(task.subtasks || []), {
+        id: `${task.id}_sub_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+        title: clean,
+        completed: false
+      }];
+      this.updateTask(task.id, { subtasks }, { silent: true });
     }
 
     addSubtasks(taskId, titlesArray) {
-      const task = this.tasks.find(t => t.id == taskId);
-      if (task && Array.isArray(titlesArray)) {
-        if (!task.subtasks) task.subtasks = [];
-        titlesArray.forEach((title, idx) => {
-          if (title && title.trim()) {
-            task.subtasks.push({
-              id: `${taskId}_sub_${Date.now()}_${idx}_${Math.random().toString(36).substr(2, 5)}`,
-              title: title.trim(),
-              completed: false
-            });
-          }
-        });
-
-        // Async Background Persist
-        StorageService.putItem("tasks", task);
-
-        this.emit("tasksUpdated", this.tasks);
-      }
+      const task = this.getTaskById(taskId);
+      if (!task || !Array.isArray(titlesArray)) return;
+      const added = titlesArray
+        .map((t) => String(t || "").trim())
+        .filter(Boolean)
+        .map((title, idx) => ({
+          id: `${task.id}_sub_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}`,
+          title,
+          completed: false
+        }));
+      if (added.length === 0) return;
+      const subtasks = [...(task.subtasks || []), ...added];
+      this.updateTask(task.id, { subtasks }, { silent: true });
     }
 
     toggleSubtask(taskId, subtaskId) {
-      const task = this.tasks.find(t => t.id === taskId);
-      if (task) {
-        const sub = task.subtasks.find(s => s.id === subtaskId);
-        if (sub) {
-          sub.completed = !sub.completed;
-
-          // Async Background Persist
-          StorageService.putItem("tasks", task);
-
-          this.emit("tasksUpdated", this.tasks);
-        }
-      }
+      const task = this.getTaskById(taskId);
+      if (!task || !Array.isArray(task.subtasks)) return;
+      const subtasks = task.subtasks.map((s) =>
+        s.id === subtaskId ? { ...s, completed: !s.completed } : s
+      );
+      this.updateTask(task.id, { subtasks }, { silent: true });
     }
 
     deleteSubtask(taskId, subtaskId) {
-      const task = this.tasks.find(t => t.id === taskId);
-      if (task) {
-        task.subtasks = task.subtasks.filter(s => s.id !== subtaskId);
+      const task = this.getTaskById(taskId);
+      if (!task || !Array.isArray(task.subtasks)) return;
+      const subtasks = task.subtasks.filter((s) => s.id !== subtaskId);
+      this.updateTask(task.id, { subtasks }, { silent: true });
+    }
 
-        // Async Background Persist
-        StorageService.putItem("tasks", task);
+    // -----------------------------------------------------------------------
+    // Lazy Completed Archive Pagination
+    // -----------------------------------------------------------------------
+    _invalidateCompletedCaches() {
+      this.completedPageCache.loaded = false;
+      this.completedPageCache.queryKey = "";
+      this.allCompletedCache = null;
+    }
 
-        this.emit("tasksUpdated", this.tasks);
+    _patchCompletedCacheItem(updatedTask) {
+      const items = this.completedPageCache.items;
+      const idx = items.findIndex((t) => String(t.id) === String(updatedTask.id));
+      if (idx !== -1) items[idx] = updatedTask;
+      if (this.allCompletedCache) {
+        const aIdx = this.allCompletedCache.findIndex((t) => String(t.id) === String(updatedTask.id));
+        if (aIdx !== -1) this.allCompletedCache[aIdx] = updatedTask;
       }
     }
 
-    // -------------------------------------------------------------------------
-    // Routines & Timetables
-    // -------------------------------------------------------------------------
+    async loadCompletedPage(options = {}) {
+      const reset = Boolean(options.reset);
+      const limit = options.limit || 50;
+      const search = (options.search !== undefined ? options.search : this.filters.search).trim();
+      const priority = options.priority !== undefined ? options.priority : this.filters.priority;
+      const category = options.category !== undefined ? options.category : this.filters.category;
+      const queryKey = `${search.toLowerCase()}|${priority}|${category}`;
+
+      const shouldReset = reset || !this.completedPageCache.loaded || this.completedPageCache.queryKey !== queryKey;
+      const offset = shouldReset ? 0 : this.completedPageCache.nextOffset;
+
+      const page = await Storage.getCompletedTasksPage({ offset, limit, search, priority, category });
+      const prepared = page.items.map((t) => {
+        const p = this._prepareTaskInMemory(t);
+        this.taskMap.set(String(p.id), p);
+        return p;
+      });
+
+      if (shouldReset) {
+        this.completedPageCache = {
+          items: prepared,
+          total: page.total,
+          hasMore: page.hasMore,
+          nextOffset: page.nextOffset,
+          queryKey,
+          loaded: true
+        };
+      } else {
+        const existingIds = new Set(this.completedPageCache.items.map((t) => String(t.id)));
+        for (let i = 0; i < prepared.length; i++) {
+          if (!existingIds.has(String(prepared[i].id))) {
+            this.completedPageCache.items.push(prepared[i]);
+          }
+        }
+        this.completedPageCache.total = page.total;
+        this.completedPageCache.hasMore = page.hasMore;
+        this.completedPageCache.nextOffset = page.nextOffset;
+      }
+
+      this.completedCount = page.total;
+      return this.completedPageCache;
+    }
+
+    async ensureAllCompletedLoaded() {
+      if (this.allCompletedCache) return this.allCompletedCache;
+      const all = await Storage.getAllItems("tasks");
+      const completed = [];
+      for (let i = 0; i < all.length; i++) {
+        if (all[i] && all[i].completed && all[i].id !== "general_focus") {
+          completed.push(this._prepareTaskInMemory(all[i]));
+        }
+      }
+      this.allCompletedCache = completed;
+      this.completedCount = completed.length;
+      return completed;
+    }
+
+    // -----------------------------------------------------------------------
+    // Routines CRUD
+    // -----------------------------------------------------------------------
     addRoutineBlock(data) {
       const routine = {
-        id: `rout_${Date.now()}`,
-        title: data.title.trim(),
+        id: `rout_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+        title: String(data.title || "").trim(),
         startTime: data.startTime,
         endTime: data.endTime,
         category: data.category || "Routine",
         color: data.color || "indigo",
-        icon: data.icon || "",
-        days: data.days || ["Mon", "Tue", "Wed", "Thu", "Fri"]
+        icon: String(data.icon || "").trim(),
+        days: Array.isArray(data.days) && data.days.length ? data.days : ["Mon", "Tue", "Wed", "Thu", "Fri"]
       };
       this.routines.push(routine);
-
-      // Async Background Persist
-      StorageService.putItem("routines", routine);
-
+      this.routineMap.set(String(routine.id), routine);
+      Storage.putItem("routines", routine)
+        .then(() => Storage.broadcastDataChanged("routines"))
+        .catch((err) => this.emit("storageError", err));
       this.emit("routinesUpdated", this.routines);
-      this.emit("notification", { message: `Routine block "${routine.title}" scheduled!`, type: "success" });
+      this.emit("notification", { message: `Block "${routine.title}" scheduled`, type: "success" });
+      return routine;
     }
 
     updateRoutineBlock(id, data) {
-      const idx = this.routines.findIndex(r => r.id === id);
-      if (idx !== -1) {
-        this.routines[idx] = {
-          ...this.routines[idx],
-          title: data.title.trim(),
-          startTime: data.startTime,
-          endTime: data.endTime,
-          category: data.category || "Routine",
-          color: data.color || "indigo",
-          icon: data.icon || "",
-          days: data.days || ["Mon", "Tue", "Wed", "Thu", "Fri"]
-        };
+      const key = String(id);
+      const idx = this.routines.findIndex((r) => String(r.id) === key);
+      if (idx === -1) return null;
+      const updated = {
+        ...this.routines[idx],
+        title: String(data.title || "").trim(),
+        startTime: data.startTime,
+        endTime: data.endTime,
+        category: data.category || "Routine",
+        color: data.color || "indigo",
+        icon: String(data.icon || "").trim(),
+        days: Array.isArray(data.days) && data.days.length ? data.days : ["Mon", "Tue", "Wed", "Thu", "Fri"]
+      };
+      this.routines[idx] = updated;
+      this.routineMap.set(key, updated);
+      Storage.putItem("routines", updated)
+        .then(() => Storage.broadcastDataChanged("routines"))
+        .catch((err) => this.emit("storageError", err));
+      this.emit("routinesUpdated", this.routines);
+      this.emit("notification", { message: "Block updated", type: "success" });
+      return updated;
+    }
 
-        // Async Background Persist
-        StorageService.putItem("routines", this.routines[idx]);
-
-        this.emit("routinesUpdated", this.routines);
-        this.emit("notification", { message: "Routine block updated successfully!", type: "success" });
+    deleteRoutineBlock(id) {
+      const key = String(id);
+      const removed = this.routineMap.get(key);
+      this.routineMap.delete(key);
+      this.routines = this.routines.filter((r) => String(r.id) !== key);
+      Storage.deleteItem("routines", id)
+        .then(() => Storage.broadcastDataChanged("routines"))
+        .catch((err) => this.emit("storageError", err));
+      this.emit("routinesUpdated", this.routines);
+      if (removed) {
+        this.emit("notification", { message: `Removed "${removed.title}"`, type: "info" });
       }
     }
 
@@ -713,49 +1142,33 @@ document.addEventListener("DOMContentLoaded", async function () {
       const [ehA, emA] = endTime.split(":").map(Number);
       const startMinA = shA * 60 + smA;
       const endMinA = ehA * 60 + emA;
+      const overlaps = [];
 
-      const overlappingBlocks = [];
-
-      this.routines.forEach(r => {
-        if (r.id === ignoreId) return;
-
-        // Check shared days
-        const sharedDays = r.days.filter(d => days.includes(d));
-        if (sharedDays.length === 0) return;
-
+      for (let i = 0; i < this.routines.length; i++) {
+        const r = this.routines[i];
+        if (r.id === ignoreId) continue;
+        const sharedDays = (r.days || []).filter((d) => days.includes(d));
+        if (sharedDays.length === 0) continue;
         const [shB, smB] = r.startTime.split(":").map(Number);
         const [ehB, emB] = r.endTime.split(":").map(Number);
         const startMinB = shB * 60 + smB;
         const endMinB = ehB * 60 + emB;
-
         if (startMinA < endMinB && endMinA > startMinB) {
-          overlappingBlocks.push({
-            block: r,
-            days: sharedDays
-          });
+          overlaps.push({ block: r, days: sharedDays });
         }
-      });
-
-      return overlappingBlocks;
+      }
+      return overlaps;
     }
 
-    deleteRoutineBlock(id) {
-      this.routines = this.routines.filter(r => r.id !== id);
-
-      // Async Background Persist
-      StorageService.deleteItem("routines", id);
-
-      this.emit("routinesUpdated", this.routines);
-      this.emit("notification", { message: "Routine block removed", type: "info" });
-    }
-
-    // -------------------------------------------------------------------------
-    // Habits & Consistency
-    // -------------------------------------------------------------------------
+    // -----------------------------------------------------------------------
+    // Habits & Streaks (with 1 Weekly Grace Shield + Minimal Boot Writes)
+    // -----------------------------------------------------------------------
     addHabit(title, category = "Routine", color = "indigo") {
+      const clean = String(title || "").trim();
+      if (!clean) return null;
       const habit = {
-        id: `hab_${Date.now()}`,
-        title: title.trim(),
+        id: `hab_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+        title: clean,
         category,
         color,
         streak: 0,
@@ -764,183 +1177,334 @@ document.addEventListener("DOMContentLoaded", async function () {
         createdAt: new Date().toISOString()
       };
       this.habits.push(habit);
-
-      // Async Background Persist
-      StorageService.putItem("habits", habit);
-
-      this.emit("habitsUpdated", this.habits);
-      this.emit("notification", { message: `New atomic habit "${habit.title}" active!`, type: "success" });
+      this.habitMap.set(String(habit.id), habit);
+      Storage.putItem("habits", habit)
+        .then(() => Storage.broadcastDataChanged("habits"))
+        .catch((err) => this.emit("storageError", err));
+      this.emit("habitsUpdated", { habit, all: this.habits });
+      this.emit("notification", { message: `Habit "${habit.title}" added`, type: "success" });
       return habit;
     }
 
-    deleteHabit(id) {
-      this.habits = this.habits.filter(h => h.id !== id);
-
-      // Async Background Persist
-      StorageService.deleteItem("habits", id);
-
-      this.emit("habitsUpdated", this.habits);
+    updateHabit(id, data) {
+      const key = String(id);
+      const idx = this.habits.findIndex((h) => String(h.id) === key);
+      if (idx === -1) return null;
+      const updated = {
+        ...this.habits[idx],
+        title: String(data.title || "").trim(),
+        category: data.category || "Routine",
+        color: data.color || "indigo"
+      };
+      this.habits[idx] = updated;
+      this.habitMap.set(key, updated);
+      Storage.putItem("habits", updated)
+        .then(() => Storage.broadcastDataChanged("habits"))
+        .catch((err) => this.emit("storageError", err));
+      this.emit("habitsUpdated", { habit: updated, all: this.habits });
+      this.emit("notification", { message: `Habit "${updated.title}" updated`, type: "success" });
+      return updated;
     }
 
-    updateHabit(id, data) {
-      const idx = this.habits.findIndex(h => h.id === id);
-      if (idx !== -1) {
-        this.habits[idx] = {
-          ...this.habits[idx],
-          title: data.title.trim(),
-          category: data.category || "Routine",
-          color: data.color || "indigo"
-        };
-
-        // Async Background Persist
-        StorageService.putItem("habits", this.habits[idx]);
-
-        this.emit("habitsUpdated", this.habits);
-        this.emit("notification", { message: `Habit "${data.title}" updated!`, type: "success" });
+    deleteHabit(id) {
+      const key = String(id);
+      const removed = this.habitMap.get(key);
+      this.habitMap.delete(key);
+      this.habits = this.habits.filter((h) => String(h.id) !== key);
+      Storage.deleteItem("habits", id)
+        .then(() => Storage.broadcastDataChanged("habits"))
+        .catch((err) => this.emit("storageError", err));
+      this.emit("habitsUpdated", { deletedId: id, all: this.habits });
+      if (removed) {
+        this.emit("notification", { message: `Removed "${removed.title}"`, type: "info" });
       }
     }
 
     toggleHabitCompletion(id, dateStr) {
-      const habit = this.habits.find(h => h.id === id);
-      if (habit) {
-        if (!habit.history) habit.history = {};
+      const habit = this.habitMap.get(String(id));
+      if (!habit) return;
+      if (!habit.history) habit.history = {};
 
-        const todayStr = getLocalDateString();
-        if (dateStr > todayStr) {
-          this.emit("notification", { message: "Cannot complete habits for future dates!", type: "error" });
-          return;
-        }
+      const todayStr = getLocalDateString();
+      if (dateStr > todayStr) {
+        this.emit("notification", { message: "Cannot log habits for future dates", type: "error" });
+        return;
+      }
 
-        habit.history[dateStr] = !habit.history[dateStr];
-        this.recalculateHabitStreaks(habit);
+      const nextVal = !habit.history[dateStr];
+      if (nextVal) habit.history[dateStr] = true;
+      else delete habit.history[dateStr];
 
-        // Async Background Persist
-        StorageService.putItem("habits", habit);
+      this.recalculateHabitStreaks(habit);
+      this.awardXP(nextVal ? 25 : -25);
 
-        this.emit("habitsUpdated", this.habits);
-        
-        if (habit.history[dateStr]) {
-          this.emit("celebrate", { elementId: `habit_checkbox_${id}_${dateStr}` });
-          this.emit("notification", { message: `Habit "${habit.title}" checked! Keep it up!`, type: "success" });
-        }
+      Storage.putItem("habits", habit)
+        .then(() => Storage.broadcastDataChanged("habits"))
+        .catch((err) => this.emit("storageError", err));
+
+      this.emit("habitsUpdated", { habitId: habit.id, habit, dateStr, all: this.habits });
+
+      if (nextVal) {
+        SoundEffects.playCompletionChime();
+        this.emit("celebrate", { elementId: `habit_checkbox_${habit.id}_${dateStr}` });
+        this.emit("notification", { message: `"${habit.title}" checked (+25 XP)`, type: "success" });
       }
     }
 
     recalculateHabitStreaks(habit) {
+      const prevStreak = habit.streak || 0;
+      const prevMax = habit.maxStreak || 0;
       const history = habit.history || {};
+
       const sortedDates = Object.keys(history)
-        .filter(d => history[d] === true)
-        .sort((a, b) => new Date(b) - new Date(a)); // Newest first
+        .filter((d) => history[d] === true)
+        .sort((a, b) => (a < b ? 1 : a > b ? -1 : 0)); // Lexicographic YYYY-MM-DD desc
 
       if (sortedDates.length === 0) {
         habit.streak = 0;
-        return;
+        return prevStreak !== 0;
       }
 
       const todayStr = getLocalDateString();
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = getLocalDateString(yesterday);
-
+      const yesterdayStr = getNDaysFromNow(-1);
+      const twoDaysAgoStr = getNDaysFromNow(-2);
       const latestDate = sortedDates[0];
+
+      let graceApplied = false;
       if (latestDate !== todayStr && latestDate !== yesterdayStr) {
-        habit.streak = 0;
-        return;
+        // 1 Weekly Grace Shield protects streak across a single missed day
+        if (latestDate === twoDaysAgoStr && !this.graceShieldUsed) {
+          graceApplied = true;
+        } else {
+          habit.streak = 0;
+          return prevStreak !== 0;
+        }
       }
 
       let currentStreak = 1;
-      let checkDate = new Date(latestDate);
+      let checkMs = parseLocalDate(latestDate).getTime();
 
       for (let i = 1; i < sortedDates.length; i++) {
-        const prevDate = new Date(sortedDates[i]);
-        const diffDays = (checkDate - prevDate) / (1000 * 60 * 60 * 24);
-
-        if (Math.round(diffDays) === 1) {
-          currentStreak++;
-          checkDate = prevDate;
-        } else if (Math.round(diffDays) > 1) {
+        const prevMs = parseLocalDate(sortedDates[i]).getTime();
+        const diffDays = Math.round((checkMs - prevMs) / 86400000);
+        if (diffDays === 1) {
+          currentStreak += 1;
+          checkMs = prevMs;
+        } else if (diffDays > 1) {
           break;
         }
       }
 
       habit.streak = currentStreak;
+      habit.graceProtected = graceApplied;
       if (habit.streak > (habit.maxStreak || 0)) {
         habit.maxStreak = habit.streak;
       }
+      return habit.streak !== prevStreak || habit.maxStreak !== prevMax;
     }
 
-    verifyHabitsStreaksOnBoot() {
-      this.habits.forEach(h => this.recalculateHabitStreaks(h));
-      this.habits.forEach(h => StorageService.putItem("habits", h));
+    async verifyHabitsStreaksOnBoot() {
+      const changed = [];
+      for (let i = 0; i < this.habits.length; i++) {
+        if (this.recalculateHabitStreaks(this.habits[i])) {
+          changed.push(this.habits[i]);
+        }
+      }
+      if (changed.length > 0) {
+        await Storage.putBatch("habits", changed);
+      }
     }
 
-    // -------------------------------------------------------------------------
-    // Bullet Journal & Reflections
-    // -------------------------------------------------------------------------
-    saveJournalEntry(dateStr, data) {
-      if (!this.journal[dateStr]) this.journal[dateStr] = {};
-      this.journal[dateStr] = {
-        ...this.journal[dateStr],
-        ...data
+    // -----------------------------------------------------------------------
+    // Journal (Unified with Voice Companion Schema)
+    // -----------------------------------------------------------------------
+    saveJournalEntry(dateStr, data, opts = {}) {
+      const prev = this.journal[dateStr] || {};
+      const next = { ...prev, ...data };
+      // Normalize voice-agent `reflection`/`mood` fields if present
+      if (data.reflection && !data.eveningReflection) {
+        next.eveningReflection = prev.eveningReflection
+          ? `${prev.eveningReflection}\n\n${data.reflection}`
+          : data.reflection;
+      }
+      if (data.mood && !data.morningMood) {
+        const moodMap = { great: "energized", good: "calm", neutral: "peaceful", drained: "tired", stressed: "tired" };
+        next.morningMood = moodMap[data.mood] || data.mood;
+      }
+      this.journal[dateStr] = next;
+
+      Storage.putItem("journal", { dateStr, ...next })
+        .then(() => Storage.broadcastDataChanged("journal"))
+        .catch((err) => this.emit("storageError", err));
+
+      this.emit("journalUpdated", { dateStr, entry: next, silentAutosave: Boolean(opts.silentAutosave) });
+    }
+
+    // -----------------------------------------------------------------------
+    // Persistent Background Focus Timer Engine (#13 Contract)
+    // -----------------------------------------------------------------------
+    async syncTimerFromBackground() {
+      const res = await sendExtensionMessage({ type: "TIMER_GET_STATE" });
+      if (res && res.success && res.state) {
+        this._applyRemoteTimerState(res.state);
+        if (Array.isArray(res.completions) && res.completions.length > 0) {
+          await this._drainTimerCompletions(res.completions);
+        }
+        return;
+      }
+      // Fallback for non-extension HTTP preview mode
+      const saved = await Storage.getExtensionLocal("aurora_timer_state", null);
+      if (saved && typeof saved === "object") {
+        this._applyRemoteTimerState(saved);
+      }
+    }
+
+    _applyRemoteTimerState(state) {
+      if (!state) return;
+      const wasRunning = this.timer.isRunning;
+      const wasAlarm = this.isAlarmActive;
+
+      this.timer = {
+        ...this.timer,
+        ...state,
+        duration: this._computeLiveDuration(state)
       };
 
-      // Async Background Persist
-      StorageService.putItem("journal", { dateStr, ...this.journal[dateStr] });
+      if (this.timer.isRunning) {
+        this._ensureLocalTickLoop();
+      } else {
+        this._clearLocalTickLoop();
+      }
 
-      this.emit("journalUpdated", this.journal);
+      if (state.alarmActive && !wasAlarm) {
+        this.playAlarmLoop();
+      } else if (!state.alarmActive && wasAlarm) {
+        this.stopAlarm(true);
+      }
+
+      if (wasRunning !== this.timer.isRunning || true) {
+        this.emit("timerStateChanged", this.timer);
+      }
     }
 
-    // -------------------------------------------------------------------------
-    // Pomodoro Productivity Focus Engine
-    // -------------------------------------------------------------------------
-    startTimer(taskId = null) {
-      this.stopAlarm();
-      if (taskId !== null) this.timer.activeTaskId = taskId;
-      this.timer.isRunning = true;
-      if (this.timer.type !== "stopwatch") {
-        this.timer.targetEndTime = Date.now() + (this.timer.duration * 1000);
-      } else {
-        this.timer.stopwatchStartTime = Date.now() - (this.timer.duration * 1000);
+    _computeLiveDuration(st) {
+      if (!st.isRunning) return Math.max(0, Number(st.duration) || 0);
+      if (st.type === "stopwatch" && st.stopwatchStartTime) {
+        return Math.max(0, Math.floor((Date.now() - st.stopwatchStartTime) / 1000));
       }
-      this.emit("timerStateChanged", this.timer);
+      if (st.type !== "stopwatch" && st.targetEndTime) {
+        return Math.max(0, Math.round((st.targetEndTime - Date.now()) / 1000));
+      }
+      return Math.max(0, Number(st.duration) || 0);
+    }
 
-      if (this.timerInterval) clearInterval(this.timerInterval);
+    async _drainTimerCompletions(completions) {
+      if (!Array.isArray(completions) || completions.length === 0) return;
+      const ackIds = [];
+      for (let i = 0; i < completions.length; i++) {
+        const ev = completions[i];
+        if (!ev) continue;
+        this.logFocusSession(ev.taskId || "general_focus", ev.minutes || 25, ev.completedAt);
+        if (ev.id) ackIds.push(ev.id);
+      }
+      if (ackIds.length > 0) {
+        await sendExtensionMessage({ type: "TIMER_ACK_COMPLETIONS", payload: { ids: ackIds } });
+      }
+    }
+
+    _ensureLocalTickLoop() {
+      if (this.timerInterval) return;
       this.timerInterval = setInterval(() => this.tickTimer(), 1000);
     }
 
-    pauseTimer() {
-      this.stopAlarm();
-      this.timer.isRunning = false;
-      clearInterval(this.timerInterval);
-      if (this.timer.type !== "stopwatch" && this.timer.targetEndTime) {
-        this.timer.duration = Math.max(0, Math.round((this.timer.targetEndTime - Date.now()) / 1000));
-        this.timer.targetEndTime = null;
-      } else if (this.timer.type === "stopwatch" && this.timer.stopwatchStartTime) {
-        this.timer.duration = Math.floor((Date.now() - this.timer.stopwatchStartTime) / 1000);
-        this.timer.stopwatchStartTime = null;
+    _clearLocalTickLoop() {
+      if (this.timerInterval) {
+        clearInterval(this.timerInterval);
+        this.timerInterval = null;
       }
+    }
+
+    _mirrorTimerStateLocal() {
+      Storage.setExtensionLocal("aurora_timer_state", { ...this.timer, updatedAt: Date.now() }).catch(() => {});
+      Storage.broadcastSync("TIMER_SYNC", { state: this.timer });
+    }
+
+    startTimer(taskId = null) {
+      this.stopAlarm(true);
+      if (taskId !== null && taskId !== undefined) {
+        this.timer.activeTaskId = taskId;
+        const linked = this.getTaskById(taskId);
+        this.timer.activeTaskTitle = linked ? linked.title : "";
+      }
+      this.timer.isRunning = true;
+      this.timer.alarmActive = false;
+      if (this.timer.type !== "stopwatch") {
+        this.timer.targetEndTime = Date.now() + this.timer.duration * 1000;
+        this.timer.stopwatchStartTime = null;
+      } else {
+        this.timer.stopwatchStartTime = Date.now() - this.timer.duration * 1000;
+        this.timer.targetEndTime = null;
+      }
+
+      this._ensureLocalTickLoop();
       this.emit("timerStateChanged", this.timer);
+
+      sendExtensionMessage({
+        type: "TIMER_START",
+        payload: {
+          mode: this.timer.type,
+          durationSec: this.timer.duration,
+          taskId: this.timer.activeTaskId,
+          taskTitle: this.timer.activeTaskTitle
+        }
+      }).then((res) => {
+        if (!res) this._mirrorTimerStateLocal();
+      });
+    }
+
+    pauseTimer() {
+      this.stopAlarm(true);
+      this.timer.isRunning = false;
+      this._clearLocalTickLoop();
+      this.timer.duration = this._computeLiveDuration({ ...this.timer, isRunning: true });
+      this.timer.targetEndTime = null;
+      this.timer.stopwatchStartTime = null;
+      this.emit("timerStateChanged", this.timer);
+
+      sendExtensionMessage({ type: "TIMER_PAUSE" }).then((res) => {
+        if (!res) this._mirrorTimerStateLocal();
+      });
     }
 
     resetTimer() {
-      this.stopAlarm();
+      this.stopAlarm(true);
       this.timer.isRunning = false;
-      clearInterval(this.timerInterval);
+      this.timer.alarmActive = false;
+      this._clearLocalTickLoop();
       this.timer.targetEndTime = null;
       this.timer.stopwatchStartTime = null;
       this.timer.activeTaskId = null;
+      this.timer.activeTaskTitle = "";
       this.setTimerDuration();
       this.emit("timerStateChanged", this.timer);
+
+      sendExtensionMessage({
+        type: "TIMER_RESET",
+        payload: { mode: this.timer.type, durationSec: this.timer.duration, clearTask: true }
+      }).then((res) => {
+        if (!res) this._mirrorTimerStateLocal();
+      });
     }
 
     restartTimer() {
-      this.stopAlarm();
+      const activeId = this.timer.activeTaskId;
+      this.stopAlarm(true);
       this.timer.isRunning = false;
-      clearInterval(this.timerInterval);
+      this._clearLocalTickLoop();
       this.timer.targetEndTime = null;
       this.timer.stopwatchStartTime = null;
       this.setTimerDuration();
-      this.startTimer(this.timer.activeTaskId);
+      this.startTimer(activeId);
     }
 
     setTimerDuration() {
@@ -953,7 +1517,7 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     changeTimerType(type) {
       if (this.timer.isRunning) {
-        this.emit("notification", { message: "Cannot change timer type while a session is active!", type: "info" });
+        this.emit("notification", { message: "Pause the active session before switching modes", type: "info" });
         return;
       }
       this.timer.type = type;
@@ -963,47 +1527,45 @@ document.addEventListener("DOMContentLoaded", async function () {
     skipTimerInterval(autoStart = true) {
       const wasRunning = this.timer.isRunning;
       const currentTaskId = this.timer.activeTaskId;
-      this.pauseTimer();
+      this._clearLocalTickLoop();
+      this.timer.isRunning = false;
 
       if (this.timer.type === "pomodoro") {
         this.savedFocusTaskId = currentTaskId;
         this.timer.type = "shortBreak";
-        this.resetTimer();
-        this.emit("notification", { message: "Focus skipped · Break started", type: "info" });
+        this.setTimerDuration();
+        this.emit("notification", { message: "Focus skipped · Break ready", type: "info" });
       } else {
-        const taskIdToRestore = currentTaskId || this.savedFocusTaskId;
+        const restoreId = currentTaskId || this.savedFocusTaskId;
         this.timer.type = "pomodoro";
-        this.resetTimer();
-        if (taskIdToRestore) {
-          this.timer.activeTaskId = taskIdToRestore;
-        }
-        this.emit("notification", { message: "Break skipped · Focus started", type: "info" });
+        this.setTimerDuration();
+        if (restoreId) this.timer.activeTaskId = restoreId;
+        this.emit("notification", { message: "Break skipped · Focus ready", type: "info" });
       }
 
-      if (wasRunning || autoStart) {
-        this.startTimer(this.timer.activeTaskId);
-      }
+      sendExtensionMessage({
+        type: "TIMER_SKIP",
+        payload: { autoStart: Boolean(wasRunning || autoStart) }
+      }).then((res) => {
+        if (res && res.state) {
+          this._applyRemoteTimerState(res.state);
+        } else if (wasRunning || autoStart) {
+          this.startTimer(this.timer.activeTaskId);
+        } else {
+          this._mirrorTimerStateLocal();
+          this.emit("timerStateChanged", this.timer);
+        }
+      });
     }
 
     tickTimer() {
       if (!this.timer.isRunning) return;
-
       if (this.timer.type === "stopwatch") {
-        if (this.timer.stopwatchStartTime) {
-          this.timer.duration = Math.floor((Date.now() - this.timer.stopwatchStartTime) / 1000);
-        } else {
-          this.timer.duration += 1;
-        }
+        this.timer.duration = this._computeLiveDuration(this.timer);
         this.timer.elapsedSeconds = this.timer.duration;
       } else {
-        if (this.timer.targetEndTime) {
-          const remaining = Math.round((this.timer.targetEndTime - Date.now()) / 1000);
-          this.timer.duration = Math.max(0, remaining);
-        } else {
-          this.timer.duration -= 1;
-        }
+        this.timer.duration = this._computeLiveDuration(this.timer);
         this.timer.elapsedSeconds += 1;
-
         if (this.timer.duration <= 0) {
           this.timer.duration = 0;
           this.timerComplete();
@@ -1015,28 +1577,32 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     timerComplete() {
       const completedType = this.timer.type;
-      this.pauseTimer();
+      this._clearLocalTickLoop();
+      this.timer.isRunning = false;
+      this.timer.targetEndTime = null;
 
-      NotificationService.send("Session Achieved!", {
-        body: completedType === "pomodoro" ? "Focus session cleared! Take a breather." : "Break completed! Ready to lock in?"
-      });
+      NotificationService.send(
+        "Session Complete",
+        { body: completedType === "pomodoro" ? "Focus block finished. Take a quick break." : "Break finished. Ready to focus?" },
+        this.notificationsEnabled
+      );
 
-      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+      if (navigator.vibrate) {
+        try { navigator.vibrate([180, 90, 180]); } catch (_) {}
+      }
 
       if (completedType === "pomodoro") {
-        const minutes = Math.round(this.timer.totalDuration / 60) || 25;
+        const minutes = Math.round((this.timer.totalDuration || 1500) / 60) || 25;
         this.logFocusSession(this.timer.activeTaskId || "general_focus", minutes);
         this.timer.completedSessions = (this.timer.completedSessions || 0) + 1;
       }
 
       this.playAlarmLoop();
 
-      // Determine next timer type based on the Pomodoro cycle:
-      // Focus -> Short Break -> Focus -> Short Break -> Focus -> Short Break -> Focus -> Long Break
       if (completedType === "pomodoro") {
         if (this.timer.completedSessions >= 4) {
           this.timer.type = "longBreak";
-          this.timer.completedSessions = 0; // reset cycle
+          this.timer.completedSessions = 0;
         } else {
           this.timer.type = "shortBreak";
         }
@@ -1045,52 +1611,45 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
 
       this.timer.activeTaskId = null;
+      this.timer.activeTaskTitle = "";
       this.setTimerDuration();
+      this._mirrorTimerStateLocal();
       this.emit("timerStateChanged", this.timer);
-
       this.emit("timerComplete", this.timer);
     }
 
-    logFocusSession(taskId, minutes) {
-      let task;
-      if (!taskId || taskId === "general_focus") {
-        task = this.tasks.find(t => t.id === "general_focus");
-        if (!task) {
-          task = {
-            id: "general_focus",
-            title: "General Focus",
-            description: "Accumulated unlinked focus sessions",
-            category: "Inbox",
-            completed: false,
-            focusSessions: [],
-            createdAt: new Date().toISOString()
-          };
-          this.tasks.push(task);
-        }
-      } else {
-        task = this.tasks.find(t => t.id === taskId);
-      }
+    logFocusSession(taskId, minutes, completedAtISO = new Date().toISOString()) {
+      const targetId = taskId || "general_focus";
+      let task = this.getTaskById(targetId);
 
-      if (task) {
-        if (!task.focusSessions) task.focusSessions = [];
-        task.focusSessions.push({
-          startTime: new Date().toISOString(),
-          duration: minutes
+      if (!task && targetId === "general_focus") {
+        task = this._prepareTaskInMemory({
+          id: "general_focus",
+          title: "General Focus",
+          description: "Accumulated unlinked focus sessions",
+          category: "Inbox",
+          completed: false,
+          focusSessions: [],
+          createdAt: new Date().toISOString()
         });
-        
-        // Async Background Persist
-        StorageService.putItem("tasks", task);
-
-        this.emit("tasksUpdated", this.tasks);
-        this.emit("notification", { message: `Logged ${minutes}m focus time on "${task.title}"!`, type: "success" });
+        this.tasks.push(task);
+        this.taskMap.set("general_focus", task);
       }
+
+      if (!task) return;
+      const focusSessions = [...(task.focusSessions || []), {
+        startTime: completedAtISO,
+        duration: Number(minutes) || 25
+      }];
+      this.awardXP(100);
+      this.updateTask(task.id, { focusSessions }, { silent: true });
+      this.emit("notification", { message: `Logged ${minutes}m focus on "${task.title}" (+100 XP)`, type: "success" });
     }
 
     playAlarmLoop() {
-      // First stop any existing alarm
-      this.stopAlarm();
-      
+      this.stopAlarm(true);
       this.isAlarmActive = true;
+      this.timer.alarmActive = true;
       this.emit("alarmStateChanged", true);
 
       if (this.alarmSound === "steady_ascent") {
@@ -1100,12 +1659,8 @@ document.addEventListener("DOMContentLoaded", async function () {
             this.alarmAudio.loop = true;
           }
           this.alarmAudio.currentTime = 0;
-          this.alarmAudio.play().catch(err => {
-            console.warn("Audio play failed, falling back to beeps:", err);
-            this.playDefaultBeeps();
-          });
-        } catch (e) {
-          console.warn("Audio element creation failed, falling back to beeps:", e);
+          this.alarmAudio.play().catch(() => this.playDefaultBeeps());
+        } catch (_) {
           this.playDefaultBeeps();
         }
       } else {
@@ -1115,363 +1670,156 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     playDefaultBeeps() {
       try {
-        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        this.audioCtx = new AudioCtx();
+
         const playBeep = () => {
           if (!this.isAlarmActive || !this.audioCtx) return;
-          
           try {
             const now = this.audioCtx.currentTime;
-            
-            const playTone = (freq, startTime, duration) => {
-              if (!this.audioCtx) return;
+            [0, 0.24].forEach((offset) => {
               const osc = this.audioCtx.createOscillator();
               const gain = this.audioCtx.createGain();
+              osc.type = "sine";
+              osc.frequency.setValueAtTime(880, now + offset);
+              gain.gain.setValueAtTime(0.0001, now + offset);
+              gain.gain.linearRampToValueAtTime(0.14, now + offset + 0.04);
+              gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.16);
               osc.connect(gain);
               gain.connect(this.audioCtx.destination);
-              
-              osc.type = "sine";
-              osc.frequency.setValueAtTime(freq, startTime);
-              
-              gain.gain.setValueAtTime(0, startTime);
-              gain.gain.linearRampToValueAtTime(0.15, startTime + 0.05); // Attack
-              gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration); // Decay
-              
-              osc.start(startTime);
-              osc.stop(startTime + duration);
-            };
-
-            // Play a double beep sequence
-            playTone(880, now, 0.15); // A5 note
-            playTone(880, now + 0.25, 0.15);
-          } catch (e) {
-            console.warn("Error playing alarm beep:", e);
-          }
+              osc.start(now + offset);
+              osc.stop(now + offset + 0.17);
+            });
+          } catch (_) {}
         };
-
-        // Play immediately, then every 1.5 seconds
         playBeep();
         this.alarmInterval = setInterval(playBeep, 1500);
-
-      } catch (err) {
-        console.warn("Web Audio Context blocked/failed:", err);
-      }
+      } catch (_) {}
     }
 
-    stopAlarm() {
-      if (!this.isAlarmActive) return;
+    stopAlarm(skipRemote = false) {
+      const wasActive = this.isAlarmActive || this.timer.alarmActive;
       this.isAlarmActive = false;
+      this.timer.alarmActive = false;
       if (this.alarmInterval) {
         clearInterval(this.alarmInterval);
         this.alarmInterval = null;
       }
       if (this.audioCtx) {
-        try {
-          this.audioCtx.close();
-        } catch (e) {
-          console.warn("Error closing AudioContext:", e);
-        }
+        try { this.audioCtx.close(); } catch (_) {}
         this.audioCtx = null;
       }
       if (this.alarmAudio) {
         try {
           this.alarmAudio.pause();
           this.alarmAudio.currentTime = 0;
-        } catch (e) {
-          console.warn("Error pausing alarm audio:", e);
+        } catch (_) {}
+      }
+      if (wasActive) {
+        this.emit("alarmStateChanged", false);
+        if (!skipRemote) {
+          sendExtensionMessage({ type: "TIMER_DISMISS_ALARM" });
         }
       }
-      this.emit("alarmStateChanged", false);
     }
 
-    // -------------------------------------------------------------------------
-    // Preferences & Sidebars
-    // -------------------------------------------------------------------------
-    setView(view) {
-      this.currentView = view;
-      localStorage.setItem("indigo_redirect_view", view);
-      this.emit("viewChanged", view);
-    }
-
+    // -----------------------------------------------------------------------
+    // Preferences
+    // -----------------------------------------------------------------------
     setTheme(theme) {
       this.theme = theme;
-      StorageService.savePreference("theme", theme);
+      Storage.savePreference("theme", theme).then(() => Storage.broadcastDataChanged("preferences")).catch(() => {});
       this.emit("preferenceChanged", { theme });
     }
 
     setUiStyle(style) {
-      this.uiStyle = style;
-      StorageService.savePreference("ui_style", style);
-      this.emit("preferenceChanged", { uiStyle: style });
+      this.uiStyle = style === "neo-brutalism" ? "neo-brutalism" : "atelier";
+      Storage.savePreference("ui_style", this.uiStyle).then(() => Storage.broadcastDataChanged("preferences")).catch(() => {});
+      this.emit("preferenceChanged", { uiStyle: this.uiStyle });
     }
 
     setAccent(accent) {
-      this.accent = accent;
-      StorageService.savePreference("accent", accent);
-      this.emit("preferenceChanged", { accent });
+      this.accent = ACCENT_MAP[accent] || "aurora";
+      Storage.savePreference("accent", this.accent).then(() => Storage.broadcastDataChanged("preferences")).catch(() => {});
+      this.emit("preferenceChanged", { accent: this.accent });
     }
 
     setAlarmSound(sound) {
       this.alarmSound = sound;
-      StorageService.savePreference("alarm_sound", sound);
+      Storage.savePreference("alarm_sound", sound).then(() => Storage.broadcastDataChanged("preferences")).catch(() => {});
       this.emit("preferenceChanged", { alarmSound: sound });
     }
 
     setSidebarCollapsed(collapsed) {
-      this.sidebarCollapsed = collapsed;
-      StorageService.savePreference("sidebar_collapsed", collapsed);
-      this.emit("sidebarToggled", collapsed);
+      this.sidebarCollapsed = Boolean(collapsed);
+      Storage.savePreference("sidebar_collapsed", this.sidebarCollapsed).catch(() => {});
+      this.emit("sidebarToggled", this.sidebarCollapsed);
+    }
+
+    setNotificationsEnabled(enabled) {
+      this.notificationsEnabled = Boolean(enabled);
+      this.bannerDismissed = true;
+      Storage.putBatch("preferences", [
+        { key: "notifications_enabled", value: this.notificationsEnabled },
+        { key: "banner_dismissed", value: true }
+      ]).catch(() => {});
+      this.emit("preferenceChanged", { notificationsEnabled: this.notificationsEnabled });
     }
 
     setPersonalityProfile(profile) {
       this.personalityProfile = profile;
-      StorageService.savePreference("personality_profile", profile);
+      Storage.savePreference("personality_profile", profile).then(() => Storage.broadcastDataChanged("preferences")).catch(() => {});
       this.emit("personalityChanged", profile);
     }
 
-    setFilters(search, priority, category) {
-      this.filters.search = search;
-      this.filters.priority = priority;
-      this.filters.category = category;
-      this.emit("filtersChanged", this.filters);
-    }
-  }
-
-  // =========================================================================
-  // 3. SMART NOTIFICATIONS
-  // =========================================================================
-  class NotificationService {
-    static isSupported() {
-      return "Notification" in window;
+    setRoutinePrefs(prefs) {
+      this.routinePrefs = prefs;
+      Storage.savePreference("routine_prefs", prefs).then(() => Storage.broadcastDataChanged("preferences")).catch(() => {});
+      this.emit("routinesUpdated", this.routines);
     }
 
-    static async requestPermission() {
-      if (NotificationService.isSupported() && Notification.permission !== "granted") {
-        const res = await Notification.requestPermission();
-        return res === "granted";
+    async reloadStoreSlice(slice = "all") {
+      if (slice === "tasks" || slice === "all") {
+        const [activeTasks, completedCount] = await Promise.all([
+          Storage.getActiveTasks(),
+          Storage.getCompletedCount()
+        ]);
+        this.tasks = [];
+        this.taskMap.clear();
+        this.categoryCounts.clear();
+        for (let i = 0; i < activeTasks.length; i++) {
+          const t = this._prepareTaskInMemory(activeTasks[i]);
+          this.tasks.push(t);
+          this.taskMap.set(String(t.id), t);
+          if (t.id !== "general_focus") this._incCategory(t.category, 1);
+        }
+        this.completedCount = completedCount;
+        this._invalidateCompletedCaches();
+        this.emit("categoriesChanged", this.getCategories());
+        this.emit("tasksBatchUpdated", { ids: [] });
       }
-      return Notification.permission === "granted";
-    }
-
-    static send(title, options = {}) {
-      const enabledSetting = localStorage.getItem("aurora_notifications_enabled") !== "false";
-      if (NotificationService.isSupported() && Notification.permission === "granted" && enabledSetting) {
-        new Notification(title, {
-          ...options
-        });
+      if (slice === "habits" || slice === "all") {
+        this.habits = await Storage.getAllItems("habits");
+        this.habitMap = new Map(this.habits.map((h) => [String(h.id), h]));
+        this.emit("habitsUpdated", { all: this.habits });
+      }
+      if (slice === "routines" || slice === "all") {
+        this.routines = await Storage.getAllItems("routines");
+        this.routineMap = new Map(this.routines.map((r) => [String(r.id), r]));
+        this.emit("routinesUpdated", this.routines);
+      }
+      if (slice === "journal" || slice === "all") {
+        const rows = await Storage.getAllItems("journal");
+        this.journal = {};
+        rows.forEach(({ dateStr, ...entry }) => { if (dateStr) this.journal[dateStr] = entry; });
+        this.emit("journalUpdated", { dateStr: getLocalDateString(), entry: this.journal[getLocalDateString()] || {} });
       }
     }
   }
 
   // =========================================================================
-  // 3.5 BEHAVIORAL SCIENCE & PERSONALITY PROFILING ENGINE
-  // =========================================================================
-  const PERSONALITY_QUESTIONS = [
-    {
-      id: "chronotype",
-      kicker: "Pillar 1: Circadian Energy",
-      title: "When is your mind at its peak analytical clarity?",
-      subtitle: "Tasks requiring deep executive function should match your biological rhythm.",
-      options: [
-        {
-          value: "early_falcon",
-          icon: "🌅",
-          label: "Early Falcon (06:00 – 10:00)",
-          desc: "Highest discipline at dawn. Energy naturally tapers off by late afternoon."
-        },
-        {
-          value: "midday_climber",
-          icon: "☀️",
-          label: "Midday Climber (10:00 – 14:00)",
-          desc: "Requires a gradual morning warm-up. Strikes peak velocity around midday."
-        },
-        {
-          value: "twilight_owl",
-          icon: "🌙",
-          label: "Twilight Owl (18:00 – 23:00)",
-          desc: "Slow day start. Deep creative flow and clarity unlock after dusk."
-        },
-        {
-          value: "variable",
-          icon: "⚡",
-          label: "Wave Surfer (Flexible & Variable)",
-          desc: "Energy fluctuates based on inspiration. Needs adaptive micro-sprints."
-        }
-      ]
-    },
-    {
-      id: "procrastination",
-      kicker: "Pillar 2: Emotional Friction",
-      title: "When you delay a scheduled task, what is the core friction?",
-      subtitle: "Procrastination is emotional regulation. The AI will engineer micro-starters to dissolve this exact trigger.",
-      options: [
-        {
-          value: "perfectionism",
-          icon: "🎯",
-          label: "Perfectionist Resistance",
-          desc: "Fear of suboptimal output, endless research, or waiting for ideal conditions."
-        },
-        {
-          value: "overwhelm",
-          icon: "🌪️",
-          label: "Cognitive Overwhelm",
-          desc: "Too many open tabs and loose ends. Paralyzed about which thread to pull first."
-        },
-        {
-          value: "boredom",
-          icon: "🥱",
-          label: "Low-Stimulation Boredom",
-          desc: "The task feels mundane, mechanical, or devoid of novelty and urgency."
-        },
-        {
-          value: "fatigue",
-          icon: "🔋",
-          label: "Executive Burnout & Fatigue",
-          desc: "Depleted mental stamina, brain fog, or chronic overcommitment to others."
-        }
-      ]
-    },
-    {
-      id: "pacing",
-      kicker: "Pillar 3: Flow Architecture",
-      title: "How does your brain naturally sustain execution momentum?",
-      subtitle: "Determines how the AI groups, sequences, and intervals your day.",
-      options: [
-        {
-          value: "sprints",
-          icon: "🏃",
-          label: "Interval Sprints (20–25m bursts)",
-          desc: "Fast, punchy Pomodoro sessions with frequent dopamine reset breaks."
-        },
-        {
-          value: "deep_dive",
-          icon: "🧘",
-          label: "Deep Immersion (60–90m unbroken)",
-          desc: "Long, uninterrupted blocks. Hate context switching once in the zone."
-        },
-        {
-          value: "rule_of_three",
-          icon: "3️⃣",
-          label: "Power of Three (Capped & Shielded)",
-          desc: "Show me exactly 3 key objectives. Hide everything else from view."
-        },
-        {
-          value: "momentum",
-          icon: "🔥",
-          label: "Micro-Wins Chain (Snowball)",
-          desc: "Conquer a tiny 2-minute win first to ignite neurological momentum."
-        }
-      ]
-    },
-    {
-      id: "coach_voice",
-      kicker: "Pillar 4: Companion Persona",
-      title: "Which coaching voice resonates most deeply with you?",
-      subtitle: "The AI strategist will speak, nudge, and celebrate in this personality tone.",
-      options: [
-        {
-          value: "stoic",
-          icon: "🥋",
-          label: "The Stoic Strategist",
-          desc: "Calm, concise, disciplined, zero fluff. Focuses on duty and quiet consistency."
-        },
-        {
-          value: "scientist",
-          icon: "🧠",
-          label: "The Behavioral Scientist",
-          desc: "Analytical, evidence-based, explains the cognitive psychology behind each recommendation."
-        },
-        {
-          value: "empathetic",
-          icon: "🌿",
-          label: "The Empathetic Anchor",
-          desc: "Warm, supportive, protects your emotional capacity and shields against burnout."
-        },
-        {
-          value: "hype",
-          icon: "⚡",
-          label: "The High-Energy Hype Coach",
-          desc: "Vibrant, celebratory, gamified, dopamine-fueled enthusiasm for every milestone."
-        }
-      ]
-    },
-    {
-      id: "capacity_limit",
-      kicker: "Pillar 5: Capacity Guard",
-      title: "How many critical goals can you sustainably finish in a single day?",
-      subtitle: "Prevents the planning fallacy. The AI will advise deferring items above this limit.",
-      options: [
-        {
-          value: "2",
-          icon: "🎯",
-          label: "1 to 2 Keystone Goals",
-          desc: "Deep research, heavy architecture, or complex engineering requiring massive focus."
-        },
-        {
-          value: "3",
-          icon: "⚖️",
-          label: "3 to 4 Balanced Priorities (Golden Ratio)",
-          desc: "1 anchor milestone plus 2-3 supporting operational stepping stones."
-        },
-        {
-          value: "5",
-          icon: "🚀",
-          label: "5+ High Velocity Tasks",
-          desc: "Fast execution across operational, logistical, and communicative checkpoints."
-        }
-      ]
-    }
-  ];
-
-  function computeArchetype(answers) {
-    const { procrastination, pacing, coach_voice } = answers;
-    if (procrastination === "perfectionism") {
-      return {
-        archetype: "The Perfectionist",
-        heroIcon: "🎯",
-        superpower: "Exacting craftsmanship and uncompromising quality standards.",
-        blindspot: "Fear of starting until conditions feel 100% ideal. Scope-creep anxiety.",
-        strategyTip: "The AI enforces strict 'Done is better than perfect' constraints and timeboxes."
-      };
-    }
-    if (procrastination === "boredom" || pacing === "sprints") {
-      return {
-        archetype: "The Dopamine Sprinter",
-        heroIcon: "⚡",
-        superpower: "Explosive creative bursts and rapid problem-solving when engaged.",
-        blindspot: "Loses stimulation during routine or tedious maintenance tasks.",
-        strategyTip: "The AI injects gamified 20-minute sprints with immediate sensory feedback."
-      };
-    }
-    if (procrastination === "overwhelm" || pacing === "rule_of_three") {
-      return {
-        archetype: "The Overwhelmed Strategist",
-        heroIcon: "🌪️",
-        superpower: "Vast architectural vision and deep multi-threaded thinking.",
-        blindspot: "Cognitive freeze when confronted with broad, open-ended backlogs.",
-        strategyTip: "The AI isolates a single physical micro-starter and shelters overflow tasks."
-      };
-    }
-    if (pacing === "deep_dive") {
-      return {
-        archetype: "The Methodical Architect",
-        heroIcon: "📐",
-        superpower: "Immense stamina for uninterrupted, deep-state cognitive work.",
-        blindspot: "Friction and disorientation when disrupted by sudden context switches.",
-        strategyTip: "The AI builds chronologically sequenced blocks aligned to your peak window."
-      };
-    }
-    return {
-      archetype: "The Compassionate Balancer",
-      heroIcon: "🌿",
-      superpower: "Harmonious balance, empathetic connection, and sustained resilience.",
-      blindspot: "Saying yes to peripheral requests while neglecting your own core keystones.",
-      strategyTip: "The AI prioritizes self-care and boundary defense as non-negotiable milestones."
-    };
-  }
-
-  // =========================================================================
-  // 4. UI RENDERER & INTERACTION CONTROLLER
+  // 3. APP CONTROLLER (VIRTUALIZED UI, DELEGATED EVENTS, ZERO-JANK PATCHING)
   // =========================================================================
   class AppController {
     constructor(store) {
@@ -1480,87 +1828,233 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.activeEditingRoutineId = null;
       this.activeEditingHabitId = null;
       this.isSubmitting = false;
+
       this.selectedRoutineDay = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][new Date().getDay()];
       this.routineLayoutMode = "timeline";
-      this.cachedQuote = null;
-      this.lastQuoteFetchTime = 0;
       this.selectedJournalDate = getLocalDateString();
+      this.renderedJournalDate = null;
+      this.journalAutosaveTimeout = null;
+
       this.habitWeekOffset = 0;
       this.habitHeatmapMonthOffset = 0;
-      this.geminiApiKey = localStorage.getItem("aurora_gemini_api_key") || "";
+
+      this.geminiApiKey = "";
       this.cachedGeminiModels = null;
       this.pendingUnhealthyHabit = null;
       this.todayAIPlan = null;
       this.todayAITaskOrder = null;
       this.focusAITab = "today";
+
       this.personalityProfile = this.store.personalityProfile;
       this.currentQuizStep = 1;
       this.quizAnswers = {};
-      this.tomorrowPlan = this.loadTomorrowPlan();
+
+      this.tomorrowPlan = this.store.tomorrowPlan || null;
       this.tomorrowPlanDraft = null;
-      this.eveningPlanningStreak = parseInt(localStorage.getItem("aurora_evening_streak") || "0", 10);
+      this.eveningPlanningStreak = 0;
+      this.eveningClosureDismissedDate = "";
+
+      this.cachedQuote = null;
+      this.lastQuoteFetchTime = 0;
+
       this.quickAddState = {
         dateMode: "today",
         priority: "Medium",
-        category: "Inbox"
+        category: "Inbox",
+        attachedTab: null
       };
 
-      // Touch coordinates for swipe-to-complete
-      this.touchStartX = 0;
-      this.touchStartY = 0;
+      // Collapsible group states for virtualized lists
+      this.collapsedPriorityGroups = new Set();
+      this.collapsedCompletedDates = new Set();
+      this.completedDatesInitialized = false;
+
+      // Active Virtual Lists
+      this.todayVirtualList = null;
+      this.planVirtualList = null;
+
+      // Toast & Dialog state
+      this.toastTimer = null;
+      this.activeToastUndo = null;
+      this.confirmResolver = null;
+      this.confirmMatchText = null;
+      this.confirmRequireInput = false;
+
+      // PiP & Audio preview handles
+      this.pipWindow = null;
+      this.pipUnsubscribers = [];
+      this.previewAudio = null;
+      this.previewCtx = null;
+      this.previewTimeout = null;
+      this.phaseInterval = null;
 
       this.cacheDOMElements();
+      this.initVirtualLists();
       this.bindStoreEvents();
       this.bindUserInteractions();
       this.populateCreationFormsFromConfigs();
-
-      // Refresh layout on boot
+      this.populateCategoryDropdowns();
       this.updateThemeClasses();
+      this.updateCircadianPhase();
       this.updateSidebarClass();
-      this.render();
-      this.checkOverdueDeadlines();
+      this.updateOfflineBadge();
+
+      // Periodically refresh circadian phase (every 10m)
+      this.phaseInterval = setInterval(() => this.updateCircadianPhase(), 600000);
     }
 
+    async finalizeBoot() {
+      this.geminiApiKey = await Storage.getApiKey();
+      this.eveningPlanningStreak = Number(await Storage.getPreference("evening_planning_streak", 0)) || 0;
+      this.eveningClosureDismissedDate = (await Storage.getPreference("evening_closure_dismissed", "")) || "";
+
+      await this.store.syncTimerFromBackground();
+      await this.drainPendingCaptures();
+
+      // Hide boot skeleton cleanly
+      if (this.bootSkeleton) {
+        this.bootSkeleton.hidden = true;
+        this.bootSkeleton.style.display = "none";
+      }
+
+      // Show non-blocking welcome inline card if first run
+      if (!this.store.welcomeDialogShown && this.welcomeInlineCard) {
+        this.welcomeInlineCard.hidden = false;
+      }
+
+      this.updateActiveTabUI();
+      this.render();
+      this.checkOverdueDeadlines();
+
+      // Cross-context sync (Side Panel <-> Full Tab)
+      Storage.onSync((msg) => this.handleCrossContextSync(msg));
+      if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.onMessage) {
+        chrome.runtime.onMessage.addListener((message) => {
+          if (!message) return;
+          if (message.type === "TIMER_STATE_UPDATED") {
+            if (message.state) this.store._applyRemoteTimerState(message.state);
+            if (message.completedEvent) {
+              this.store._drainTimerCompletions([message.completedEvent]);
+            }
+          } else if (message.type === "PENDING_CAPTURES_UPDATED") {
+            this.drainPendingCaptures();
+          }
+        });
+      }
+    }
+
+    async handleCrossContextSync(msg) {
+      if (!msg || !msg.type) return;
+      if (msg.type === "DATA_CHANGED") {
+        await this.store.reloadStoreSlice(msg.store || "all");
+      } else if (msg.type === "API_KEY_CHANGED") {
+        this.geminiApiKey = await Storage.getApiKey();
+        if (this.store.currentView === "settings") this.renderSettingsUI();
+      } else if (msg.type === "TIMER_SYNC" && msg.state) {
+        this.store._applyRemoteTimerState(msg.state);
+      } else if (msg.type === "PENDING_CAPTURES_UPDATED") {
+        await this.drainPendingCaptures();
+      } else if (msg.type === "DB_RESET") {
+        window.location.reload();
+      }
+    }
+
+    async drainPendingCaptures() {
+      let pending = null;
+      const res = await sendExtensionMessage({ type: "GET_PENDING_CAPTURES" });
+      if (res && res.success && Array.isArray(res.captures)) {
+        pending = res.captures;
+      } else {
+        const stored = await Storage.getExtensionLocal("aurora_pending_captures", []);
+        if (Array.isArray(stored) && stored.length > 0) pending = stored;
+      }
+
+      if (!pending || pending.length === 0) return;
+
+      const consumedIds = [];
+      const todayStr = getLocalDateString();
+      for (let i = 0; i < pending.length; i++) {
+        const cap = pending[i];
+        if (!cap || !cap.title) continue;
+        this.store.addTask({
+          title: cap.title,
+          description: cap.description || "",
+          url: cap.url || "",
+          dueDate: todayStr,
+          priority: "Medium",
+          category: "Inbox"
+        }, { silent: true });
+        if (cap.id) consumedIds.push(cap.id);
+      }
+
+      if (consumedIds.length > 0) {
+        const ack = await sendExtensionMessage({
+          type: "CONSUME_PENDING_CAPTURES",
+          payload: { ids: consumedIds }
+        });
+        if (!ack) {
+          await Storage.setExtensionLocal("aurora_pending_captures", []);
+        }
+        this.showToast(`Captured ${consumedIds.length} web item${consumedIds.length > 1 ? "s" : ""} to Today`, "success");
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // DOM Element Cache (Matches #14 Contract + Aliases)
+    // -----------------------------------------------------------------------
     cacheDOMElements() {
       this.appContainer = document.getElementById("app");
-      
-      // Global Sidebar elements
+      this.mainContent = document.getElementById("main_content") || document.querySelector(".main_content");
+      this.desktopSidebar = document.getElementById("desktop_sidebar") || document.querySelector(".desktop_sidebar");
       this.sidebarToggleBtn = document.getElementById("sidebar_toggle_trigger");
-      this.hamburgerTrigger = document.getElementById("mobile_hamburger_trigger");
-      this.desktopSidebar = document.querySelector(".desktop_sidebar");
-      
-      // Sidebar + Bottom Navigation anchors
       this.navButtons = document.querySelectorAll(".nav_tab");
-      
-      // Screen views anchors
+      this.moreNavPopover = document.getElementById("more_nav_popover");
+
+      // Header
       this.viewTitle = document.getElementById("active_view_title");
       this.viewCount = document.getElementById("active_view_count");
-      
-      // Panels Wrapper Blocks
-      this.dashboardPanel = document.getElementById("dashboard_panel");
-      this.taskSection = document.getElementById("tasks_panel");
-      this.taskListContainer = document.getElementById("task_list_container");
-      this.routinePanel = document.getElementById("routine_panel");
-      this.consistencyPanel = document.getElementById("consistency_panel");
-      this.consistencyHistoryPanel = document.getElementById("consistency_history_panel");
-      this.timerSection = document.getElementById("timer_panel");
-      this.insightsSection = document.getElementById("insights_panel");
-      this.journalPanel = document.getElementById("journal_panel");
-      this.settingsSection = document.getElementById("settings_panel");
+      this.phaseDot = document.getElementById("circadian_phase_dot");
+      this.phaseLabel = document.getElementById("circadian_phase_label");
+      this.offlineBadge = document.getElementById("offline_status_badge");
+      this.streakCountEl = document.getElementById("streak_count");
+      this.headerMomentumRing = document.getElementById("header_momentum_ring");
+      this.headerMomentumPct = document.getElementById("header_momentum_pct");
 
-      // Shared FAB and Sheets
-      this.fabButton = document.getElementById("fab_add");
-      this.bottomSheet = document.getElementById("bottom_sheet");
-      this.bottomSheetOverlay = document.getElementById("bottom_sheet_overlay");
-      this.sheetForm = document.getElementById("sheet_form");
-      this.sheetTitle = document.getElementById("sheet_form_title");
-      this.sheetSubmitBtn = document.getElementById("sheet_submit");
-      this.closeSheetBtn = document.getElementById("close_sheet");
-      this.sheetDeleteBtn = document.getElementById("sheet_delete_btn");
+      // Panels
+      this.panels = {
+        today: document.getElementById("today_panel"),
+        plan: document.getElementById("plan_panel"),
+        habits: document.getElementById("habits_panel"),
+        focus: document.getElementById("focus_panel") || document.getElementById("timer_panel"),
+        insights: document.getElementById("insights_panel"),
+        journal: document.getElementById("journal_panel"),
+        settings: document.getElementById("settings_panel")
+      };
 
-      // Quick Add Task Elements
-      this.quickAddContainer = document.getElementById("quick_add_container");
+      // Sub-views
+      this.planPipelineView = document.getElementById("plan_pipeline_view");
+      this.planRoutineView = document.getElementById("plan_routine_view");
+      this.habitsTrackerView = document.getElementById("habits_tracker_view");
+      this.habitsHistoryView = document.getElementById("habits_history_view");
+
+      // Today Feed chrome
+      this.bootSkeleton = document.getElementById("boot_skeleton");
+      this.inlineErrorAlert = document.getElementById("inline_error_alert") || document.getElementById("inline_error_banner");
+      this.inlineErrorText = document.getElementById("inline_error_text");
+      this.inlineErrorActionBtn = document.getElementById("inline_error_action_btn");
+      this.inlineErrorDismissBtn = document.getElementById("inline_error_dismiss_btn");
+      this.notifBanner = document.getElementById("notification_banner");
+      this.grantNotifBtn = document.getElementById("grant_notifications");
+      this.closeNotifBtn = document.getElementById("close_notification_banner");
+      this.welcomeInlineCard = document.getElementById("welcome_inline_card") || document.getElementById("welcome_nudge_banner");
+
+      // Quick-Add
+      this.quickAddForm = document.getElementById("quick_add_form");
       this.quickAddInput = document.getElementById("quick_add_input");
+      this.qaCaptureTabBtn = document.getElementById("qa_capture_tab_btn");
+      this.qaAttachedTabChip = document.getElementById("qa_attached_tab_chip");
+      this.qaAttachedTabTitle = document.getElementById("qa_attached_tab_title");
+      this.qaClearTabBtn = document.getElementById("qa_clear_tab_btn");
       this.qaChipDate = document.getElementById("qa_chip_date");
       this.qaDateText = document.getElementById("qa_date_text");
       this.qaChipPriority = document.getElementById("qa_chip_priority");
@@ -1570,35 +2064,53 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.qaBtnAdvanced = document.getElementById("qa_btn_advanced");
       this.qaBtnCommit = document.getElementById("qa_btn_commit");
 
-      // Routine Sheet specifically
-      this.routineSheet = document.getElementById("routine_sheet");
-      this.routineSheetOverlay = document.getElementById("routine_sheet_overlay");
-      this.routineForm = document.getElementById("routine_sheet_form");
-      this.closeRoutineSheetBtn = document.getElementById("close_routine_sheet");
-
-      // Habit Sheet specifically
-      this.habitSheet = document.getElementById("habit_sheet");
-      this.habitSheetOverlay = document.getElementById("habit_sheet_overlay");
-      this.habitForm = document.getElementById("habit_sheet_form");
-      this.closeHabitSheetBtn = document.getElementById("close_habit_sheet");
-
-      // Filter Nodes
+      // Search & Filter Controls (Today + Plan)
       this.searchInput = document.getElementById("search_bar");
       this.filterPriority = document.getElementById("filter_priority");
       this.filterCategory = document.getElementById("filter_category");
+      this.searchClearBtn = document.getElementById("search_clear_btn");
+      this.todaySearchPopover = document.getElementById("today_search_popover");
 
-      // Notifications banner nodes
-      this.notifBanner = document.getElementById("notification_banner");
-      this.grantNotifBtn = document.getElementById("grant_notifications");
-      this.closeNotifBtn = document.getElementById("close_notification_banner");
+      this.planSearchInput = document.getElementById("plan_search_input");
+      this.planFilterPriority = document.getElementById("plan_filter_priority");
+      this.planFilterCategory = document.getElementById("plan_filter_category");
+      this.planLoadMoreBtn = document.getElementById("plan_completed_load_more_btn");
 
-      // Picture-in-Picture controls
+      // Virtual List Hosts
+      this.todayListViewport = document.getElementById("task_list_viewport");
+      this.todayListContainer = document.getElementById("task_list_container");
+      this.todayEmptyState = document.getElementById("task_list_empty_state");
+
+      this.planListViewport = document.getElementById("plan_task_list_viewport");
+      this.planListContainer = document.getElementById("plan_task_list_container");
+      this.planEmptyState = document.getElementById("plan_empty_state");
+
+      // Mini-Timer Bar
+      this.miniTimerBar = document.getElementById("mini_timer_bar");
+      this.miniTimerDot = document.getElementById("mini_timer_mode_dot");
+      this.miniTimerTaskTitle = document.getElementById("mini_timer_task_title");
+      this.miniTimerCountdown = document.getElementById("mini_timer_countdown");
+      this.miniTimerToggleBtn = document.getElementById("mini_timer_toggle_btn");
+      this.miniTimerOpenBtn = document.getElementById("mini_timer_open_btn");
+      this.miniTimerStopBtn = document.getElementById("mini_timer_stop_btn");
       this.timerPipToggleBtn = document.getElementById("timer_pip_toggle_btn");
 
-      // Streak flame indicators
-      this.streakCountEl = document.getElementById("streak_count");
+      // Native Dialogs
+      this.taskDialog = document.getElementById("task_dialog");
+      this.sheetForm = document.getElementById("sheet_form");
+      this.sheetTitle = document.getElementById("sheet_form_title");
+      this.sheetSubmitBtn = document.getElementById("sheet_submit");
+      this.closeSheetBtn = document.getElementById("close_sheet");
+      this.sheetDeleteBtn = document.getElementById("sheet_delete_btn");
 
-      // Personality Quiz Dialog Nodes
+      this.routineDialog = document.getElementById("routine_dialog");
+      this.routineForm = document.getElementById("routine_sheet_form");
+      this.closeRoutineSheetBtn = document.getElementById("close_routine_sheet");
+
+      this.habitDialog = document.getElementById("habit_dialog");
+      this.habitForm = document.getElementById("habit_sheet_form");
+      this.closeHabitSheetBtn = document.getElementById("close_habit_sheet");
+
       this.personalityDialog = document.getElementById("personality_quiz_dialog");
       this.closePersonalityDialogBtn = document.getElementById("close_personality_dialog");
       this.personalityPrevBtn = document.getElementById("personality_prev_btn");
@@ -1606,317 +2118,638 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.personalitySkipBtn = document.getElementById("personality_skip_btn");
       this.personalityStepContent = document.getElementById("personality_step_content");
       this.personalityStepperBar = document.getElementById("personality_stepper_bar");
+
+      this.confirmDialog = document.getElementById("confirm_dialog");
+      this.confirmForm = document.getElementById("confirm_dialog_form");
+      this.confirmTitle = document.getElementById("confirm_dialog_title");
+      this.confirmMessage = document.getElementById("confirm_dialog_message");
+      this.confirmInputGroup = document.getElementById("confirm_input_group");
+      this.confirmInputLabel = document.getElementById("confirm_input_label");
+      this.confirmInput = document.getElementById("confirm_dialog_input");
+      this.confirmCancelBtn = document.getElementById("confirm_cancel_btn");
+      this.confirmOkBtn = document.getElementById("confirm_ok_btn");
+
+      // Live Regions
+      this.toastRegion = document.getElementById("toast_region");
+      this.srAssertive = document.getElementById("sr_assertive_region");
     }
 
-    bindStoreEvents() {
-      // Direct render triggers on state mutations
-      this.store.subscribe("tasksUpdated", () => this.render());
-      this.store.subscribe("routinesUpdated", () => this.render());
-      this.store.subscribe("habitsUpdated", () => this.render());
-      this.store.subscribe("journalUpdated", () => this.render());
-      this.store.subscribe("personalityChanged", (p) => {
-        this.personalityProfile = p;
-        this.render();
+    // -----------------------------------------------------------------------
+    // Native Dialog Helper (with closedby="any" light-dismiss fallback)
+    // -----------------------------------------------------------------------
+    openDialog(dialogEl) {
+      if (!dialogEl) return;
+      if (typeof dialogEl.showModal === "function") {
+        if (!dialogEl.open) dialogEl.showModal();
+      } else {
+        dialogEl.setAttribute("open", "");
+      }
+      if (!dialogEl.dataset.lightDismissBound) {
+        dialogEl.dataset.lightDismissBound = "true";
+        if (!("closedBy" in HTMLDialogElement.prototype)) {
+          dialogEl.addEventListener("click", (e) => {
+            if (e.target !== dialogEl) return;
+            const rect = dialogEl.getBoundingClientRect();
+            const outside =
+              e.clientX < rect.left ||
+              e.clientX > rect.right ||
+              e.clientY < rect.top ||
+              e.clientY > rect.bottom;
+            if (outside) this.closeDialog(dialogEl);
+          });
+        }
+      }
+    }
+
+    closeDialog(dialogEl) {
+      if (!dialogEl) return;
+      if (typeof dialogEl.close === "function" && dialogEl.open) {
+        dialogEl.close();
+      } else {
+        dialogEl.removeAttribute("open");
+      }
+    }
+
+    showConfirmDialog(opts = {}) {
+      if (!this.confirmDialog) return Promise.resolve(false);
+      if (this.confirmResolver) {
+        this.confirmResolver(opts.requireInput ? null : false);
+        this.confirmResolver = null;
+      }
+
+      this.confirmRequireInput = Boolean(opts.requireInput);
+      this.confirmMatchText = opts.matchText || null;
+
+      if (this.confirmTitle) this.confirmTitle.textContent = opts.title || "Confirm Action";
+      if (this.confirmMessage) this.confirmMessage.textContent = opts.message || "";
+      if (this.confirmOkBtn) {
+        this.confirmOkBtn.textContent = opts.okLabel || "Confirm";
+        this.confirmOkBtn.classList.toggle("danger", Boolean(opts.danger));
+      }
+      if (this.confirmCancelBtn) {
+        this.confirmCancelBtn.textContent = opts.cancelLabel || "Cancel";
+        this.confirmCancelBtn.hidden = Boolean(opts.hideCancel);
+      }
+
+      if (this.confirmInputGroup && this.confirmInput) {
+        this.confirmInputGroup.hidden = !this.confirmRequireInput;
+        if (this.confirmInputLabel) this.confirmInputLabel.textContent = opts.inputLabel || "Value";
+        this.confirmInput.value = opts.defaultValue !== undefined ? String(opts.defaultValue) : "";
+        this.confirmInput.placeholder = opts.inputPlaceholder || "";
+        this.confirmInput.type = opts.inputType || "text";
+        this.confirmInput.required = this.confirmRequireInput;
+      }
+
+      this.openDialog(this.confirmDialog);
+      if (this.confirmRequireInput && this.confirmInput) {
+        setTimeout(() => {
+          this.confirmInput.focus();
+          this.confirmInput.select();
+        }, 30);
+      }
+
+      return new Promise((resolve) => {
+        this.confirmResolver = resolve;
       });
-      
-      this.store.subscribe("viewChanged", (view) => {
-        this.updateActiveTabUI(view);
-        this.render();
+    }
+
+    // -----------------------------------------------------------------------
+    // Virtual Lists Initialization (Today & Plan Pipeline)
+    // -----------------------------------------------------------------------
+    initVirtualLists() {
+      const commonOpts = {
+        scrollContainer: this.mainContent || window,
+        estimatedItemHeight: 84,
+        overscan: 6,
+        gap: 8,
+        getItemKey: (item) => (item.__type === "groupHeader" ? item.id : `task_${item.id}`),
+        estimateHeight: (item, isExpanded) => {
+          if (item.__type === "groupHeader") return 42;
+          if (isExpanded) {
+            const subCount = Array.isArray(item.subtasks) ? item.subtasks.length : 0;
+            return 220 + subCount * 34;
+          }
+          return item.description ? 96 : 78;
+        },
+        renderItem: (item, state) => this.renderVirtualListRow(item, state),
+        updateItem: (el, item, state) => this.patchVirtualListRow(el, item, state),
+        onAction: (e, key, action, actionEl, item) => this.handleVirtualAction(e, key, action, actionEl, item),
+        onSwipe: (key, direction, item) => this.handleVirtualSwipe(key, direction, item),
+        enableSwipe: true
+      };
+
+      if (this.todayListContainer) {
+        this.todayVirtualList = new VirtualList({
+          ...commonOpts,
+          container: this.todayListContainer
+        });
+      }
+
+      if (this.planListContainer) {
+        this.planVirtualList = new VirtualList({
+          ...commonOpts,
+          container: this.planListContainer
+        });
+      }
+    }
+
+    getActiveVirtualList() {
+      return this.store.currentView === "plan" ? this.planVirtualList : this.todayVirtualList;
+    }
+
+    // -----------------------------------------------------------------------
+    // Store Event Bindings (Granular Surgical Patching)
+    // -----------------------------------------------------------------------
+    bindStoreEvents() {
+      this.store.subscribe("taskAdded", ({ task }) => {
+        this._handleTaskMutationUI(task, "add");
       });
 
-      this.store.subscribe("filtersChanged", () => this.render());
-      this.store.subscribe("preferenceChanged", () => this.updateThemeClasses());
-      
+      this.store.subscribe("taskUpdated", ({ task, prev }) => {
+        this._handleTaskMutationUI(task, "update", prev);
+      });
+
+      this.store.subscribe("taskDeleted", ({ task }) => {
+        this._handleTaskMutationUI(task, "delete");
+      });
+
+      this.store.subscribe("tasksBatchUpdated", () => {
+        this._refreshActiveViewOnly();
+      });
+
+      this.store.subscribe("categoriesChanged", () => {
+        this.populateCategoryDropdowns();
+      });
+
+      this.store.subscribe("routinesUpdated", () => {
+        if (this.store.currentView === "today") {
+          this.renderTodayCircadianBlocks();
+        } else if (this.store.currentView === "plan" && this.store.planMode === "routine") {
+          this.renderRoutineUI();
+        }
+      });
+
+      this.store.subscribe("habitsUpdated", () => {
+        this.updateGlobalStreakBadge();
+        if (this.store.currentView === "today") {
+          this.renderTodayHabitStrip();
+          this.updateTodayMomentumMetrics();
+        } else if (this.store.currentView === "habits") {
+          if (this.store.habitsMode === "history") this.renderConsistencyHistoryUI();
+          else this.renderConsistencyUI();
+        } else if (this.store.currentView === "insights") {
+          this.renderInsightsUI();
+        }
+      });
+
+      this.store.subscribe("journalUpdated", ({ dateStr, silentAutosave }) => {
+        if (this.store.currentView === "journal" && !silentAutosave) {
+          if (dateStr === this.selectedJournalDate) {
+            this.syncJournalInputsWithoutRebuild();
+          }
+        }
+        if (this.store.currentView === "today") {
+          this.renderEveningClosureCard();
+        }
+      });
+
+      this.store.subscribe("personalityChanged", (profile) => {
+        this.personalityProfile = profile;
+        this.todayAIPlan = null;
+        this._refreshActiveViewOnly();
+      });
+
+      this.store.subscribe("viewChanged", () => {
+        this.clearJournalAutosaveTimer();
+        this.updateActiveTabUI();
+        this.transitionRender();
+      });
+
+      this.store.subscribe("planFilterChanged", () => {
+        this.updatePlanSubNavUI();
+        this.renderPlanPipelineUI();
+      });
+
+      this.store.subscribe("todayFilterChanged", () => {
+        this.updateTodayFilterPillsUI();
+        this.renderTodayTaskList();
+      });
+
+      this.store.subscribe("filtersChanged", () => {
+        this.syncFilterInputsUI();
+        if (this.store.currentView === "today") {
+          this.renderTodayTaskList();
+        } else if (this.store.currentView === "plan" && this.store.planMode === "pipeline") {
+          this.renderPlanPipelineUI();
+        }
+      });
+
+      this.store.subscribe("preferenceChanged", () => {
+        this.updateThemeClasses();
+      });
+
       this.store.subscribe("sidebarToggled", () => {
         this.updateSidebarClass();
       });
 
-      // Focus screen triggers
-      this.store.subscribe("timerStateChanged", (t) => this.renderTimerUI(t));
-      this.store.subscribe("timerTick", (t) => this.updateTimerCountdown(t));
-      this.store.subscribe("timerComplete", () => this.render());
-      this.store.subscribe("alarmStateChanged", (active) => this.toggleAlarmUI(active));
+      this.store.subscribe("xpUpdated", () => {
+        if (this.store.currentView === "today") this.updateTodayMomentumMetrics();
+      });
 
-      // Animations and feedbacks
+      this.store.subscribe("timerStateChanged", (t) => {
+        this.renderMiniTimerBar(t);
+        if (this.store.currentView === "focus") this.renderTimerUI(t);
+        if (this.store.currentView === "today") this.renderTodayHeroCard();
+      });
+
+      this.store.subscribe("timerTick", (t) => {
+        this.updateTimerCountdown(t);
+        this.renderMiniTimerBar(t);
+      });
+
+      this.store.subscribe("timerComplete", () => {
+        if (this.store.currentView === "focus") this.renderTimerUI(this.store.timer);
+        if (this.store.currentView === "today") {
+          this.updateTodayMomentumMetrics();
+          this.renderTodayHeroCard();
+        }
+      });
+
+      this.store.subscribe("alarmStateChanged", (active) => {
+        this.toggleAlarmUI(active);
+      });
+
       this.store.subscribe("celebrate", ({ taskId, elementId }) => {
         if (taskId) this.triggerCelebration(taskId);
         if (elementId) this.triggerElementCelebration(elementId);
       });
-      this.store.subscribe("notification", ({ message, type }) => this.showToast(message, type));
+
+      this.store.subscribe("notification", (payload) => {
+        this.showToast(payload.message, payload.type || "success", {
+          undoLabel: payload.undoLabel,
+          onUndo: payload.onUndo
+        });
+      });
+
+      this.store.subscribe("storageError", (err) => {
+        this.showInlineError(`Storage write error: ${err && err.message ? err.message : "check disk quota"}`);
+      });
     }
 
+    _handleTaskMutationUI(task, kind, prev) {
+      const view = this.store.currentView;
+
+      if (view === "today") {
+        // Fast-path: patch single card in place if membership didn't change
+        const canPatchInPlace =
+          kind === "update" &&
+          prev &&
+          prev.completed === task.completed &&
+          prev.priority === task.priority &&
+          prev.isLater === task.isLater &&
+          prev.dueDate === task.dueDate &&
+          this.todayVirtualList &&
+          this.todayVirtualList.patchItem(`task_${task.id}`, task);
+
+        if (!canPatchInPlace) {
+          this.renderTodayTaskList();
+        }
+        this.updateTodayMomentumMetrics();
+        this.renderTodayHeroCard();
+        this.renderEveningClosureCard();
+      } else if (view === "plan" && this.store.planMode === "pipeline") {
+        const canPatchInPlace =
+          kind === "update" &&
+          prev &&
+          prev.completed === task.completed &&
+          prev.priority === task.priority &&
+          prev.isLater === task.isLater &&
+          prev.dueDate === task.dueDate &&
+          this.planVirtualList &&
+          this.planVirtualList.patchItem(`task_${task.id}`, task);
+
+        if (!canPatchInPlace) {
+          this.renderPlanPipelineUI();
+        }
+      } else if (view === "insights") {
+        this.renderInsightsUI();
+      }
+    }
+
+    _refreshActiveViewOnly() {
+      const active = this.store.currentView;
+      if (active === "today") this.renderTodayView();
+      else if (active === "plan") this.renderPlanView();
+      else if (active === "habits") this.renderHabitsView();
+      else if (active === "focus") this.renderTimerUI(this.store.timer);
+      else if (active === "insights") this.renderInsightsUI();
+      else if (active === "journal") this.renderJournalUI();
+      else if (active === "settings") this.renderSettingsUI();
+    }
+
+    transitionRender() {
+      if (typeof document.startViewTransition === "function" && !prefersReducedMotion()) {
+        try {
+          document.startViewTransition(() => {
+            this.render();
+          });
+          return;
+        } catch (_) {}
+      }
+      this.render();
+    }
+
+    // -----------------------------------------------------------------------
+    // User Interactions (Delegated, IME-Safe, Zero Inline Handlers)
+    // -----------------------------------------------------------------------
     bindUserInteractions() {
-      // Sidebar Collapse triggers
+      // Online/offline listeners
+      window.addEventListener("online", () => this.updateOfflineBadge());
+      window.addEventListener("offline", () => this.updateOfflineBadge());
+
+      // Sidebar collapse
       if (this.sidebarToggleBtn) {
         this.sidebarToggleBtn.addEventListener("click", () => {
           this.store.setSidebarCollapsed(!this.store.sidebarCollapsed);
         });
       }
 
-      // Mobile Hamburger drawer opener
-      if (this.hamburgerTrigger) {
-        this.hamburgerTrigger.addEventListener("click", () => {
-          this.desktopSidebar.classList.add("mobile_reveal");
-          this.bottomSheetOverlay.classList.add("visible");
-        });
-      }
-
-      // Close mobile drawer on overlay click
-      if (this.bottomSheetOverlay) {
-        this.bottomSheetOverlay.addEventListener("click", () => {
-          this.desktopSidebar.classList.remove("mobile_reveal");
-          if (this.bottomSheet && this.bottomSheet.classList.contains("visible")) {
-            this.closeBottomSheet();
-          } else {
-            this.bottomSheetOverlay.classList.remove("visible");
-          }
-        });
-      }
-
-      // View anchors navigation click binds
-      this.navButtons.forEach(btn => {
+      // Navigation tabs (Desktop rail + Bottom dock + More popover)
+      this.navButtons.forEach((btn) => {
         btn.addEventListener("click", () => {
           const target = btn.getAttribute("data-view");
-          this.store.setView(target);
-          this.desktopSidebar.classList.remove("mobile_reveal");
-          if (this.bottomSheet && this.bottomSheet.classList.contains("visible")) {
-            this.closeBottomSheet();
-          } else {
-            this.bottomSheetOverlay.classList.remove("visible");
+          if (target) this.store.setView(target);
+          if (this.moreNavPopover && typeof this.moreNavPopover.hidePopover === "function") {
+            try { this.moreNavPopover.hidePopover(); } catch (_) {}
           }
         });
       });
 
-      // Quick-Add FAB sheets trigger
-      if (this.fabButton) {
-        this.fabButton.addEventListener("click", () => {
-          if (this.store.currentView === "routine") {
-            this.openRoutineSheet();
-          } else {
-            this.openBottomSheet();
+      // Header momentum pill -> open Habits
+      const momentumBtn = document.getElementById("header_momentum_btn");
+      if (momentumBtn) {
+        momentumBtn.addEventListener("click", () => this.store.setView("habits"));
+      }
+
+      // Shortcuts help button inside More popover
+      const shortcutsBtn = document.getElementById("more_shortcuts_btn");
+      if (shortcutsBtn) {
+        shortcutsBtn.addEventListener("click", () => {
+          if (this.moreNavPopover && typeof this.moreNavPopover.hidePopover === "function") {
+            try { this.moreNavPopover.hidePopover(); } catch (_) {}
+          }
+          this.showConfirmDialog({
+            title: "Keyboard Shortcuts",
+            message: "N: Focus Quick-Add · /: Focus Search · Space: Play/Pause Timer (Focus view) · R: Restart Timer · Esc: Close dialog or dismiss alarm",
+            okLabel: "Got it",
+            hideCancel: true
+          });
+        });
+      }
+
+      // Inline Error Alert dismissal
+      if (this.inlineErrorDismissBtn) {
+        this.inlineErrorDismissBtn.addEventListener("click", () => this.hideInlineError());
+      }
+
+      // Welcome inline nudge card
+      const welcomeDismiss = document.getElementById("welcome_dismiss_btn");
+      if (welcomeDismiss) {
+        welcomeDismiss.addEventListener("click", () => {
+          if (this.welcomeInlineCard) this.welcomeInlineCard.hidden = true;
+          this.store.welcomeDialogShown = true;
+          Storage.savePreference("welcome_dialog_shown", true).catch(() => {});
+        });
+      }
+      const welcomeQuizBtn = document.getElementById("welcome_start_quiz_btn");
+      if (welcomeQuizBtn) {
+        welcomeQuizBtn.addEventListener("click", () => {
+          if (this.welcomeInlineCard) this.welcomeInlineCard.hidden = true;
+          this.store.welcomeDialogShown = true;
+          Storage.savePreference("welcome_dialog_shown", true).catch(() => {});
+          this.openPersonalityQuiz();
+        });
+      }
+
+      // Notification permission banner
+      if (NotificationService.isSupported() && Notification.permission === "default" && !this.store.bannerDismissed && this.store.notificationsEnabled && this.notifBanner) {
+        this.notifBanner.hidden = false;
+        this.notifBanner.classList.add("visible");
+      }
+      if (this.grantNotifBtn) {
+        this.grantNotifBtn.addEventListener("click", async () => {
+          const granted = await NotificationService.requestPermission();
+          this.store.setNotificationsEnabled(granted);
+          if (this.notifBanner) {
+            this.notifBanner.hidden = true;
+            this.notifBanner.classList.remove("visible");
+          }
+          if (granted) {
+            this.showToast("Flow alerts enabled", "success");
+            this.checkOverdueDeadlines();
+          }
+        });
+      }
+      if (this.closeNotifBtn) {
+        this.closeNotifBtn.addEventListener("click", () => {
+          this.store.setNotificationsEnabled(false);
+          if (this.notifBanner) {
+            this.notifBanner.hidden = true;
+            this.notifBanner.classList.remove("visible");
           }
         });
       }
 
-      // Routine quick add button
+      // Quick-Add Form & Active Tab Capture
+      this.bindQuickAddInteractions();
+
+      // Today filter pills
+      const todayPills = document.getElementById("today_filter_pills");
+      if (todayPills) {
+        todayPills.addEventListener("click", (e) => {
+          const btn = e.target.closest("button[data-today-filter]");
+          if (!btn) return;
+          this.store.setTodayFilter(btn.getAttribute("data-today-filter"));
+        });
+      }
+
+      // Today inline habit strip (single delegated listener)
+      const habitStripList = document.getElementById("today_habit_strip_list");
+      if (habitStripList) {
+        habitStripList.addEventListener("click", (e) => {
+          const pill = e.target.closest("button[data-habit-id]");
+          if (!pill) return;
+          const id = pill.getAttribute("data-habit-id");
+          this.store.toggleHabitCompletion(id, getLocalDateString());
+        });
+      }
+      const habitStripAllBtn = document.getElementById("today_habit_view_all_btn");
+      if (habitStripAllBtn) {
+        habitStripAllBtn.addEventListener("click", () => this.store.setView("habits"));
+      }
+
+      // Evening Closure Card interactions
+      this.bindEveningClosureInteractions();
+
+      // Search & Filter controls (debounced 120ms for snappy INP)
+      let searchDebounce = null;
+      const onSearchInput = (val) => {
+        if (searchDebounce) clearTimeout(searchDebounce);
+        searchDebounce = setTimeout(() => {
+          this.store.setFilters(val, undefined, undefined);
+        }, 120);
+      };
+      if (this.searchInput) {
+        this.searchInput.addEventListener("input", () => onSearchInput(this.searchInput.value));
+      }
+      if (this.planSearchInput) {
+        this.planSearchInput.addEventListener("input", () => onSearchInput(this.planSearchInput.value));
+      }
+      if (this.filterPriority) {
+        this.filterPriority.addEventListener("change", () => this.store.setFilters(undefined, this.filterPriority.value, undefined));
+      }
+      if (this.planFilterPriority) {
+        this.planFilterPriority.addEventListener("change", () => this.store.setFilters(undefined, this.planFilterPriority.value, undefined));
+      }
+      if (this.filterCategory) {
+        this.filterCategory.addEventListener("change", () => this.store.setFilters(undefined, undefined, this.filterCategory.value));
+      }
+      if (this.planFilterCategory) {
+        this.planFilterCategory.addEventListener("change", () => this.store.setFilters(undefined, undefined, this.planFilterCategory.value));
+      }
+      if (this.searchClearBtn) {
+        this.searchClearBtn.addEventListener("click", () => {
+          this.store.setFilters("", "All", "All");
+        });
+      }
+
+      // Plan Sub-navigation (Pipeline vs Routine, and Pipeline filter pills)
+      const planModeTabs = document.getElementById("plan_mode_tabs");
+      if (planModeTabs) {
+        planModeTabs.addEventListener("click", (e) => {
+          const btn = e.target.closest("button[data-plan-mode]");
+          if (!btn) return;
+          this.store.setPlanMode(btn.getAttribute("data-plan-mode"));
+        });
+      }
+      const planFilterBar = document.getElementById("plan_filter_bar");
+      if (planFilterBar) {
+        planFilterBar.addEventListener("click", (e) => {
+          const btn = e.target.closest("button[data-plan-filter]");
+          if (!btn) return;
+          this.store.setPlanFilter(btn.getAttribute("data-plan-filter"));
+        });
+      }
+      if (this.planLoadMoreBtn) {
+        this.planLoadMoreBtn.addEventListener("click", async () => {
+          this.planLoadMoreBtn.disabled = true;
+          this.planLoadMoreBtn.textContent = "Loading...";
+          await this.store.loadCompletedPage({ reset: false, limit: 50 });
+          this.renderPlanPipelineUI({ skipCompletedFetch: true });
+        });
+      }
+
+      // Routine Controls (delegated)
       const routineQuickAddBtn = document.getElementById("routine_quick_add_btn");
       if (routineQuickAddBtn) {
         routineQuickAddBtn.addEventListener("click", () => this.openRoutineSheet());
       }
-
-      // Dismissal anchor controllers
-      if (this.closeSheetBtn) this.closeSheetBtn.addEventListener("click", () => this.closeBottomSheet());
-      const cancelSheetBtn = document.getElementById("btn_cancel_sheet");
-      if (cancelSheetBtn) cancelSheetBtn.addEventListener("click", () => this.closeBottomSheet());
-      if (this.sheetDeleteBtn) {
-        this.sheetDeleteBtn.addEventListener("click", () => {
-          if (this.activeEditingTaskId) {
-            const task = this.store.tasks.find(t => t.id === this.activeEditingTaskId);
-            if (confirm(`Delete "${task ? task.title : 'task'}"?`)) {
-              this.store.deleteTask(this.activeEditingTaskId);
-              this.closeBottomSheet();
-            }
-          }
+      const dayTabsBar = document.getElementById("routine_day_tabs_bar");
+      if (dayTabsBar) {
+        dayTabsBar.addEventListener("click", (e) => {
+          const tab = e.target.closest(".routine_day_tab");
+          if (!tab) return;
+          this.selectedRoutineDay = tab.getAttribute("data-day");
+          this.renderRoutineUI();
         });
       }
-      if (this.closeRoutineSheetBtn) this.closeRoutineSheetBtn.addEventListener("click", () => this.closeRoutineSheet());
-      if (this.routineSheetOverlay) this.routineSheetOverlay.addEventListener("click", () => this.closeRoutineSheet());
-
-      // Quick-Add Task Deck & Redesigned Modal Handlers
-      this.bindQuickAddInteractions();
-      this.bindPriorityPills();
-      this.bindSheetAdvancedToggle();
-
-      // Forms commit handlers
-      if (this.sheetForm) {
-        this.sheetForm.addEventListener("submit", (e) => {
-          e.preventDefault();
-          this.handleFormSubmission();
+      const layoutPills = document.getElementById("routine_layout_pills");
+      if (layoutPills) {
+        layoutPills.addEventListener("click", (e) => {
+          const btn = e.target.closest(".pill_btn");
+          if (!btn) return;
+          this.routineLayoutMode = btn.getAttribute("data-layout");
+          this.renderRoutineUI();
         });
-
-        // Add Category creation trigger
-        const taskCategorySelect = document.getElementById("task_category");
-        let previousCategoryValue = "Inbox";
-
-        if (taskCategorySelect) {
-          taskCategorySelect.addEventListener("focus", () => {
-            if (taskCategorySelect.value !== "custom") {
-              previousCategoryValue = taskCategorySelect.value;
-            }
-          });
-
-          taskCategorySelect.addEventListener("change", () => {
-            if (taskCategorySelect.value === "custom") {
-              const newTagRaw = prompt("Enter a custom category tag name:");
-              const newTag = newTagRaw ? newTagRaw.trim() : null;
-              if (newTag) {
-                const capitalizedTag = newTag.charAt(0).toUpperCase() + newTag.slice(1);
-                let existingOption = Array.from(taskCategorySelect.options).find(opt => opt.value === capitalizedTag);
-                if (!existingOption) {
-                  const opt = document.createElement("option");
-                  opt.value = capitalizedTag;
-                  opt.textContent = capitalizedTag;
-                  taskCategorySelect.insertBefore(opt, taskCategorySelect.options[taskCategorySelect.options.length - 1]);
-                  
-                  const filterCatSelect = document.getElementById("filter_category");
-                  if (filterCatSelect) {
-                    const existsInFilter = Array.from(filterCatSelect.options).some(opt => opt.value === capitalizedTag);
-                    if (!existsInFilter) {
-                      const filterOpt = document.createElement("option");
-                      filterOpt.value = capitalizedTag;
-                      filterOpt.textContent = capitalizedTag;
-                      filterCatSelect.appendChild(filterOpt);
-                    }
-                  }
-                }
-                taskCategorySelect.value = capitalizedTag;
-                previousCategoryValue = capitalizedTag;
-              } else {
-                taskCategorySelect.value = previousCategoryValue;
-              }
-            } else {
-              previousCategoryValue = taskCategorySelect.value;
-            }
-          });
-        }
-
-        // Quick Date scheduler chips inside creator sheet
-        const dateChips = this.sheetForm.querySelectorAll(".date_chip");
-        const dateInput = document.getElementById("task_due_date");
-        
-        dateChips.forEach(chip => {
-          chip.addEventListener("click", () => {
-            dateChips.forEach(c => c.classList.remove("active"));
-            chip.classList.add("active");
-
-            const daysStr = chip.getAttribute("data-days");
-            if (daysStr !== null) {
-              const days = parseInt(daysStr || 0);
-              const d = new Date();
-              d.setDate(d.getDate() + days);
-
-              const Y = d.getFullYear();
-              const M = String(d.getMonth() + 1).padStart(2, "0");
-              const D = String(d.getDate()).padStart(2, "0");
-              dateInput.value = `${Y}-${M}-${D}`;
-              dateInput.style.display = "none";
-            } else if (chip.id === "chip_custom_date") {
-              dateInput.style.display = "block";
-              if (!dateInput.value) {
-                dateInput.value = getLocalDateString();
-              }
-              dateInput.focus();
-            } else {
-              // Clicked "Do Later" chip!
-              dateInput.value = "";
-              dateInput.style.display = "none";
-            }
-          });
-        });
-
-        dateInput.addEventListener("change", () => {
-          dateChips.forEach(c => c.classList.remove("active"));
-          const val = dateInput.value;
-          if (val) {
-            const todayStr = getLocalDateString();
-            const tom = new Date(); tom.setDate(tom.getDate() + 1); const tomStr = getLocalDateString(tom);
-            const nW = new Date(); nW.setDate(nW.getDate() + 7); const nWStr = getLocalDateString(nW);
-
-            let matched = false;
-            dateChips.forEach(c => {
-              const offsetStr = c.getAttribute("data-days");
-              if (offsetStr) {
-                const offset = parseInt(offsetStr);
-                if (offset === 0 && val === todayStr) { c.classList.add("active"); matched = true; }
-                if (offset === 1 && val === tomStr) { c.classList.add("active"); matched = true; }
-                if (offset === 7 && val === nWStr) { c.classList.add("active"); matched = true; }
-              }
+      }
+      const routineScroller = document.getElementById("routine_timetable_scroller");
+      if (routineScroller) {
+        routineScroller.addEventListener("click", async (e) => {
+          const delBtn = e.target.closest("[data-action='delete-routine']");
+          if (delBtn) {
+            e.stopPropagation();
+            const id = delBtn.getAttribute("data-id");
+            const block = this.store.routineMap.get(String(id));
+            const ok = await this.showConfirmDialog({
+              title: "Remove Routine Block",
+              message: `Unschedule "${block ? block.title : "this block"}"?`,
+              okLabel: "Remove",
+              danger: true
             });
-            if (!matched) {
-              const customChip = document.getElementById("chip_custom_date");
-              if (customChip) customChip.classList.add("active");
-              dateInput.style.display = "block";
-            }
-          } else {
-            const doLater = document.getElementById("chip_do_later");
-            if (doLater) doLater.classList.add("active");
-            dateInput.style.display = "none";
+            if (ok) this.store.deleteRoutineBlock(id);
+            return;
+          }
+          const editTarget = e.target.closest("[data-action='edit-routine'], .agenda_timeline_item[data-id], .routine_table_row[data-id]");
+          if (editTarget) {
+            const id = editTarget.getAttribute("data-id");
+            const block = this.store.routineMap.get(String(id));
+            if (block) this.openRoutineSheet(block);
           }
         });
       }
 
-      // Routine Add form handler
-      if (this.routineForm) {
-        this.routineForm.addEventListener("submit", (e) => {
-          e.preventDefault();
-          this.handleRoutineFormSubmission();
+      // Habits Sub-navigation & Delegated Interactions
+      const habitsModeTabs = document.getElementById("habits_mode_tabs");
+      if (habitsModeTabs) {
+        habitsModeTabs.addEventListener("click", (e) => {
+          const btn = e.target.closest("button[data-habits-mode]");
+          if (!btn) return;
+          this.store.setHabitsMode(btn.getAttribute("data-habits-mode"));
         });
       }
+      this.bindConsistencyInteractions();
 
-      // Inline checklists subtasks capture keydown listener
+      // Task Dialog / Form Bindings
+      this.bindTaskDialogInteractions();
+      this.bindRoutineDialogInteractions();
+      this.bindHabitDialogInteractions();
+      this.bindPersonalityDialogInteractions();
+      this.bindConfirmDialogInteractions();
+      this.bindTimerInteractions();
+
+      // Global Keyboard Shortcuts (IME-safe)
       document.addEventListener("keydown", (e) => {
-        if (e.target.classList.contains("subtask_input") && e.key === "Enter") {
-          e.preventDefault();
-          const taskId = parseInt(e.target.getAttribute("data-task-id"));
-          const txt = e.target.value.trim();
-          if (txt) {
-            this.store.addSubtask(taskId, txt);
-            e.target.value = "";
-          }
-        }
-      });
+        if (isIMEComposing(e)) return;
+        const tag = (e.target && e.target.tagName ? e.target.tagName.toLowerCase() : "");
+        const activeEditing = ["input", "textarea", "select"].includes(tag) || (e.target && e.target.isContentEditable);
+        const anyModalOpen = Boolean(document.querySelector("dialog[open]"));
 
-      // Filters changes triggers
-      let debounceTimeout;
-      const handleFilters = (debounce = false) => {
-        if (debounceTimeout) clearTimeout(debounceTimeout);
-        
-        const run = () => {
-          this.store.setFilters(
-            this.searchInput.value,
-            this.filterPriority.value,
-            this.filterCategory.value
-          );
-        };
-
-        if (debounce) {
-          debounceTimeout = setTimeout(run, 250);
-        } else {
-          run();
-        }
-      };
-      if (this.searchInput) this.searchInput.addEventListener("input", () => handleFilters(true));
-      if (this.filterPriority) this.filterPriority.addEventListener("change", () => handleFilters(false));
-      if (this.filterCategory) this.filterCategory.addEventListener("change", () => handleFilters(false));
-
-      // Keyboard Shortcuts setup
-      document.addEventListener("keydown", (e) => {
-        const tag = e.target.tagName.toLowerCase();
-        const activeEditing = ["input", "textarea", "select"].includes(tag) || e.target.isContentEditable;
-
-        if (!activeEditing) {
-          // "+" or "=" or "n" focuses quick-add input or opens task creator (or routine creator)
-          if (e.key === "+" || e.key === "=" || e.key === "n" || e.key === "N") {
+        if (!activeEditing && !anyModalOpen) {
+          if (e.key === "n" || e.key === "N" || e.key === "+") {
             e.preventDefault();
-            if (this.store.currentView === "routine") {
+            if (this.store.currentView === "plan" && this.store.planMode === "routine") {
               this.openRoutineSheet();
-            } else if (this.quickAddInput && this.quickAddContainer && this.quickAddContainer.style.display !== "none") {
+            } else if (this.store.currentView === "today" && this.quickAddInput) {
               this.quickAddInput.focus();
               this.quickAddInput.select();
             } else {
               this.openBottomSheet();
             }
-          }
-
-          // Timer keyboard shortcuts (always active globally when timer is visible)
-          if (this.store.currentView === "timer") {
+          } else if (e.key === "/") {
+            e.preventDefault();
+            if (this.store.currentView === "plan" && this.planSearchInput) {
+              this.planSearchInput.focus();
+            } else if (this.todaySearchPopover && typeof this.todaySearchPopover.showPopover === "function") {
+              try { this.todaySearchPopover.showPopover(); } catch (_) {}
+              if (this.searchInput) this.searchInput.focus();
+            } else if (this.searchInput) {
+              this.searchInput.focus();
+            }
+          } else if (this.store.currentView === "focus") {
             if (e.key === " " || e.code === "Space") {
               e.preventDefault();
-              if (this.store.timer.isRunning) {
-                this.store.pauseTimer();
-              } else {
-                this.store.startTimer();
-              }
+              if (this.store.timer.isRunning) this.store.pauseTimer();
+              else this.store.startTimer();
             } else if (e.key === "r" || e.key === "R") {
               e.preventDefault();
               this.store.restartTimer();
@@ -1924,4816 +2757,119 @@ document.addEventListener("DOMContentLoaded", async function () {
           }
         }
 
-        // "Escape" - dismiss sheets, close mobile sidebar, stop timer alarm, exit DF mode
         if (e.key === "Escape") {
-          // If alarm is active, dismiss alarm first
           if (this.store.isAlarmActive) {
             this.dismissTimerAlarm();
-            return;
-          }
-
-          // If timer is running in stopwatch/pomodoro, stop it
-          if (this.store.currentView === "timer" && this.store.timer.isRunning) {
-            this.store.resetTimer();
-            this.closeDocumentPiP();
-            return;
-          }
-
-          this.closeBottomSheet();
-          this.closeRoutineSheet();
-          this.closeHabitSheet();
-          this.closePersonalityQuiz();
-          this.desktopSidebar.classList.remove("mobile_reveal");
-          if (document.body.classList.contains("journal-distraction-free")) {
+          } else if (document.body.classList.contains("journal-distraction-free")) {
             document.body.classList.remove("journal-distraction-free");
-            this.render();
+            this.updateJournalDFButton();
           }
         }
       });
-
-      // Browser permissions alerts banner
-      const bannerDismissed = localStorage.getItem("aurora_banner_dismissed") === "true";
-      const notifsEnabled = localStorage.getItem("aurora_notifications_enabled") !== "false";
-
-      if (NotificationService.isSupported() && Notification.permission === "default" && !bannerDismissed && notifsEnabled) {
-        this.notifBanner.classList.add("visible");
-      }
-      if (this.grantNotifBtn) {
-        this.grantNotifBtn.addEventListener("click", async () => {
-          const granted = await NotificationService.requestPermission();
-          localStorage.setItem("aurora_banner_dismissed", "true");
-          localStorage.setItem("aurora_notifications_enabled", granted ? "true" : "false");
-          this.notifBanner.classList.remove("visible");
-          if (granted) {
-            this.showToast("Notifications enabled!", "success");
-            this.checkOverdueDeadlines();
-          }
-        });
-      }
-      if (this.closeNotifBtn) {
-        this.closeNotifBtn.addEventListener("click", () => {
-          localStorage.setItem("aurora_banner_dismissed", "true");
-          localStorage.setItem("aurora_notifications_enabled", "false");
-          this.notifBanner.classList.remove("visible");
-        });
-      }
-
-      // -------------------------------------------------------------------------
-      // PERSONALITY QUIZ DIALOG CONTROLLER BINDINGS
-      // -------------------------------------------------------------------------
-      if (this.closePersonalityDialogBtn) {
-        this.closePersonalityDialogBtn.addEventListener("click", () => this.closePersonalityQuiz());
-      }
-      if (this.personalitySkipBtn) {
-        this.personalitySkipBtn.addEventListener("click", () => this.closePersonalityQuiz());
-      }
-      if (this.personalityPrevBtn) {
-        this.personalityPrevBtn.addEventListener("click", () => this.handlePersonalityPrev());
-      }
-      if (this.personalityNextBtn) {
-        this.personalityNextBtn.addEventListener("click", () => this.handlePersonalityNext());
-      }
-
-      // -------------------------------------------------------------------------
-      // FIRST-TIME BOOT WELCOME PRIVACY DIALOG
-      // -------------------------------------------------------------------------
-      StorageService.getPreference("welcome_dialog_shown", false).then(shown => {
-        if (!shown) {
-          const welcomeDialog = document.getElementById("welcome_dialog");
-          if (welcomeDialog) {
-            welcomeDialog.style.display = "flex";
-            const dismissBtn = document.getElementById("welcome_dismiss_btn");
-            if (dismissBtn) {
-              dismissBtn.addEventListener("click", () => {
-                welcomeDialog.style.display = "none";
-                StorageService.savePreference("welcome_dialog_shown", true);
-                if (!this.personalityProfile) {
-                  setTimeout(() => this.openPersonalityQuiz(), 350);
-                }
-              });
-            }
-          }
-        }
-      });
-
-      // -------------------------------------------------------------------------
-      // POMODORO TIMER EVENT BINDINGS
-      // -------------------------------------------------------------------------
-      const playBtn = document.getElementById("timer_play_btn");
-      if (playBtn) {
-        playBtn.addEventListener("click", () => {
-          this.store.startTimer();
-          // Auto-open PiP when starting a focus session
-          if (!this.pipWindow && 'documentPictureInPicture' in window) {
-            this.openDocumentPiP();
-          }
-        });
-      }
-
-      const pauseBtn = document.getElementById("timer_pause_btn");
-      if (pauseBtn) {
-        pauseBtn.addEventListener("click", () => {
-          this.store.pauseTimer();
-        });
-      }
-
-      const stopBtn = document.getElementById("timer_stop_btn");
-      if (stopBtn) {
-        stopBtn.addEventListener("click", () => {
-          this.store.resetTimer();
-          // Auto-close PiP when stopping
-          this.closeDocumentPiP();
-        });
-      }
-
-      const restartBtn = document.getElementById("timer_restart_btn");
-      if (restartBtn) {
-        restartBtn.addEventListener("click", () => {
-          this.store.restartTimer();
-        });
-      }
-
-      if (this.timerPipToggleBtn) {
-        this.timerPipToggleBtn.addEventListener("click", () => {
-          if (this.pipWindow) {
-            this.closeDocumentPiP();
-          } else {
-            this.openDocumentPiP();
-          }
-        });
-      }
-
-      const skipBtn = document.getElementById("timer_skip_btn");
-      if (skipBtn) {
-        skipBtn.addEventListener("click", () => {
-          this.store.skipTimerInterval();
-        });
-      }
-
-      const pomoBtn = document.getElementById("timer_pomo_btn");
-      if (pomoBtn) {
-        pomoBtn.addEventListener("click", () => this.store.changeTimerType("pomodoro"));
-      }
-
-      const shortBtn = document.getElementById("timer_short_btn");
-      if (shortBtn) {
-        shortBtn.addEventListener("click", () => this.store.changeTimerType("shortBreak"));
-      }
-
-      const longBtn = document.getElementById("timer_long_btn");
-      if (longBtn) {
-        longBtn.addEventListener("click", () => this.store.changeTimerType("longBreak"));
-      }
-
-      const stopwatchBtn = document.getElementById("timer_stopwatch_btn");
-      if (stopwatchBtn) {
-        stopwatchBtn.addEventListener("click", () => this.store.changeTimerType("stopwatch"));
-      }
-
-      // Focus Timer duration increment/decrement adjusters
-      const btnDec = document.getElementById("btn_timer_dec");
-      const btnInc = document.getElementById("btn_timer_inc");
-      
-      if (btnDec) {
-        btnDec.addEventListener("click", () => {
-          if (this.store.timer.isRunning) {
-            this.showToast("Cannot adjust time during an active session!", "info");
-            return;
-          }
-          // Decrease by 5 minutes, minimum 5 minutes
-          const newDur = Math.max(300, this.store.timer.duration - 300);
-          this.store.timer.duration = newDur;
-          this.store.timer.totalDuration = newDur;
-          this.updateTimerCountdown(this.store.timer);
-        });
-      }
-
-      if (btnInc) {
-        btnInc.addEventListener("click", () => {
-          if (this.store.timer.isRunning) {
-            this.showToast("Cannot adjust time during an active session!", "info");
-            return;
-          }
-          // Increase by 5 minutes, max 120 minutes
-          const newDur = Math.min(7200, this.store.timer.duration + 300);
-          this.store.timer.duration = newDur;
-          this.store.timer.totalDuration = newDur;
-          this.updateTimerCountdown(this.store.timer);
-        });
-      }
-
-      const timerCountdownText = document.getElementById("timer_countdown_text");
-      if (timerCountdownText) {
-        timerCountdownText.style.cursor = "pointer";
-        timerCountdownText.title = "Click to set custom minutes";
-        timerCountdownText.addEventListener("click", () => {
-          if (this.store.timer.isRunning) {
-            this.showToast("Cannot adjust time during an active session!", "info");
-            return;
-          }
-          
-          const currentMins = Math.round(this.store.timer.duration / 60);
-          const input = prompt("Enter custom duration in minutes (1 to 180):", currentMins);
-          if (input === null) return; // User cancelled
-          
-          const mins = parseInt(input.trim(), 10);
-          if (isNaN(mins) || mins <= 0 || mins > 180) {
-            this.showToast("Please enter a valid number of minutes between 1 and 180.", "error");
-            return;
-          }
-          
-          const seconds = mins * 60;
-          this.store.timer.duration = seconds;
-          this.store.timer.totalDuration = seconds;
-          this.updateTimerCountdown(this.store.timer);
-          this.showToast(`Timer duration set to ${mins} minutes!`, "success");
-        });
-      }
-
-      // Alarm Dismiss Button Bindings
-      const dismissAlarmBtn = document.getElementById("timer_dismiss_alarm_btn");
-      if (dismissAlarmBtn) {
-        dismissAlarmBtn.addEventListener("click", () => this.dismissTimerAlarm());
-      }
-
-      const startNextBtn = document.getElementById("timer_start_next_btn");
-      if (startNextBtn) {
-        startNextBtn.addEventListener("click", () => {
-          this.dismissTimerAlarm();
-          this.store.startTimer();
-        });
-      }
-
-      // -------------------------------------------------------------------------
-      // HABITS SLIDE-UP BOTTOM SHEET DRAWER BINDINGS
-      // -------------------------------------------------------------------------
-      if (this.closeHabitSheetBtn) this.closeHabitSheetBtn.addEventListener("click", () => this.closeHabitSheet());
-      if (this.habitSheetOverlay) this.habitSheetOverlay.addEventListener("click", () => this.closeHabitSheet());
-
-      if (this.habitForm) {
-        this.habitForm.addEventListener("submit", (e) => {
-          e.preventDefault();
-          if (this.isSubmitting) return;
-          const title = document.getElementById("habit_title").value.trim();
-          const cat = document.getElementById("habit_category").value;
-          const color = document.getElementById("habit_color").value;
-          if (title) {
-            this.isSubmitting = true;
-            const habitSubmitBtn = this.habitForm.querySelector("button[type='submit']");
-            if (habitSubmitBtn) habitSubmitBtn.disabled = true;
-
-            if (this.activeEditingHabitId !== null) {
-              this.store.updateHabit(this.activeEditingHabitId, { title, category: cat, color });
-              this.evaluateHabitWithAI(title, this.activeEditingHabitId);
-            } else {
-              const newHabit = this.store.addHabit(title, cat, color);
-              if (newHabit) this.evaluateHabitWithAI(title, newHabit.id);
-            }
-            this.closeHabitSheet();
-          }
-        });
-      }
-
-      this.bindConsistencyInteractions();
-
-      // -------------------------------------------------------------------------
-      // WEEKDAY TABS & ROUTINE VIEW TOGGLE BINDINGS
-      // -------------------------------------------------------------------------
-      const dayTabsBar = document.getElementById("routine_day_tabs_bar");
-      if (dayTabsBar) {
-        dayTabsBar.addEventListener("click", (e) => {
-          const tab = e.target.closest(".routine_day_tab");
-          if (tab) {
-            this.selectedRoutineDay = tab.getAttribute("data-day");
-            this.renderRoutineUI();
-          }
-        });
-      }
-
-      const layoutPills = document.getElementById("routine_layout_pills");
-      if (layoutPills) {
-        layoutPills.addEventListener("click", (e) => {
-          const btn = e.target.closest(".pill_btn");
-          if (btn) {
-            this.routineLayoutMode = btn.getAttribute("data-layout");
-            this.renderRoutineUI();
-          }
-        });
-      }
-
-      this.store.subscribe("tasksUpdated", () => this.populateCategoryDropdowns());
-    }
-
-    updateThemeClasses() {
-      document.body.className = `theme-${this.store.theme} accent-${this.store.accent}`;
-      document.body.setAttribute("data-style", this.store.uiStyle || "neo-brutalism");
-
-      // Dynamically sync SVG gradients to match theme accent in real-time
-      const ringGradient = document.getElementById("ringGradient");
-      if (ringGradient) {
-        const accentColor = getComputedStyle(document.body).getPropertyValue("--accent-primary").trim();
-        if (accentColor) {
-          const stops = ringGradient.querySelectorAll("stop");
-          stops.forEach(s => {
-            s.setAttribute("stop-color", accentColor);
-            s.style.stopColor = accentColor;
-          });
-        }
-      }
-    }
-
-    updateSidebarClass() {
-      this.appContainer.classList.toggle("collapsed", this.store.sidebarCollapsed);
-    }
-
-    updateActiveTabUI(view) {
-      this.navButtons.forEach(btn => {
-        btn.classList.toggle("active", btn.getAttribute("data-view") === view);
-      });
-    }
-
-    populateCategoryDropdowns() {
-      const cats = ["All", "Inbox", "Work", "Personal", "Health", "Finance"];
-      this.store.tasks.filter(t => t.id !== "general_focus").forEach(t => {
-        if (t.category && !cats.includes(t.category)) cats.push(t.category);
-      });
-
-      const current = this.filterCategory.value;
-      this.filterCategory.innerHTML = cats.map(c => `<option value="${c}">${c}</option>`).join("");
-      this.filterCategory.value = cats.includes(current) ? current : "All";
-
-      const taskCatSelect = document.getElementById("task_category");
-      if (taskCatSelect) {
-        const optionSet = cats.filter(c => c !== "All");
-        taskCatSelect.innerHTML = optionSet.map(c => `<option value="${c}">${c}</option>`).join("") + `<option value="custom">+ Create Tag...</option>`;
-      }
-    }
-
-    populateCreationFormsFromConfigs() {
-      // 1. Capture New Goal (Task) Form Select Options
-      const taskPriority = document.getElementById("task_priority");
-      if (taskPriority && CONFIG_CAPTURE_NEW_GOAL.priorities) {
-        taskPriority.innerHTML = CONFIG_CAPTURE_NEW_GOAL.priorities.map(p => 
-          `<option value="${p.value}">${p.label}</option>`
-        ).join("");
-      }
-
-      const taskCategory = document.getElementById("task_category");
-      if (taskCategory && CONFIG_CAPTURE_NEW_GOAL.categories) {
-        const optionSet = CONFIG_CAPTURE_NEW_GOAL.categories;
-        taskCategory.innerHTML = optionSet.map(c => 
-          `<option value="${c}">${c}</option>`
-        ).join("") + `<option value="custom">+ Create Tag...</option>`;
-      }
-
-      const taskDuration = document.getElementById("task_duration");
-      if (taskDuration && CONFIG_CAPTURE_NEW_GOAL.durations) {
-        taskDuration.innerHTML = CONFIG_CAPTURE_NEW_GOAL.durations.map(d => 
-          `<option value="${d.value}">${d.label}</option>`
-        ).join("");
-      }
-
-      const taskRecurring = document.getElementById("task_recurring");
-      if (taskRecurring && CONFIG_CAPTURE_NEW_GOAL.recurrences) {
-        taskRecurring.innerHTML = CONFIG_CAPTURE_NEW_GOAL.recurrences.map(r => 
-          `<option value="${r.value}">${r.label}</option>`
-        ).join("");
-      }
-
-      // 2. Schedule Routine Form Select Options
-      const routineCategory = document.getElementById("routine_category");
-      if (routineCategory && CONFIG_SCHEDULE_ROUTINE.categories) {
-        routineCategory.innerHTML = CONFIG_SCHEDULE_ROUTINE.categories.map(c => 
-          `<option value="${c}">${c}</option>`
-        ).join("");
-      }
-
-      const routineColor = document.getElementById("routine_color");
-      if (routineColor && CONFIG_SCHEDULE_ROUTINE.colors) {
-        routineColor.innerHTML = CONFIG_SCHEDULE_ROUTINE.colors.map(col => 
-          `<option value="${col.value}">${col.label}</option>`
-        ).join("");
-      }
-
-      // 3. Create Habit Form Select Options
-      const habitCategory = document.getElementById("habit_category");
-      if (habitCategory && CONFIG_CREATE_HABIT.categories) {
-        habitCategory.innerHTML = CONFIG_CREATE_HABIT.categories.map(c => 
-          `<option value="${c}">${c}</option>`
-        ).join("");
-      }
-
-      const habitColor = document.getElementById("habit_color");
-      if (habitColor && CONFIG_CREATE_HABIT.colors) {
-        habitColor.innerHTML = CONFIG_CREATE_HABIT.colors.map(col => 
-          `<option value="${col.value}">${col.label}</option>`
-        ).join("");
-      }
-
-      // 4. Recommended Habit Templates Chips in index.html dynamically
-      const templatesBox = document.getElementById("habit_templates");
-      if (templatesBox && CONFIG_CREATE_HABIT.templates) {
-        templatesBox.innerHTML = CONFIG_CREATE_HABIT.templates.map(tpl => 
-          `<button type="button" class="template_chip" data-title="${tpl.title}" data-cat="${tpl.cat}" data-color="${tpl.color}">
-            ${tpl.svg ? tpl.svg : ""} ${tpl.label}
-          </button>`
-        ).join("");
-
-        // Bind click events to dynamically populated templates chips
-        templatesBox.querySelectorAll(".template_chip").forEach(chip => {
-          chip.addEventListener("click", () => {
-            document.getElementById("habit_title").value = chip.getAttribute("data-title");
-            document.getElementById("habit_category").value = chip.getAttribute("data-cat");
-            document.getElementById("habit_color").value = chip.getAttribute("data-color");
-            
-            // Toggle highlight
-            templatesBox.querySelectorAll(".template_chip").forEach(c => c.classList.remove("active"));
-            chip.classList.add("active");
-          });
-        });
-      }
-    }
-
-    // =========================================================================
-    // RENDERING CORE VIEWPORTS (SPA DIRECTING)
-    // =========================================================================
-    render() {
-      const active = this.store.currentView;
-
-      // Reset displayed elements visibility states
-      this.dashboardPanel.style.display = (active === "dashboard") ? "block" : "none";
-      this.taskSection.style.display = (["all", "today", "tomorrow", "upcoming", "overdue", "completed", "later"].includes(active)) ? "block" : "none";
-      this.routinePanel.style.display = (active === "routine") ? "block" : "none";
-      this.consistencyPanel.style.display = (active === "consistency") ? "block" : "none";
-      this.consistencyHistoryPanel.style.display = (active === "consistency_history") ? "block" : "none";
-      this.timerSection.style.display = (active === "timer") ? "flex" : "none";
-      document.body.classList.toggle("view-timer-active", active === "timer");
-      this.insightsSection.style.display = (active === "insights") ? "block" : "none";
-      this.journalPanel.style.display = (active === "journal") ? "block" : "none";
-      this.settingsSection.style.display = (active === "settings") ? "block" : "none";
-
-      this.streakCountEl.textContent = this.store.habits.reduce((acc, h) => Math.max(acc, h.streak || 0), 0);
-
-      // Update active view header title
-      const viewTitles = {
-        dashboard: "Executive Command",
-        routine: "Energy Architecture",
-        consistency: "Atomic Streaks",
-        consistency_history: "Momentum Trajectory",
-        timer: "Flow State Timer",
-        insights: "Cognitive Insights",
-        journal: "Evening Reflection",
-        settings: "Settings",
-        all: "Focus Pipeline",
-        today: "Today's Core Focus",
-        tomorrow: "Tomorrow's Blueprint",
-        upcoming: "Upcoming Horizons",
-        overdue: "Priority Attention",
-        completed: "Victory Archive",
-        later: "Mindful Backlog"
-      };
-
-      if (viewTitles[active]) {
-        this.viewTitle.textContent = viewTitles[active];
-      }
-
-      // Show/hide view count badge
-      if (["all", "today", "tomorrow", "upcoming", "overdue", "completed", "later"].includes(active)) {
-        this.viewCount.style.display = "inline-block";
-      } else {
-        this.viewCount.style.display = "none";
-      }
-
-      if (active === "dashboard") this.renderDashboardUI();
-      else if (active === "routine") this.renderRoutineUI();
-      else if (active === "consistency") this.renderConsistencyUI();
-      else if (active === "consistency_history") this.renderConsistencyHistoryUI();
-      else if (active === "timer") this.renderTimerUI(this.store.timer);
-      else if (active === "insights") this.renderInsightsUI();
-      else if (active === "journal") this.renderJournalUI();
-      else if (active === "settings") this.renderSettingsUI();
-      else this.renderTaskListUI(active);
-    }
-
-    // -------------------------------------------------------------------------
-    // 1. DASHBOARD VIEW (PSYCHOLOGICAL COMMAND CENTER)
-    // -------------------------------------------------------------------------
-    renderDashboardUI() {
-      const nowNode = document.getElementById("dash_now_block");
-      const nextNode = document.getElementById("dash_next_block");
-
-      const routineMap = this.getNowNextRoutine();
-      
-      if (routineMap.now) {
-        nowNode.innerHTML = `
-          <div class="dash_rout_card border-${routineMap.now.color}">
-            <span class="dash_rout_icon">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <circle cx="12" cy="12" r="10"></circle>
-                <polyline points="12 6 12 12 16 14"></polyline>
-              </svg>
-            </span>
-            <div class="dash_rout_text">
-              <h4>${this.escapeHTML(routineMap.now.title)}</h4>
-              <p>${routineMap.now.startTime} - ${routineMap.now.endTime} (${routineMap.now.category})</p>
-            </div>
-          </div>
-        `;
-      } else {
-        nowNode.innerHTML = `<div class="dash_rout_empty">Free Breathing Space</div>`;
-      }
-
-      if (routineMap.next) {
-        nextNode.innerHTML = `
-          <div class="dash_rout_card next border-${routineMap.next.color}">
-            <span class="dash_rout_icon">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                <line x1="16" y1="2" x2="16" y2="6"></line>
-                <line x1="8" y1="2" x2="8" y2="6"></line>
-                <line x1="3" y1="10" x2="21" y2="10"></line>
-              </svg>
-            </span>
-            <div class="dash_rout_text">
-              <h4>${this.escapeHTML(routineMap.next.title)}</h4>
-              <p>Upcoming at ${routineMap.next.startTime}</p>
-            </div>
-          </div>
-        `;
-      } else {
-        nextNode.innerHTML = `<div class="dash_rout_empty">No further activities today</div>`;
-      }
-
-      const listSummaryBox = document.getElementById("dash_urgent_tasks");
-      const pendingTasks = this.store.tasks.filter(t => t.id !== "general_focus" && !t.completed);
-      
-      const todayStr = getLocalDateString();
-      const urgentTasks = pendingTasks.filter(t => t.dueDate <= todayStr || t.priority === "High")
-        .sort((a, b) => a.dueDate.localeCompare(b.dueDate))
-        .slice(0, 3);
-
-      if (urgentTasks.length === 0) {
-        listSummaryBox.innerHTML = `
-          <div class="dash_tasks_clear_card">
-            <svg viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="var(--accent-secondary)" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p>Your mental space is fully clear! No urgent deadlines.</p>
-          </div>
-        `;
-      } else {
-        listSummaryBox.innerHTML = "";
-        urgentTasks.forEach(task => {
-          const card = this.createTaskCardDOM(task);
-          listSummaryBox.appendChild(card);
-        });
-      }
-
-      const focusNudgeBox = document.getElementById("dash_focus_nudge_area");
-
-      // If timer is actively running, show live session status
-      if (this.store.timer.isRunning) {
-        const activeTask = this.store.timer.activeTaskId
-          ? this.store.tasks.find(tk => tk.id === this.store.timer.activeTaskId)
-          : null;
-        const mins = Math.floor(Math.abs(this.store.timer.duration) / 60);
-        const secs = Math.abs(this.store.timer.duration) % 60;
-        const timeLeft = `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-
-        focusNudgeBox.innerHTML = `
-          <div class="dash_nudge_prompt_card">
-            <div class="nudge_text">
-              <span>🔴 FOCUS SESSION ACTIVE</span>
-              <h3>${activeTask ? this.escapeHTML(activeTask.title) : 'Deep Work'}</h3>
-              <p>${timeLeft} remaining · ${this.store.timer.type === 'pomodoro' ? 'Focus Block' : this.store.timer.type === 'shortBreak' ? 'Short Break' : this.store.timer.type === 'longBreak' ? 'Long Break' : 'Stopwatch'}</p>
-            </div>
-            <div style="display: flex; gap: 8px;">
-              <button class="nudge_focus_btn" id="btn_nudge_goto_timer">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                View Timer
-              </button>
-              <button class="nudge_focus_btn secondary" id="btn_nudge_stop_focus" style="background-color: rgba(239,68,68,0.15); color: #ef4444; box-shadow: none;">
-                Stop
-              </button>
-            </div>
-          </div>
-        `;
-
-        document.getElementById("btn_nudge_goto_timer").addEventListener("click", () => {
-          this.store.setView("timer");
-        });
-        document.getElementById("btn_nudge_stop_focus").addEventListener("click", () => {
-          this.store.resetTimer();
-        });
-      } else {
-        // Show today's focus summary
-        const todayStr = getLocalDateString();
-        let todayFocusMin = 0;
-        let todaySessions = 0;
-        this.store.tasks.forEach(t => {
-          if (t.focusSessions) {
-            t.focusSessions.forEach(fs => {
-              const fsDate = fs.startTime ? fs.startTime.split("T")[0] : null;
-              if (fsDate === todayStr) {
-                todayFocusMin += fs.duration || 0;
-                todaySessions++;
-              }
-            });
-          }
-        });
-
-        const focusSummaryText = todaySessions > 0
-          ? `${todaySessions} session${todaySessions > 1 ? 's' : ''} · ${(todayFocusMin / 60).toFixed(1)}h focused today`
-          : "No focus sessions today yet";
-
-        const highPriorityTask = pendingTasks.find(t => t.priority === "High") || pendingTasks[0];
-
-        if (highPriorityTask) {
-          focusNudgeBox.innerHTML = `
-            <div class="dash_nudge_prompt_card">
-              <div class="nudge_text">
-                <span>RECOMMENDED ATOMIC TARGET · ${focusSummaryText}</span>
-                <h3>${this.escapeHTML(highPriorityTask.title)}</h3>
-                <p>${highPriorityTask.description ? this.escapeHTML(highPriorityTask.description) : 'Locked focus block'}</p>
-              </div>
-              <button class="nudge_focus_btn" id="btn_nudge_launch_focus">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
-                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                </svg>
-                Focus (${highPriorityTask.estimatedDuration || 25}m)
-              </button>
-            </div>
-          `;
-
-          document.getElementById("btn_nudge_launch_focus").addEventListener("click", () => {
-            this.store.setView("timer");
-            this.store.startTimer(highPriorityTask.id);
-          });
-        } else {
-          focusNudgeBox.innerHTML = `
-            <div class="dash_nudge_prompt_card clean_slate">
-              <div class="nudge_text">
-                <span>SYSTEM COMPANION · ${focusSummaryText}</span>
-                <h3>All actions accomplished!</h3>
-                <p>Consider reading, stretching, or scheduling upcoming objectives.</p>
-              </div>
-              <button class="nudge_focus_btn secondary" id="btn_nudge_quick_add">+ Capture Goal</button>
-            </div>
-          `;
-
-          document.getElementById("btn_nudge_quick_add").addEventListener("click", () => this.openBottomSheet());
-        }
-      }
-
-      const completedTodayCount = this.getCompletedTodayCount();
-      const totalTodayTasks = this.store.tasks.filter(t => t.dueDate === todayStr).length;
-      const taskRingPct = totalTodayTasks > 0 ? (completedTodayCount / totalTodayTasks) : (this.store.tasks.length > 0 ? (this.store.tasks.filter(t => t.completed).length / this.store.tasks.length) : 0);
-
-      const completedHabits = this.store.habits.filter(h => h.history && h.history[todayStr] === true).length;
-      const habitRingPct = this.store.habits.length > 0 ? (completedHabits / this.store.habits.length) : 0;
-
-      this.updateCircularProgressRing("ring_tasks_today", taskRingPct);
-      this.updateCircularProgressRing("ring_habits_today", habitRingPct);
-      document.getElementById("dash_tasks_pct_label").textContent = `${Math.round(taskRingPct * 100)}%`;
-      document.getElementById("dash_habits_pct_label").textContent = `${Math.round(habitRingPct * 100)}%`;
-
-      this.loadInspirationalQuote();
-    }
-
-    async loadInspirationalQuote() {
-      const quoteEl = document.getElementById("dash_wisdom_prompt_quote");
-      if (!quoteEl) return;
-
-      const offlineQuotes = [
-        { quote: "Simplify. Focus on the single next action.", author: "Don Norman" },
-        { quote: "Motivation is what gets you started. Habit is what keeps you going.", author: "Jim Ryun" },
-        { quote: "If you want to build a habit, make it obvious and make it easy.", author: "James Clear" },
-        { quote: "Productivity is about clearing clutter to protect your creative energy.", author: "Gleb Kuznetsov" },
-        { quote: "You do not rise to the level of your goals. You fall to the level of your systems.", author: "James Clear" },
-        { quote: "Atomic habits compound over calendar blocks. Brick by brick, momentum rises.", author: "James Clear" },
-        { quote: "Deep work is the superpower of the 21st century. Protect your blocks.", author: "Cal Newport" },
-        { quote: "Clear your evening. Mindful shutdowns restore tomorrow's baseline.", author: "Cal Newport" }
-      ];
-
-      const now = Date.now();
-      if (this.cachedQuote && (now - this.lastQuoteFetchTime < 3600000)) {
-        quoteEl.innerHTML = this.cachedQuote;
-        return;
-      }
-
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 2000);
-
-        const response = await fetch("https://quoteslate.vercel.app/api/quotes/random", { signal: controller.signal });
-        clearTimeout(timeoutId);
-
-        if (response.ok) {
-          const data = await response.json();
-          if (data && data.quote && data.author) {
-            this.cachedQuote = `"${this.escapeHTML(data.quote)}" <span class="quote_author" style="font-size: 0.85em; opacity: 0.75; font-style: italic;">— ${this.escapeHTML(data.author)}</span>`;
-            this.lastQuoteFetchTime = now;
-            quoteEl.innerHTML = this.cachedQuote;
-            return;
-          }
-        }
-      } catch (err) {
-        console.warn("Failed to fetch random quote from API, using offline fallback.", err);
-      }
-
-      const dateIndex = new Date().getDate() % offlineQuotes.length;
-      const q = offlineQuotes[dateIndex];
-      this.cachedQuote = `"${this.escapeHTML(q.quote)}" <span class="quote_author" style="font-size: 0.85em; opacity: 0.75; font-style: italic;">— ${this.escapeHTML(q.author)}</span>`;
-      this.lastQuoteFetchTime = now;
-      quoteEl.innerHTML = this.cachedQuote;
-    }
-
-    getNowNextRoutine() {
-      const now = new Date();
-      const currentMin = now.getHours() * 60 + now.getMinutes();
-      const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-      const currentDayLabel = weekdayLabels[now.getDay()];
-
-      const todayRoutines = this.store.routines.filter(r => r.days.includes(currentDayLabel));
-
-      let activeBlock = null;
-      let upcomingBlock = null;
-      let minUpcomingDiff = Infinity;
-
-      todayRoutines.forEach(rout => {
-        const [startH, startM] = rout.startTime.split(":").map(Number);
-        const [endH, endM] = rout.endTime.split(":").map(Number);
-        const startMin = startH * 60 + startM;
-        const endMin = endH * 60 + endM;
-
-        if (currentMin >= startMin && currentMin <= endMin) {
-          activeBlock = rout;
-        } else if (startMin > currentMin) {
-          const diff = startMin - currentMin;
-          if (diff < minUpcomingDiff) {
-            minUpcomingDiff = diff;
-            upcomingBlock = rout;
-          }
-        }
-      });
-
-      if (!upcomingBlock && todayRoutines.length > 0) {
-        todayRoutines.sort((a, b) => a.startTime.localeCompare(b.startTime));
-        upcomingBlock = todayRoutines[0];
-      }
-
-      return { now: activeBlock, next: upcomingBlock };
-    }
-
-    updateCircularProgressRing(elementId, percentage) {
-      const ring = document.getElementById(elementId);
-      if (ring) {
-        const radius = ring.r.baseVal.value;
-        const circ = 2 * Math.PI * radius;
-        const cappedPct = Math.min(Math.max(percentage, 0), 1);
-        const offset = circ - (cappedPct * circ);
-        ring.style.strokeDasharray = `${circ} ${circ}`;
-        ring.style.strokeDashoffset = offset;
-      }
-    }
-
-    // -------------------------------------------------------------------------
-    // 2. DAILY ROUTINE VIEW (WAKING TIME-BLOCK PLANNERS)
-    // -------------------------------------------------------------------------
-    renderRoutineUI() {
-      const wrapper = document.getElementById("routine_timetable_scroller");
-      if (!wrapper) return;
-
-      // Update switcher highlights
-      const tabs = document.querySelectorAll("#routine_day_tabs_bar .routine_day_tab");
-      tabs.forEach(t => {
-        t.classList.toggle("active", t.getAttribute("data-day") === this.selectedRoutineDay);
-      });
-
-      const pills = document.querySelectorAll("#routine_layout_pills .pill_btn");
-      pills.forEach(p => {
-        p.classList.toggle("active", p.getAttribute("data-layout") === this.routineLayoutMode);
-      });
-
-      const [wakeH, wakeM] = this.store.routinePrefs.wakeUpTime.split(":").map(Number);
-      const [sleepH, sleepM] = this.store.routinePrefs.sleepTime.split(":").map(Number);
-
-      const now = new Date();
-      const currentHour = now.getHours();
-      const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-      const currentDayLabel = weekdayLabels[now.getDay()];
-
-      const dayRoutines = this.store.routines.filter(r => r.days.includes(this.selectedRoutineDay));
-      dayRoutines.sort((a, b) => a.startTime.localeCompare(b.startTime));
-
-      if (this.routineLayoutMode === "timeline") {
-        let cardsHtml = "";
-        if (dayRoutines.length === 0) {
-          cardsHtml = `
-            <div class="agenda_empty_card">
-              <p>No routine blocks scheduled for ${this.selectedRoutineDay}. Enjoy a clear canvas, or capture a new scheduled block!</p>
-            </div>
-          `;
-        } else {
-          dayRoutines.forEach(rout => {
-            const [sH, sM] = rout.startTime.split(":").map(Number);
-            const [eH, eM] = rout.endTime.split(":").map(Number);
-            const durationMin = (eH * 60 + eM) - (sH * 60 + sM);
-
-            let activeNowHtml = "";
-            let activeClass = "";
-            const isToday = this.selectedRoutineDay === currentDayLabel;
-            
-            if (isToday) {
-              const currentMin = now.getHours() * 60 + now.getMinutes();
-              const startMin = sH * 60 + sM;
-              const endMin = eH * 60 + eM;
-              
-              if (currentMin >= startMin && currentMin <= endMin) {
-                activeClass = "active_now_item";
-                const elapsedPct = Math.round(((currentMin - startMin) / (endMin - startMin)) * 100);
-                const remainingMin = endMin - currentMin;
-                activeNowHtml = `
-                  <div class="agenda_active_beacon" style="margin-top: 8px;">
-                    <span class="beacon_dot"></span>
-                    Active Now
-                  </div>
-                  <div class="agenda_progress_wrapper">
-                    <div class="agenda_progress_labels">
-                      <span>Progress: ${elapsedPct}%</span>
-                      <span>${remainingMin}m left</span>
-                    </div>
-                    <div class="agenda_progress_track">
-                      <div class="agenda_progress_bar bg-${rout.color}" style="width: ${elapsedPct}%"></div>
-                    </div>
-                  </div>
-                `;
-              }
-            }
-
-            cardsHtml += `
-              <div class="agenda_timeline_item ${activeClass}" data-id="${rout.id}">
-                <div class="agenda_timeline_header">
-                  <div class="agenda_block_title_area">
-                    <span class="agenda_block_indicator bg-${rout.color}"></span>
-                    <h4>${this.escapeHTML(rout.title)}</h4>
-                  </div>
-                  <div class="agenda_block_actions">
-                    <button class="agenda_block_btn edit" title="Edit block">Edit</button>
-                    <button class="agenda_block_btn delete" title="Delete block">✕</button>
-                  </div>
-                </div>
-                <div class="agenda_timeline_meta">
-                  <span class="agenda_time_badge">${rout.startTime} - ${rout.endTime}</span>
-                  <span class="agenda_category_badge">${rout.category}</span>
-                  <span class="agenda_duration_badge">${durationMin}m</span>
-                </div>
-                ${activeNowHtml}
-              </div>
-            `;
-          });
-        }
-
-        wrapper.innerHTML = `
-          <div class="timeline_agenda_wrapper">
-            ${cardsHtml}
-          </div>
-        `;
-
-        wrapper.querySelectorAll(".agenda_timeline_item").forEach(card => {
-          const id = card.getAttribute("data-id");
-          
-          const openEdit = () => {
-            const block = this.store.routines.find(r => r.id === id);
-            if (block) {
-              this.openRoutineSheet(block);
-            }
-          };
-
-          card.querySelector(".edit").addEventListener("click", (e) => {
-            e.stopPropagation();
-            openEdit();
-          });
-
-          card.addEventListener("click", (e) => {
-            if (e.target.closest(".agenda_block_btn")) return;
-            openEdit();
-          });
-
-          card.querySelector(".delete").addEventListener("click", (e) => {
-            e.stopPropagation();
-            if (confirm("Permanently unschedule this routine block?")) {
-              this.store.deleteRoutineBlock(id);
-            }
-          });
-        });
-
-      } else {
-        // Hourly Waking Grid mode
-        let hours = [];
-        if (wakeH <= sleepH) {
-          for (let h = wakeH; h <= sleepH; h++) hours.push(h);
-        } else {
-          for (let h = wakeH; h < 24; h++) hours.push(h);
-          for (let h = 0; h <= sleepH; h++) hours.push(h);
-        }
-
-        let tableRowsHtml = "";
-
-        hours.forEach(h => {
-          const formattedHour = `${h.toString().padStart(2, "0")}:00`;
-          const isCurrentHour = h === currentHour && this.selectedRoutineDay === currentDayLabel;
-
-          const matches = dayRoutines.filter(rout => {
-            const startHour = parseInt(rout.startTime.split(":")[0]);
-            return startHour === h;
-          });
-
-          if (matches.length === 0) {
-            tableRowsHtml += `
-              <tr class="routine_table_row ${isCurrentHour ? 'active_hour' : ''}">
-                <td class="routine_time_col">${formattedHour}</td>
-                <td class="routine_block_col empty_block" colspan="4">Free Space</td>
-              </tr>
-            `;
-          } else {
-            matches.forEach((rout, index) => {
-              const [sH, sM] = rout.startTime.split(":").map(Number);
-              const [eH, eM] = rout.endTime.split(":").map(Number);
-              const durationMin = (eH * 60 + eM) - (sH * 60 + sM);
-              
-              tableRowsHtml += `
-                <tr class="routine_table_row ${isCurrentHour ? 'active_hour' : ''}" data-id="${rout.id}">
-                  ${index === 0 ? `<td class="routine_time_col" rowspan="${matches.length}">${formattedHour}</td>` : ''}
-                  <td class="routine_block_col">
-                    <div class="routine_block_indicator bg-${rout.color}"></div>
-                    <div class="routine_block_details">
-                      <span class="routine_block_title">${this.escapeHTML(rout.title)}</span>
-                      <span class="routine_block_time_span">${rout.startTime} - ${rout.endTime}</span>
-                    </div>
-                  </td>
-                  <td class="routine_category_col">
-                    <span class="category_badge">${rout.category}</span>
-                  </td>
-                  <td class="routine_duration_col">${durationMin}m</td>
-                  <td class="routine_action_col">
-                    <button class="routine_block_delete_btn" aria-label="Remove routine" title="Delete block">✕</button>
-                  </td>
-                </tr>
-              `;
-            });
-          }
-        });
-
-        wrapper.innerHTML = `
-          <div class="routine_table_responsive_wrapper">
-            <table class="routine_table">
-              <thead>
-                <tr>
-                  <th>Hour</th>
-                  <th>Activity Block</th>
-                  <th>Category</th>
-                  <th>Duration</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${tableRowsHtml}
-              </tbody>
-            </table>
-          </div>
-        `;
-
-        wrapper.querySelectorAll(".routine_table_row").forEach(row => {
-          const id = row.getAttribute("data-id");
-          if (!id) return;
-
-          row.addEventListener("click", (e) => {
-            if (e.target.closest(".routine_block_delete_btn")) return;
-            const block = this.store.routines.find(r => r.id === id);
-            if (block) {
-              this.openRoutineSheet(block);
-            }
-          });
-        });
-
-        wrapper.querySelectorAll(".routine_block_delete_btn").forEach(btn => {
-          btn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            const row = btn.closest(".routine_table_row");
-            const blockId = row.getAttribute("data-id");
-            if (confirm("Permanently unschedule this routine block?")) {
-              this.store.deleteRoutineBlock(blockId);
-            }
-          });
-        });
-      }
-    }
-
-    openRoutineSheet(block = null) {
-      this.closeBottomSheet();
-      this.closeHabitSheet();
-      this.routineSheet.classList.add("visible");
-      this.routineSheetOverlay.classList.add("visible");
-      document.body.classList.add("modal-open");
-
-      const formTitle = document.getElementById("routine_sheet_title");
-      const submitBtn = document.getElementById("routine_sheet_submit");
-
-      if (block) {
-        this.activeEditingRoutineId = block.id;
-        if (formTitle) formTitle.textContent = "Refine Scheduled Block";
-        if (submitBtn) submitBtn.textContent = "Save Changes";
-
-        document.getElementById("routine_title").value = block.title;
-        document.getElementById("routine_start_time").value = block.startTime;
-        document.getElementById("routine_end_time").value = block.endTime;
-        document.getElementById("routine_category").value = block.category || "Routine";
-        document.getElementById("routine_color").value = block.color || "indigo";
-        document.getElementById("routine_icon").value = block.icon || "";
-
-        // Uncheck all days first
-        this.routineForm.querySelectorAll("input[name='routine_days']").forEach(cb => {
-          cb.checked = block.days.includes(cb.value);
-        });
-      } else {
-        this.activeEditingRoutineId = null;
-        if (formTitle) formTitle.textContent = "Schedule Routine Block";
-        if (submitBtn) submitBtn.textContent = "Schedule Block";
-
-        this.routineForm.reset();
-        
-        // Default check all days
-        this.routineForm.querySelectorAll("input[name='routine_days']").forEach(cb => {
-          cb.checked = true;
-        });
-      }
-
-      setTimeout(() => document.getElementById("routine_title").focus(), 200);
-    }
-
-    closeRoutineSheet() {
-      this.routineSheet.classList.remove("visible");
-      this.routineSheetOverlay.classList.remove("visible");
-      document.body.classList.remove("modal-open");
-      this.activeEditingRoutineId = null;
-      this.isSubmitting = false;
-      const routineSubmitBtn = document.getElementById("routine_sheet_submit");
-      if (routineSubmitBtn) routineSubmitBtn.disabled = false;
-    }
-
-    openHabitSheet(habit = null) {
-      this.closeBottomSheet();
-      this.closeRoutineSheet();
-      this.habitSheet.classList.add("visible");
-      this.habitSheetOverlay.classList.add("visible");
-      document.body.classList.add("modal-open");
-
-      const formTitle = document.getElementById("habit_sheet_title");
-      const submitBtn = this.habitForm.querySelector("button[type='submit']");
-
-      if (habit) {
-        this.activeEditingHabitId = habit.id;
-        if (formTitle) formTitle.textContent = "Edit Habit";
-        if (submitBtn) submitBtn.textContent = "Save Changes";
-
-        document.getElementById("habit_title").value = habit.title;
-        document.getElementById("habit_category").value = habit.category || "Routine";
-        document.getElementById("habit_color").value = habit.color || "indigo";
-      } else {
-        this.activeEditingHabitId = null;
-        if (formTitle) formTitle.textContent = "Create Atomic Habit";
-        if (submitBtn) submitBtn.textContent = "Save Habit";
-        this.habitForm.reset();
-      }
-
-      setTimeout(() => document.getElementById("habit_title").focus(), 200);
-    }
-
-    closeHabitSheet() {
-      this.habitSheet.classList.remove("visible");
-      this.habitSheetOverlay.classList.remove("visible");
-      document.body.classList.remove("modal-open");
-      this.isSubmitting = false;
-      const habitSubmitBtn = this.habitForm.querySelector("button[type='submit']");
-      if (habitSubmitBtn) habitSubmitBtn.disabled = false;
-    }
-
-    handleRoutineFormSubmission() {
-      if (this.isSubmitting) return;
-      const title = document.getElementById("routine_title").value.trim();
-      const startTime = document.getElementById("routine_start_time").value;
-      const endTime = document.getElementById("routine_end_time").value;
-      const category = document.getElementById("routine_category").value;
-      const color = document.getElementById("routine_color").value;
-      const icon = document.getElementById("routine_icon").value.trim() || "";
-
-      const days = [];
-      this.routineForm.querySelectorAll("input[name='routine_days']:checked").forEach(cb => {
-        days.push(cb.value);
-      });
-
-      if (!title || !startTime || !endTime || days.length === 0) {
-        alert("Please specify routine objective, schedule times, and active weekdays!");
-        return;
-      }
-
-      const [sh, sm] = startTime.split(":").map(Number);
-      const [eh, em] = endTime.split(":").map(Number);
-      if (sh * 60 + sm >= eh * 60 + em) {
-        alert("Routine start time must precede the scheduled completion time!");
-        return;
-      }
-
-      this.isSubmitting = true;
-      const routineSubmitBtn = document.getElementById("routine_sheet_submit");
-      if (routineSubmitBtn) routineSubmitBtn.disabled = true;
-
-      // Check soft overlaps
-      const overlaps = this.store.checkRoutineOverlap(startTime, endTime, days, this.activeEditingRoutineId);
-      if (overlaps.length > 0) {
-        const names = overlaps.map(o => `"${o.block.title}" on ${o.days.join(", ")}`).join(", ");
-        this.showToast(`Warning: Intersects with ${names}!`, "info");
-      }
-
-      const blockData = { title, startTime, endTime, category, color, icon, days };
-
-      if (this.activeEditingRoutineId !== null) {
-        this.store.updateRoutineBlock(this.activeEditingRoutineId, blockData);
-      } else {
-        this.store.addRoutineBlock(blockData);
-      }
-
-      this.closeRoutineSheet();
-    }
-
-    // -------------------------------------------------------------------------
-    // 3. CONSISTENCY VIEW (GRID MATRICES & HEATMAPS)
-    // -------------------------------------------------------------------------
-    bindConsistencyInteractions() {
-      // Week Navigation
-      const prevWeekBtn = document.getElementById("btn_habit_prev_week");
-      const thisWeekBtn = document.getElementById("btn_habit_this_week");
-      const nextWeekBtn = document.getElementById("btn_habit_next_week");
-
-      if (prevWeekBtn && !prevWeekBtn.dataset.bound) {
-        prevWeekBtn.dataset.bound = "true";
-        prevWeekBtn.addEventListener("click", () => {
-          this.habitWeekOffset -= 1;
-          this.renderConsistencyUI();
-        });
-      }
-
-      if (thisWeekBtn && !thisWeekBtn.dataset.bound) {
-        thisWeekBtn.dataset.bound = "true";
-        thisWeekBtn.addEventListener("click", () => {
-          this.habitWeekOffset = 0;
-          this.renderConsistencyUI();
-        });
-      }
-
-      if (nextWeekBtn && !nextWeekBtn.dataset.bound) {
-        nextWeekBtn.dataset.bound = "true";
-        nextWeekBtn.addEventListener("click", () => {
-          this.habitWeekOffset += 1;
-          this.renderConsistencyUI();
-        });
-      }
-
-      // Heatmap Month Navigation
-      const prevMonthBtn = document.getElementById("btn_heatmap_prev_month");
-      const thisMonthBtn = document.getElementById("btn_heatmap_this_month");
-      const nextMonthBtn = document.getElementById("btn_heatmap_next_month");
-
-      if (prevMonthBtn && !prevMonthBtn.dataset.bound) {
-        prevMonthBtn.dataset.bound = "true";
-        prevMonthBtn.addEventListener("click", () => {
-          this.habitHeatmapMonthOffset -= 1;
-          this.renderMonthlyHeatmapSVG();
-        });
-      }
-
-      if (thisMonthBtn && !thisMonthBtn.dataset.bound) {
-        thisMonthBtn.dataset.bound = "true";
-        thisMonthBtn.addEventListener("click", () => {
-          this.habitHeatmapMonthOffset = 0;
-          this.renderMonthlyHeatmapSVG();
-        });
-      }
-
-      if (nextMonthBtn && !nextMonthBtn.dataset.bound) {
-        nextMonthBtn.dataset.bound = "true";
-        nextMonthBtn.addEventListener("click", () => {
-          this.habitHeatmapMonthOffset += 1;
-          this.renderMonthlyHeatmapSVG();
-        });
-      }
-
-      // Spontaneous Quick Add Form
-      const quickForm = document.getElementById("habit_quick_add_form");
-      if (quickForm && !quickForm.dataset.bound) {
-        quickForm.dataset.bound = "true";
-        quickForm.addEventListener("submit", (e) => {
-          e.preventDefault();
-          const input = document.getElementById("habit_quick_input");
-          const catSelect = document.getElementById("habit_quick_cat");
-          const title = input ? input.value.trim() : "";
-          const cat = catSelect ? catSelect.value : "Routine";
-          if (!title) return;
-
-          const newHabit = this.store.addHabit(title, cat, "indigo");
-          if (input) input.value = "";
-          if (newHabit) {
-            this.evaluateHabitWithAI(title, newHabit.id);
-          }
-        });
-      }
-
-      // Spontaneous 1-Click Preset Chips
-      document.querySelectorAll(".habit_preset_chip").forEach(chip => {
-        if (!chip.dataset.bound) {
-          chip.dataset.bound = "true";
-          chip.addEventListener("click", () => {
-            const title = chip.dataset.title;
-            const cat = chip.dataset.cat || "Routine";
-            const color = chip.dataset.color || "indigo";
-            if (!title) return;
-
-            const newHabit = this.store.addHabit(title, cat, color);
-            if (newHabit) {
-              this.evaluateHabitWithAI(title, newHabit.id);
-            }
-          });
-        }
-      });
-
-      // Custom Detailed Dialog Trigger
-      const customBtn = document.getElementById("btn_consistency_add_habit");
-      if (customBtn && !customBtn.dataset.bound) {
-        customBtn.dataset.bound = "true";
-        customBtn.addEventListener("click", () => this.openHabitSheet());
-      }
-
-      // AI Health Advisory Alert Card Actions
-      const dismissAdvisoryBtn = document.getElementById("btn_dismiss_ai_advisory");
-      const keepHabitBtn = document.getElementById("btn_ai_keep_habit");
-      const adoptAltBtn = document.getElementById("btn_ai_adopt_alternative");
-      const advisoryCard = document.getElementById("habit_ai_advisory_card");
-
-      if (dismissAdvisoryBtn && !dismissAdvisoryBtn.dataset.bound) {
-        dismissAdvisoryBtn.dataset.bound = "true";
-        dismissAdvisoryBtn.addEventListener("click", () => {
-          if (advisoryCard) advisoryCard.style.display = "none";
-          this.pendingUnhealthyHabit = null;
-        });
-      }
-
-      if (keepHabitBtn && !keepHabitBtn.dataset.bound) {
-        keepHabitBtn.dataset.bound = "true";
-        keepHabitBtn.addEventListener("click", () => {
-          if (advisoryCard) advisoryCard.style.display = "none";
-          this.pendingUnhealthyHabit = null;
-        });
-      }
-
-      if (adoptAltBtn && !adoptAltBtn.dataset.bound) {
-        adoptAltBtn.dataset.bound = "true";
-        adoptAltBtn.addEventListener("click", () => {
-          if (this.pendingUnhealthyHabit) {
-            const { id, alternativeTitle, category } = this.pendingUnhealthyHabit;
-            this.store.updateHabit(id, {
-              title: alternativeTitle,
-              category: category || "Health",
-              color: "emerald"
-            });
-            if (advisoryCard) advisoryCard.style.display = "none";
-            this.showToast(`Switched to "${alternativeTitle}"!`, "success");
-            this.pendingUnhealthyHabit = null;
-          }
-        });
-      }
-
-      // Gemini AI Habit Coach Trigger
-      const coachBtn = document.getElementById("btn_ai_analyze_habits");
-      if (coachBtn && !coachBtn.dataset.bound) {
-        coachBtn.dataset.bound = "true";
-        coachBtn.addEventListener("click", () => this.analyzeHabitsWithAI());
-      }
-
-      // Gemini AI Prompt Chips
-      document.querySelectorAll(".ai_prompt_chip").forEach(chip => {
-        if (!chip.dataset.bound) {
-          chip.dataset.bound = "true";
-          chip.addEventListener("click", () => {
-            this.analyzeHabitsWithAI(chip.dataset.prompt);
-          });
-        }
-      });
-    }
-
-    renderConsistencyUI() {
-      const matrixBox = document.getElementById("habit_matrix_tbody");
-      if (!matrixBox) return;
-
-      const today = new Date();
-      const todayISO = getLocalDateString(today);
-
-      // Calculate Monday of target week factoring in this.habitWeekOffset
-      const dayOfWeekIdx = today.getDay(); // 0 is Sun, 1 is Mon
-      const diffToMon = dayOfWeekIdx === 0 ? -6 : 1 - dayOfWeekIdx;
-      const startOfWeek = new Date(today);
-      startOfWeek.setDate(today.getDate() + diffToMon + (this.habitWeekOffset * 7));
-
-      const weekdays = [];
-      const weekdaysShort = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-      const monthsShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-      const monthsFull = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-
-      for (let i = 0; i < 7; i++) {
-        const d = new Date(startOfWeek);
-        d.setDate(startOfWeek.getDate() + i);
-        const iso = getLocalDateString(d);
-        weekdays.push({
-          iso,
-          dayName: weekdaysShort[i],
-          dateNum: d.getDate(),
-          monthShort: monthsShort[d.getMonth()],
-          monthFull: monthsFull[d.getMonth()],
-          year: d.getFullYear(),
-          isToday: iso === todayISO,
-          isFuture: iso > todayISO
-        });
-      }
-
-      // Update Week Range Badge (#habit_week_range_badge)
-      const weekBadge = document.getElementById("habit_week_range_badge");
-      if (weekBadge) {
-        const startDay = weekdays[0];
-        const endDay = weekdays[6];
-        let offsetTag = "";
-        if (this.habitWeekOffset === 0) offsetTag = " · This Week";
-        else if (this.habitWeekOffset === -1) offsetTag = " · Last Week";
-        else if (this.habitWeekOffset < -1) offsetTag = ` · ${Math.abs(this.habitWeekOffset)}w Ago`;
-        else if (this.habitWeekOffset === 1) offsetTag = " · Next Week";
-        else offsetTag = ` · In ${this.habitWeekOffset}w`;
-
-        let rangeText = "";
-        if (startDay.monthShort === endDay.monthShort && startDay.year === endDay.year) {
-          rangeText = `${startDay.monthShort} ${startDay.dateNum} – ${endDay.dateNum}, ${startDay.year}${offsetTag}`;
-        } else if (startDay.year === endDay.year) {
-          rangeText = `${startDay.monthShort} ${startDay.dateNum} – ${endDay.monthShort} ${endDay.dateNum}, ${startDay.year}${offsetTag}`;
-        } else {
-          rangeText = `${startDay.monthShort} ${startDay.dateNum}, ${startDay.year} – ${endDay.monthShort} ${endDay.dateNum}, ${endDay.year}${offsetTag}`;
-        }
-        weekBadge.textContent = rangeText;
-      }
-
-      // Render Dynamic thead row (#habit_matrix_thead_row)
-      const theadRow = document.getElementById("habit_matrix_thead_row");
-      if (theadRow) {
-        let thHtml = `<th style="text-align: left;">Atomic Habit</th>`;
-        weekdays.forEach(w => {
-          thHtml += `
-            <th class="${w.isToday ? "active_today" : ""}">
-              <div class="matrix_th_content">
-                <span class="matrix_th_day">${w.dayName}</span>
-                <span class="matrix_th_date">${w.dateNum}</span>
-                <span class="matrix_th_month">${w.monthShort}</span>
-                ${w.isToday ? `<span class="matrix_today_indicator">TODAY</span>` : ""}
-              </div>
-            </th>
-          `;
-        });
-        theadRow.innerHTML = thHtml;
-      }
-
-      // Calculate Motivation Deck Metrics
-      const totalHabits = this.store.habits.length;
-      let completedToday = 0;
-      let actual7DayCompletions = 0;
-      let maxActiveStreak = 0;
-
-      // Last 7 calendar dates ending today
-      const past7Dates = [];
-      for (let j = 0; j < 7; j++) {
-        const pd = new Date(today);
-        pd.setDate(today.getDate() - j);
-        past7Dates.push(getLocalDateString(pd));
-      }
-
-      this.store.habits.forEach(h => {
-        if (h.history && h.history[todayISO] === true) completedToday++;
-        if ((h.streak || 0) > maxActiveStreak) maxActiveStreak = h.streak || 0;
-        if (h.history) {
-          past7Dates.forEach(d => {
-            if (h.history[d] === true) actual7DayCompletions++;
-          });
-        }
-      });
-
-      const todayPct = totalHabits > 0 ? Math.round((completedToday / totalHabits) * 100) : 0;
-      const totalPossible7 = totalHabits * 7;
-      const weeklyRatePct = totalPossible7 > 0 ? Math.round((actual7DayCompletions / totalPossible7) * 100) : 0;
-
-      const todayScoreEl = document.getElementById("habit_today_score");
-      const todayPctEl = document.getElementById("habit_today_pct");
-      const progressBarEl = document.getElementById("habit_today_progress_bar");
-      const weeklyRateEl = document.getElementById("habit_weekly_rate");
-      const topStreakEl = document.getElementById("habit_top_streak");
-      const motivationQuoteEl = document.getElementById("habit_motivation_quote");
-
-      if (todayScoreEl) todayScoreEl.textContent = `${completedToday} / ${totalHabits}`;
-      if (todayPctEl) todayPctEl.textContent = `${todayPct}%`;
-      if (progressBarEl) progressBarEl.style.width = `${todayPct}%`;
-      if (weeklyRateEl) weeklyRateEl.textContent = `${weeklyRatePct}%`;
-      if (topStreakEl) topStreakEl.textContent = `${maxActiveStreak}d`;
-
-      if (motivationQuoteEl) {
-        if (totalHabits === 0) {
-          motivationQuoteEl.textContent = '"Build the identity you want. Add your first atomic habit below to start compounding."';
-        } else if (todayPct === 100) {
-          motivationQuoteEl.textContent = '"Flawless execution! You checked off every habit for today. Consistency is an unstoppable flywheel."';
-        } else if (todayPct >= 50) {
-          motivationQuoteEl.textContent = `"${completedToday} down, ${totalHabits - completedToday} remaining today. Finish strong to protect your momentum!"`;
-        } else if (completedToday > 0) {
-          motivationQuoteEl.textContent = '"Strong start today. Check off your next atomic habit to keep your streak burning."';
-        } else {
-          motivationQuoteEl.textContent = '"Small daily disciplines compound into massive life transformations. Tap 1 habit to ignite today\'s streak."';
-        }
-      }
-
-      // Render Matrix Table Body
-      if (this.store.habits.length === 0) {
-        matrixBox.innerHTML = `
-          <tr>
-            <td colspan="8" style="text-align: center; padding: 32px 16px; color: var(--text-muted);">
-              <div style="font-size: 28px; margin-bottom: 8px;">🌱</div>
-              <h4 style="font-size: 14px; font-weight: 800; color: var(--text-primary); margin-bottom: 4px;">No habits tracked yet</h4>
-              <p style="font-size: 12px; margin-bottom: 12px;">Type a habit in the quick-add bar above, or click any 1-Click Preset to begin.</p>
-            </td>
-          </tr>
-        `;
-      } else {
-        let matrixHtml = "";
-        this.store.habits.forEach(habit => {
-          let cellsHtml = "";
-          
-          weekdays.forEach(w => {
-            const isCompleted = habit.history && habit.history[w.iso] === true;
-
-            cellsHtml += `
-              <td class="${w.isToday ? "active_today" : ""}">
-                <button class="habit_matrix_check_pill bg-${habit.color || "indigo"} ${isCompleted ? "completed" : ""} ${w.isFuture ? "future_pill" : ""}" 
-                  id="habit_checkbox_${habit.id}_${w.iso}"
-                  data-id="${habit.id}" data-date="${w.iso}"
-                  ${w.isFuture ? "disabled title=\"Cannot log habits for future dates\"" : `title="${w.dayName}, ${w.monthShort} ${w.dateNum}: ${isCompleted ? "Completed (Click to undo)" : "Click to complete"}"`}
-                  aria-label="Toggle ${habit.title} on ${w.dayName} ${w.monthShort} ${w.dateNum}">
-                  ${isCompleted ? "✓" : (w.isFuture ? "–" : "•")}
-                </button>
-              </td>
-            `;
-          });
-
-          matrixHtml += `
-            <tr>
-              <td class="habit_row_title_cell">
-                <div class="habit_row_title">
-                  <span class="habit_tag_indicator bg-${habit.color || "indigo"}"></span>
-                  <div style="flex: 1; display: flex; flex-direction: column;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                      <h4>${this.escapeHTML(habit.title)}</h4>
-                      <div style="display: flex; gap: 8px;">
-                        <button class="habit_edit_btn" data-id="${habit.id}" title="Edit Habit">Edit</button>
-                        <button class="habit_delete_btn" data-id="${habit.id}" title="Remove Habit">✕</button>
-                      </div>
-                    </div>
-                    <p>Streak: <span>${habit.streak || 0}d</span> (PB: ${habit.maxStreak || 0}d) · <span class="habit_cat_pill">${this.escapeHTML(habit.category || "Routine")}</span></p>
-                  </div>
-                </div>
-              </td>
-              ${cellsHtml}
-            </tr>
-          `;
-        });
-
-        matrixBox.innerHTML = matrixHtml;
-
-        matrixBox.querySelectorAll(".habit_matrix_check_pill:not([disabled])").forEach(btn => {
-          btn.addEventListener("click", () => {
-            const id = btn.getAttribute("data-id");
-            const dStr = btn.getAttribute("data-date");
-            this.store.toggleHabitCompletion(id, dStr);
-          });
-        });
-
-        matrixBox.querySelectorAll(".habit_edit_btn").forEach(btn => {
-          btn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            const id = btn.getAttribute("data-id");
-            const h = this.store.habits.find(hb => hb.id === id);
-            if (h) {
-              this.openHabitSheet(h);
-            }
-          });
-        });
-
-        matrixBox.querySelectorAll(".habit_delete_btn").forEach(btn => {
-          btn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            const id = btn.getAttribute("data-id");
-            const h = this.store.habits.find(hb => hb.id === id);
-            if (confirm(`Permanently delete the habit "${h ? h.title : "habit"}" and all its historical consistency data?`)) {
-              this.store.deleteHabit(id);
-            }
-          });
-        });
-      }
-
-      this.renderMonthlyHeatmapSVG();
-    }
-
-    renderMonthlyHeatmapSVG() {
-      const container = document.getElementById("chart_heatmap_grid");
-      if (!container) return;
-
-      const today = new Date();
-      const todayISO = getLocalDateString(today);
-      const targetDate = new Date(today.getFullYear(), today.getMonth() + this.habitHeatmapMonthOffset, 1);
-      const year = targetDate.getFullYear();
-      const month = targetDate.getMonth();
-      const monthDaysCount = new Date(year, month + 1, 0).getDate();
-
-      const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-      const monthBadge = document.getElementById("heatmap_month_badge");
-      if (monthBadge) {
-        const currentTag = this.habitHeatmapMonthOffset === 0 ? " (Current)" : "";
-        monthBadge.textContent = `${monthNames[month]} ${year}${currentTag}`;
-      }
-
-      const habitCount = this.store.habits.length;
-      const firstDayIdx = new Date(year, month, 1).getDay(); // 0 is Sun, 1 is Mon
-      const leadingEmptyDays = firstDayIdx === 0 ? 6 : firstDayIdx - 1; // Align to Mon-Sun
-
-      const weekdaysShort = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
-      let headerCellsHtml = weekdaysShort.map(d => `<div class="cal_th">${d}</div>`).join("");
-
-      let emptyCellsHtml = "";
-      for (let i = 0; i < leadingEmptyDays; i++) {
-        emptyCellsHtml += `<div class="cal_cell empty"></div>`;
-      }
-
-      let dayCellsHtml = "";
-      for (let dayNum = 1; dayNum <= monthDaysCount; dayNum++) {
-        const dateStr = `${year}-${(month + 1).toString().padStart(2, "0")}-${dayNum.toString().padStart(2, "0")}`;
-        
-        let completions = 0;
-        this.store.habits.forEach(h => {
-          if (h.history && h.history[dateStr] === true) completions++;
-        });
-
-        let density = 0;
-        if (habitCount > 0 && completions > 0) {
-          const pct = completions / habitCount;
-          if (pct >= 0.75) density = 3;
-          else if (pct >= 0.4) density = 2;
-          else density = 1;
-        }
-
-        const isToday = dateStr === todayISO;
-        const dayFormatted = `${monthNames[month].slice(0, 3)} ${dayNum}, ${year}`;
-        const titleText = `${dayFormatted}: ${completions} of ${habitCount} habits completed${isToday ? " (Today)" : ""}`;
-
-        dayCellsHtml += `
-          <div class="cal_cell density-${density} ${isToday ? "active_today" : ""}" 
-               data-date="${dateStr}" 
-               data-count="${completions}" 
-               title="${titleText}">
-            <span class="cal_day_num">${dayNum}</span>
-          </div>
-        `;
-      }
-
-      container.innerHTML = `
-        <div class="cal_heatmap_grid">
-          ${headerCellsHtml}
-          ${emptyCellsHtml}
-          ${dayCellsHtml}
-        </div>
-      `;
-    }
-
-    async getCandidateGeminiModels() {
-      if (Array.isArray(this.cachedGeminiModels) && this.cachedGeminiModels.length > 0) {
-        return this.cachedGeminiModels;
-      }
-
-      try {
-        const stored = localStorage.getItem("aurora_gemini_models");
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            this.cachedGeminiModels = parsed;
-            return parsed;
-          }
-        }
-      } catch (_) {}
-
-      const defaultModels = [
-        "gemini-3.5-flash-lite",
-        "gemini-flash-lite-latest",
-        "gemini-3.5-flash",
-        "gemini-3.8-flash"
-      ];
-
-      this.cachedGeminiModels = defaultModels;
-      return defaultModels;
-    }
-
-    async callGeminiWithFallback(bodyPayload) {
-      if (!this.geminiApiKey) {
-        throw new Error("Gemini API key is not configured.");
-      }
-
-      const candidateModels = await this.getCandidateGeminiModels();
-      const models = candidateModels.slice(0, 4);
-
-      let lastError = null;
-      const errorSummaries = [];
-
-      for (const model of models) {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-
-        try {
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(this.geminiApiKey)}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(bodyPayload),
-            signal: controller.signal
-          });
-
-          if (response.ok) {
-            const data = await response.json();
-            return { data, model };
-          }
-
-          const errText = await response.text().catch(() => "");
-          console.warn(`[Gemini] ${model} returned status ${response.status}:`, errText);
-
-          let detail = `Status ${response.status}`;
-          try {
-            const errJson = JSON.parse(errText);
-            if (errJson.error?.message) {
-              detail = errJson.error.message;
-            }
-          } catch (_) {}
-
-          lastError = new Error(`${model}: ${detail}`);
-          errorSummaries.push(`${model} (${response.status})`);
-
-          // Stop fallback sequence immediately on authentication or permission failure
-          if (response.status === 401 || response.status === 403) {
-            break;
-          }
-        } catch (err) {
-          const isTimeout = err.name === "AbortError";
-          const errLabel = isTimeout ? "Timeout (10s)" : "Network error";
-          console.warn(`[Gemini] Request failed for model ${model} (${errLabel}):`, err);
-          lastError = new Error(`${model}: ${errLabel}`);
-          errorSummaries.push(`${model} (${errLabel})`);
-        } finally {
-          clearTimeout(timeoutId);
-        }
-      }
-
-      const summaryStr = errorSummaries.length > 0 ? ` [Attempted: ${errorSummaries.join(", ")}]` : "";
-      const finalMsg = lastError ? `${lastError.message}${summaryStr}` : `All Gemini models in fallback sequence failed.${summaryStr}`;
-      throw new Error(finalMsg);
-    }
-
-    async evaluateHabitWithAI(habitTitle, habitId) {
-      const advisoryCard = document.getElementById("habit_ai_advisory_card");
-      if (!advisoryCard) return;
-
-      const lower = habitTitle.toLowerCase();
-      const suspiciousTerms = ["smoke", "smoking", "cigarette", "vape", "vaping", "doomscroll", "junk food", "binge drink", "skip meal", "sleep past 3", "procrastinat", "gambling", "sugar binge"];
-      const containsSuspicious = suspiciousTerms.some(term => lower.includes(term));
-
-      if (!this.geminiApiKey) {
-        if (containsSuspicious) {
-          this.showAIAdvisoryCard(habitId, habitTitle, "This habit may negatively impact your physical health and focus.", "Take a 5-minute fresh air break or hydration.", "Substitute the craving with a positive cue.");
-        }
-        return;
-      }
-
-      try {
-        const prompt = `You are a behavioral psychology and health expert. Analyze this habit: "${habitTitle}". Determine if this habit is UNHEALTHY, counterproductive, detrimental to health or productivity (e.g. smoking, doomscrolling, skipping meals, binge drinking, junk food binge, late sleeping). If healthy or neutral, isUnhealthy is false. Return ONLY valid JSON: {"isUnhealthy": boolean, "risk": "1-sentence risk explanation", "alternative": "constructive replacement habit", "tip": "atomic habit cue"}`;
-
-        const { data } = await this.callGeminiWithFallback({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.1,
-            responseMimeType: "application/json"
-          }
-        });
-
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!text) return;
-
-        const parsed = JSON.parse(text);
-        if (parsed.isUnhealthy) {
-          this.showAIAdvisoryCard(habitId, habitTitle, parsed.risk, parsed.alternative, parsed.tip);
-        } else {
-          advisoryCard.style.display = "none";
-        }
-      } catch (err) {
-        if (containsSuspicious) {
-          this.showAIAdvisoryCard(habitId, habitTitle, "This habit may negatively impact your physical health and focus.", "Take a 5-minute fresh air break or stretch.", "Substitute the craving with a positive cue.");
-        }
-      }
-    }
-
-    showAIAdvisoryCard(habitId, title, risk, alternative, tip) {
-      const advisoryCard = document.getElementById("habit_ai_advisory_card");
-      if (!advisoryCard) return;
-
-      this.pendingUnhealthyHabit = {
-        id: habitId,
-        oldTitle: title,
-        alternativeTitle: alternative,
-        category: "Health"
-      };
-
-      const titleEl = document.getElementById("ai_advisory_title");
-      const reasonEl = document.getElementById("ai_advisory_reason");
-      const altEl = document.getElementById("ai_advisory_alternative");
-      const tipEl = document.getElementById("ai_advisory_tip");
-
-      if (titleEl) titleEl.textContent = `Unhealthy Habit Detected: "${title}"`;
-      if (reasonEl) reasonEl.textContent = risk || "This habit may undermine your long-term focus or well-being.";
-      if (altEl) altEl.textContent = alternative || "5-minute mindful breathing or hydration";
-      if (tipEl) tipEl.textContent = tip ? `💡 Habit Loop Tip: ${tip}` : "";
-
-      advisoryCard.style.display = "block";
-      advisoryCard.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }
-
-    async analyzeHabitsWithAI(customPrompt = null) {
-      const resultsContainer = document.getElementById("habit_ai_coach_results");
-      if (!resultsContainer) return;
-
-      if (!this.geminiApiKey) {
-        resultsContainer.innerHTML = `
-          <div class="ai_coach_placeholder" style="border-left: 3px solid var(--accent-primary); padding-left: 14px;">
-            <p style="font-size: 13.5px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">Gemini API Key Required</p>
-            <p style="margin-bottom: 8px;">To activate consistency analysis, habit stacking strategies, and health alerts, add your free Google Gemini API key in Settings.</p>
-            <div style="background: var(--card-bg); border: 1px solid var(--border-color); border-radius: var(--border-radius); padding: 8px 12px; margin-bottom: 12px; font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 14px;">🔒</span>
-              <span><strong>Privacy Guarantee:</strong> Your key is stored 100% locally on this device in your browser's private storage. It is never sent to any external server or database.</span>
-            </div>
-            <button type="button" class="habit_quick_submit_btn" id="btn_goto_settings_key" style="height: 34px; font-size: 11.5px;">Configure Key in Settings</button>
-          </div>
-        `;
-        const gotoBtn = document.getElementById("btn_goto_settings_key");
-        if (gotoBtn) {
-          gotoBtn.addEventListener("click", () => {
-            this.store.setView("settings");
-          });
-        }
-        return;
-      }
-
-      if (!this.store.habits || this.store.habits.length === 0) {
-        resultsContainer.innerHTML = `
-          <div class="ai_coach_placeholder">
-            <p><strong>No tracked habits yet!</strong> Add at least 1 atomic habit above to unlock personalized Gemini AI habit stacking and consistency coaching.</p>
-          </div>
-        `;
-        return;
-      }
-
-      resultsContainer.innerHTML = `
-        <div class="ai_coach_loading">
-          <div class="ai_coach_spinner"></div>
-          <span>Gemini AI is analyzing your consistency data and habit stacks...</span>
-        </div>
-      `;
-
-      const habitsData = this.store.habits.map(h => {
-        const hist = h.history || {};
-        const completedDates = Object.keys(hist).filter(d => hist[d] === true);
-        return {
-          title: h.title,
-          category: h.category,
-          currentStreak: h.streak || 0,
-          maxStreak: h.maxStreak || 0,
-          totalCompletions: completedDates.length
-        };
-      });
-
-      const userGoal = customPrompt || "Analyze my habits consistency, diagnose potential friction points, give habit stacking advice, and give a 7-day challenge.";
-
-      const prompt = `You are a world-class habit formation coach grounded in James Clear's Atomic Habits.
-User tracked habits:
-${JSON.stringify(habitsData, null, 2)}
-
-User focus:
-"${userGoal}"
-
-Provide a structured, inspiring habit coaching plan. Return HTML markup (use <h4>, <p>, <ul>, <li>, <strong>) with:
-1. <h4>⚡ Consistency Diagnosis</h4>: Concise assessment of current momentum.
-2. <h4>🔗 Habit Stacking Blueprint</h4>: Practical 'After [Current Habit], I will [New Habit]' formulas using their habits.
-3. <h4>🎯 7-Day Momentum Challenge</h4>: One high-leverage atomic action to focus on this week.
-Keep the prose punchy, encouraging, and actionable. Do not wrap in markdown backticks or html code blocks, return raw HTML tags only.`;
-
-      try {
-        const { data, model } = await this.callGeminiWithFallback({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.3
-          }
-        });
-
-        let content = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        content = content.replace(/^```html\s*/i, "").replace(/^```\s*/i, "").replace(/```$/i, "").trim();
-
-        resultsContainer.innerHTML = `
-          <div class="ai_coach_content_rendered">
-            ${content}
-            <div style="margin-top: 14px; padding-top: 10px; border-top: 1px dashed var(--border-color); display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-              <span style="font-size: 11px; color: var(--text-muted);">✨ Powered by ${model}</span>
-              <button type="button" class="ai_prompt_chip" id="btn_reask_ai_coach" style="font-size: 11px;">Ask Another Question</button>
-            </div>
-          </div>
-        `;
-
-        const reaskBtn = document.getElementById("btn_reask_ai_coach");
-        if (reaskBtn) {
-          reaskBtn.addEventListener("click", () => {
-            const newPrompt = prompt("Ask Gemini Habit Coach (e.g. 'How can I stay consistent while traveling?'):");
-            if (newPrompt && newPrompt.trim()) {
-              this.analyzeHabitsWithAI(newPrompt.trim());
-            }
-          });
-        }
-      } catch (err) {
-        resultsContainer.innerHTML = `
-          <div class="ai_coach_placeholder" style="color: #ef4444;">
-            <p><strong>AI Coach connection error:</strong> ${this.escapeHTML(err.message)}</p>
-            <button type="button" class="habit_quick_submit_btn" id="btn_retry_ai_coach" style="margin-top: 8px; font-size: 11.5px; height: 32px;">Retry Analysis</button>
-          </div>
-        `;
-        const retryBtn = document.getElementById("btn_retry_ai_coach");
-        if (retryBtn) {
-          retryBtn.addEventListener("click", () => this.analyzeHabitsWithAI(customPrompt));
-        }
-      }
-    }
-
-    // -------------------------------------------------------------------------
-    // 3B. DEDICATED CONSISTENCY HISTORY VIEW
-    // -------------------------------------------------------------------------
-    renderConsistencyHistoryUI() {
-      const habits = this.store.habits;
-      
-      // Update Summary metrics
-      const activeCountNode = document.getElementById("history_active_habits_count");
-      if (activeCountNode) activeCountNode.textContent = habits.length;
-      
-      const totalStreak = habits.reduce((acc, h) => acc + (h.streak || 0), 0);
-      const avgStreak = habits.length > 0 ? Math.round(totalStreak / habits.length) : 0;
-      const avgStreakNode = document.getElementById("history_avg_streak");
-      if (avgStreakNode) avgStreakNode.textContent = `${avgStreak}d`;
-      
-      let totalCompletions = 0;
-      habits.forEach(h => {
-        if (h.history) {
-          Object.values(h.history).forEach(val => {
-            if (val === true) totalCompletions++;
-          });
-        }
-      });
-      const totalCompletionsNode = document.getElementById("history_total_completions");
-      if (totalCompletionsNode) totalCompletionsNode.textContent = totalCompletions;
-      
-      const today = new Date();
-      let possibleCompletions30 = habits.length * 30;
-      let actualCompletions30 = 0;
-      for (let i = 0; i < 30; i++) {
-        const d = new Date(today);
-        d.setDate(today.getDate() - i);
-        const dateStr = getLocalDateString(d);
-        habits.forEach(h => {
-          if (h.history && h.history[dateStr] === true) actualCompletions30++;
-        });
-      }
-      const overallRate = possibleCompletions30 > 0 ? Math.round((actualCompletions30 / possibleCompletions30) * 100) : 0;
-      const overallRateNode = document.getElementById("history_overall_rate");
-      if (overallRateNode) overallRateNode.textContent = `${overallRate}%`;
-
-      // Render Streaks List
-      const streaksContainer = document.getElementById("history_streaks_container");
-      if (streaksContainer) {
-        if (habits.length === 0) {
-          streaksContainer.innerHTML = `<div class="empty_state_text">No active streaks yet. Anchor your first ritual to build compounding neural momentum!</div>`;
-        } else {
-          streaksContainer.innerHTML = habits.map(h => {
-            let compCount30 = 0;
-            for (let i = 0; i < 30; i++) {
-              const d = new Date(today);
-              d.setDate(today.getDate() - i);
-              const dateStr = getLocalDateString(d);
-              if (h.history && h.history[dateStr] === true) compCount30++;
-            }
-            const completionPct = Math.round((compCount30 / 30) * 100);
-
-            return `
-              <div class="history_streak_item">
-                <div class="habit_info_row">
-                  <span class="habit_dot bg-${h.color}"></span>
-                  <div class="habit_title_meta">
-                    <h4>${this.escapeHTML(h.title)}</h4>
-                    <span class="category_label">${h.category}</span>
-                  </div>
-                </div>
-                <div class="streak_pills_progress">
-                  <div class="streak_stat">
-                    <span class="label">Current</span>
-                    <span class="val">${h.streak || 0}d</span>
-                  </div>
-                  <div class="streak_stat">
-                    <span class="label">Best</span>
-                    <span class="val">${h.maxStreak || 0}d</span>
-                  </div>
-                  <div class="streak_stat">
-                    <span class="label">30d Consistency</span>
-                    <span class="val">${completionPct}%</span>
-                  </div>
-                </div>
-              </div>
-            `;
-          }).join("");
-        }
-      }
-
-      // Render 7-Day Completion Trend Chart (SVG)
-      this.renderWeeklyConsistencyTrendChart();
-
-      // Render Category Mastery Chart (SVG)
-      this.renderCategoryConsistencyChart();
-
-      // Render Chronological Timeline Log
-      this.renderChronologicalLogTimeline();
-    }
-
-    renderWeeklyConsistencyTrendChart() {
-      const wrapper = document.getElementById("chart_weekly_consistency_trend");
-      if (!wrapper) return;
-
-      const days = [];
-      const counts = [];
-      const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-      for (let i = 6; i >= 0; i--) {
-        const d = new Date(); d.setDate(d.getDate() - i);
-        const dateStr = getLocalDateString(d);
-        days.push(dateStr);
-
-        let completions = 0;
-        this.store.habits.forEach(h => {
-          if (h.history && h.history[dateStr] === true) completions++;
-        });
-        counts.push(completions);
-      }
-
-      const maxCount = Math.max(...counts, 4);
-      const labels = days.map(ds => weekdayLabels[new Date(ds).getDay()]);
-
-      const chartWidth = 160;
-      const chartHeight = 90;
-      const xStart = 35;
-      const yStart = 20;
-      const stepX = chartWidth / 6;
-
-      const points = counts.map((c, idx) => {
-        const x = xStart + (idx * stepX);
-        const y = yStart + chartHeight - (c / maxCount * chartHeight);
-        return { x, y, value: c };
-      });
-
-      const polylinePoints = points.map(p => `${p.x},${p.y}`).join(" ");
-      
-      const gridLines = [0, 0.5, 1].map(pct => {
-        const val = Math.round(pct * maxCount);
-        const y = yStart + chartHeight - (pct * chartHeight);
-        return `
-          <line x1="${xStart}" y1="${y}" x2="${xStart + chartWidth}" y2="${y}" stroke="var(--border-color)" stroke-dasharray="2,2" stroke-width="0.5" />
-          <text x="${xStart - 8}" y="${y + 3}" fill="var(--text-muted)" font-size="8" text-anchor="end">${val}</text>
-        `;
-      }).join("");
-
-      const dotsHtml = points.map(p => `
-        <circle cx="${p.x}" cy="${p.y}" r="3" fill="var(--accent-primary)" stroke="var(--card-bg)" stroke-width="1" />
-        <text x="${p.x}" y="${p.y - 6}" fill="var(--text-primary)" font-size="8" font-weight="600" text-anchor="middle">${p.value}</text>
-      `).join("");
-
-      const labelsHtml = labels.map((lbl, idx) => {
-        const x = xStart + (idx * stepX);
-        return `<text x="${x}" y="${yStart + chartHeight + 14}" fill="var(--text-secondary)" font-size="8" text-anchor="middle">${lbl}</text>`;
-      }).join("");
-
-      wrapper.innerHTML = `
-        <svg viewBox="0 0 210 130" width="100%" height="100%">
-          ${gridLines}
-          <polyline fill="none" stroke="var(--accent-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="${polylinePoints}" />
-          ${dotsHtml}
-          ${labelsHtml}
-        </svg>
-      `;
-    }
-
-    renderCategoryConsistencyChart() {
-      const wrapper = document.getElementById("chart_category_consistency");
-      if (!wrapper) return;
-
-      const categories = ["Routine", "Mind", "Health", "Skill", "Work"];
-      const categoryCounts = { Routine: 0, Mind: 0, Health: 0, Skill: 0, Work: 0 };
-      
-      this.store.habits.forEach(h => {
-        const cat = h.category;
-        if (categoryCounts[cat] !== undefined && h.history) {
-          for (const key in h.history) {
-            if (h.history[key] === true) {
-              categoryCounts[cat]++;
-            }
-          }
-        }
-      });
-      const counts = categories.map(cat => categoryCounts[cat]);
-
-      const maxVal = Math.max(...counts, 4);
-
-      const chartWidth = 120;
-      const barHeight = 10;
-      const barSpacing = 8;
-      const xStart = 50;
-      const yStart = 15;
-
-      const barsHtml = categories.map((cat, idx) => {
-        const y = yStart + idx * (barHeight + barSpacing);
-        const c = counts[idx];
-        const computedWidth = (c / maxVal) * chartWidth;
-        const width = Math.max(computedWidth, 2);
-
-        let colorHex = "#6366f1";
-        if (cat === "Health") colorHex = "#f43f5e";
-        else if (cat === "Routine") colorHex = "#f59e0b";
-        else if (cat === "Mind") colorHex = "#10b981";
-        else if (cat === "Skill") colorHex = "#a855f7";
-
-        return `
-          <text x="${xStart - 8}" y="${y + 8}" fill="var(--text-secondary)" font-size="8" text-anchor="end">${cat}</text>
-          <rect x="${xStart}" y="${y}" width="${width}" height="${barHeight}" rx="2" fill="${colorHex}" />
-          <text x="${xStart + width + 6}" y="${y + 8}" fill="var(--text-primary)" font-size="8" font-weight="600" text-anchor="start">${c}</text>
-        `;
-      }).join("");
-
-      wrapper.innerHTML = `
-        <svg viewBox="0 0 210 130" width="100%" height="100%">
-          ${barsHtml}
-        </svg>
-      `;
-    }
-
-    renderChronologicalLogTimeline() {
-      const container = document.getElementById("history_chronological_log");
-      if (!container) return;
-
-      const habits = this.store.habits;
-      const today = new Date();
-      let html = "";
-
-      for (let i = 0; i < 7; i++) {
-        const d = new Date(today);
-        d.setDate(today.getDate() - i);
-        const dateStr = getLocalDateString(d);
-        
-        const completedToday = [];
-        habits.forEach(h => {
-          if (h.history && h.history[dateStr] === true) {
-            completedToday.push(h);
-          }
-        });
-
-        const formattedDate = d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
-        
-        let completionsList = "";
-        if (completedToday.length === 0) {
-          completionsList = `<span class="empty_log_item">No habits completed.</span>`;
-        } else {
-          completionsList = completedToday.map(h => `
-            <span class="history_log_badge border-${h.color}">${this.escapeHTML(h.title)}</span>
-          `).join(" ");
-        }
-
-        html += `
-          <div class="history_log_day_row">
-            <div class="history_log_date">${formattedDate}</div>
-            <div class="history_log_completions_list">
-              ${completionsList}
-            </div>
-          </div>
-        `;
-      }
-
-      container.innerHTML = html;
-    }
-
-    // -------------------------------------------------------------------------
-    // 4. REFLECTIVE JOURNAL VIEW (HABIT STACKS & MORNING/EVENING PROMPTS)
-    // -------------------------------------------------------------------------
-    renderMarkdownLite(text) {
-      if (!text) return `<p style="color: var(--text-muted); font-style: italic;">Nothing to preview yet. Start writing in the Write tab!</p>`;
-      
-      return text
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        // Headings
-        .replace(/^### (.*$)/gim, '<h3>$1</h3>')
-        .replace(/^## (.*$)/gim, '<h2>$1</h2>')
-        .replace(/^# (.*$)/gim, '<h1>$1</h1>')
-        // Bold
-        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        // Italics
-        .replace(/\*(.*?)\*/g, '<em>$1</em>')
-        // Bullet points
-        .replace(/^\- (.*$)/gim, '<li>$1</li>')
-        // Wrapping lines
-        .split('\n')
-        .map(line => {
-          const trimmed = line.trim();
-          if (!trimmed) return "";
-          if (trimmed.startsWith('<h') || trimmed.startsWith('<li>') || trimmed.startsWith('<ul>') || trimmed.startsWith('<ol>')) return line;
-          return `<p>${line}</p>`;
-        })
-        .join('\n');
-    }
-
-    renderJournalUI() {
-      const activeDate = this.selectedJournalDate;
-      const entry = this.store.journal[activeDate] || {
-        morningIntention: "",
-        morningMood: "",
-        eveningReflection: "",
-        shutdownComplete: false
-      };
-
-      const wrapper = document.getElementById("journal_entries_container");
-      if (!wrapper) return;
-
-      // Calculate recent 7 days
-      const dates = [];
-      const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-      
-      for (let i = 0; i < 7; i++) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        dates.push(getLocalDateString(d));
-      }
-
-      // Add selected date if it's older than 7 days
-      if (!dates.includes(activeDate)) {
-        dates.push(activeDate);
-        dates.sort((a, b) => b.localeCompare(a)); // Sort newest first
-      }
-
-      const formattedActiveDate = (() => {
-        const d = new Date(activeDate + "T12:00:00");
-        return `${weekdays[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-      })();
-
-      const isDFActive = document.body.classList.contains("journal-distraction-free");
-
-      const navItemsHtml = dates.map(dStr => {
-        const d = new Date(dStr + "T12:00:00");
-        const todayStr = getLocalDateString();
-        const yesterdayStr = (() => {
-          const yes = new Date(); yes.setDate(yes.getDate() - 1);
-          return getLocalDateString(yes);
-        })();
-
-        let label = `${months[d.getMonth()]} ${d.getDate()}`;
-        let sub = weekdays[d.getDay()];
-        
-        if (dStr === todayStr) {
-          label = "Today";
-          sub = "Current Entry";
-        } else if (dStr === yesterdayStr) {
-          label = "Yesterday";
-        }
-
-        const isActive = dStr === activeDate;
-        const entryExists = this.store.journal[dStr] && (this.store.journal[dStr].morningIntention || this.store.journal[dStr].eveningReflection);
-
-        return `
-          <button class="journal_nav_item ${isActive ? "active" : ""} ${entryExists ? "has_entry" : ""}" data-date="${dStr}">
-            <div class="nav_item_main">
-              <span class="nav_item_label">${label}</span>
-              <span class="nav_item_sub">${sub}</span>
-            </div>
-            ${entryExists ? '<span class="nav_entry_dot" title="Has written reflection">•</span>' : ''}
-          </button>
-        `;
-      }).join("");
-
-      wrapper.innerHTML = `
-        <div class="journal_layout_split">
-          <!-- Left Side: Navigation Pane -->
-          <aside class="journal_sidebar_nav">
-            <div class="journal_nav_section_title">Recent Reflections</div>
-            <div class="journal_nav_list">
-              ${navItemsHtml}
-            </div>
-            
-            <div class="journal_date_picker_block">
-              <div class="journal_nav_section_title">Jump to Date</div>
-              <input type="date" id="journal_date_picker" class="journal_date_picker_input" value="${activeDate}">
-            </div>
-          </aside>
-
-          <!-- Right Side: Writing Workspace -->
-          <main class="journal_editor_view">
-            <div class="journal_workspace_header">
-              <div class="journal_date_details">
-                <h3>${formattedActiveDate}</h3>
-                <span class="journal_autosave_status" id="journal_autosave_status">✓ Saved</span>
-              </div>
-              <div class="journal_header_actions">
-                <button class="journal_action_btn distraction_free_toggle" id="btn_journal_df_toggle" title="Toggle distraction-free mode (Esc to exit)">
-                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2">
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
-                    <line x1="9" y1="3" x2="9" y2="21"></line>
-                  </svg>
-                  <span>${isDFActive ? "Exit focus mode" : "Distraction-free"}</span>
-                </button>
-              </div>
-            </div>
-
-            <div class="journal_workspace_content">
-              <!-- 1. Morning Intention Section -->
-              <section class="journal_editor_section">
-                <div class="section_header">
-                  <span class="section_number">1</span>
-                  <h4>Morning Intention</h4>
-                </div>
-                <div class="form_group">
-                  <input type="text" id="j_intent" class="journal_text_input" placeholder="What is my primary focus priority today?" value="${this.escapeHTML(entry.morningIntention || "")}">
-                </div>
-              </section>
-
-              <!-- 2. Mood Vibe Section -->
-              <section class="journal_editor_section">
-                <div class="section_header">
-                  <span class="section_number">2</span>
-                  <h4>Focus Mood Vibe</h4>
-                </div>
-                <div class="journal_mood_pills" id="j_mood_row">
-                  <button class="mood_pill ${entry.morningMood === "calm" ? "active" : ""}" data-mood="calm">Calm</button>
-                  <button class="mood_pill ${entry.morningMood === "energized" ? "active" : ""}" data-mood="energized">Charged</button>
-                  <button class="mood_pill ${entry.morningMood === "peaceful" ? "active" : ""}" data-mood="peaceful">Peaceful</button>
-                  <button class="mood_pill ${entry.morningMood === "tired" ? "active" : ""}" data-mood="tired">Fatigue</button>
-                </div>
-              </section>
-
-              <!-- 3. Evening Reflection Section -->
-              <section class="journal_editor_section">
-                <div class="section_header">
-                  <span class="section_number">3</span>
-                  <h4>Evening Reflection</h4>
-                </div>
-                
-                <div class="journal_tabs_bar">
-                  <button class="journal_tab_btn active" id="tab_journal_write">Write</button>
-                  <button class="journal_tab_btn" id="tab_journal_preview">Preview</button>
-                </div>
-
-                <div class="form_group editor_pane_wrapper">
-                  <textarea id="j_gratitude" class="journal_textarea" rows="8" placeholder="Reflect on today's positive elements or deep work progress... Use Markdown if desired.">${this.escapeHTML(entry.eveningReflection || "")}</textarea>
-                  <div id="j_gratitude_preview" class="journal_preview_pane markdown-body" style="display: none;"></div>
-                </div>
-              </section>
-
-              <!-- 4. Mindful Work Shutdown Checklist -->
-              <section class="journal_editor_section">
-                <div class="section_header">
-                  <span class="section_number">4</span>
-                  <h4>Mindful Shutdown</h4>
-                </div>
-                <div class="shutdown_checklist_wrapper">
-                  <label class="shutdown_check_label">
-                    <input type="checkbox" id="btn_j_shutdown_trigger" class="shutdown_native_checkbox" ${entry.shutdownComplete ? "checked" : ""}>
-                    <span class="custom_checkbox_visual"></span>
-                    <span class="checkbox_text_label">Log focus blocks, close browser tabs, clear workspace baseline. Clear for the night!</span>
-                  </label>
-                </div>
-              </section>
-
-              <!-- Footer Manual Save Trigger -->
-              <div class="journal_footer_actions">
-                <button class="journal_submit_btn" id="btn_journal_commit_save">Commit Reflection</button>
-              </div>
-            </div>
-          </main>
-        </div>
-      `;
-
-      // Cache elements
-      const intentInput = document.getElementById("j_intent");
-      const gratitudeTextarea = document.getElementById("j_gratitude");
-      const shutdownCheckbox = document.getElementById("btn_j_shutdown_trigger");
-      const autosaveStatus = document.getElementById("journal_autosave_status");
-      const writeTabBtn = document.getElementById("tab_journal_write");
-      const previewTabBtn = document.getElementById("tab_journal_preview");
-      const previewPane = document.getElementById("j_gratitude_preview");
-      const saveBtn = document.getElementById("btn_journal_commit_save");
-
-      // Mood Selection
-      const moodBtns = wrapper.querySelectorAll("#j_mood_row .mood_pill");
-      let selectedMood = entry.morningMood;
-
-      moodBtns.forEach(btn => {
-        btn.addEventListener("click", () => {
-          moodBtns.forEach(b => b.classList.remove("active"));
-          btn.classList.add("active");
-          selectedMood = btn.getAttribute("data-mood");
-          triggerAutosave();
-        });
-      });
-
-      // Write vs Preview Tabs
-      if (writeTabBtn && previewTabBtn) {
-        writeTabBtn.addEventListener("click", () => {
-          writeTabBtn.classList.add("active");
-          previewTabBtn.classList.remove("active");
-          gratitudeTextarea.style.display = "block";
-          previewPane.style.display = "none";
-        });
-
-        previewTabBtn.addEventListener("click", () => {
-          previewTabBtn.classList.add("active");
-          writeTabBtn.classList.remove("active");
-          gratitudeTextarea.style.display = "none";
-          previewPane.style.display = "block";
-          previewPane.innerHTML = this.renderMarkdownLite(gratitudeTextarea.value);
-        });
-      }
-
-      // Sidebar Dates Selection Click binds
-      wrapper.querySelectorAll(".journal_nav_item").forEach(item => {
-        item.addEventListener("click", () => {
-          const nextDate = item.getAttribute("data-date");
-          if (nextDate !== this.selectedJournalDate) {
-            this.selectedJournalDate = nextDate;
-            this.renderJournalUI();
-          }
-        });
-      });
-
-      // Date Picker handler
-      const pickerInput = document.getElementById("journal_date_picker");
-      if (pickerInput) {
-        pickerInput.addEventListener("change", (e) => {
-          const val = e.target.value;
-          if (val && val !== this.selectedJournalDate) {
-            this.selectedJournalDate = val;
-            this.renderJournalUI();
-          }
-        });
-      }
-
-      // Distraction-Free Toggle
-      const dfToggle = document.getElementById("btn_journal_df_toggle");
-      if (dfToggle) {
-        dfToggle.addEventListener("click", () => {
-          document.body.classList.toggle("journal-distraction-free");
-          this.renderJournalUI();
-        });
-      }
-
-      // Autosave Engine
-      let autosaveTimeout;
-      const triggerAutosave = () => {
-        if (autosaveStatus) {
-          autosaveStatus.textContent = "Saving...";
-          autosaveStatus.classList.add("saving");
-        }
-        if (autosaveTimeout) clearTimeout(autosaveTimeout);
-        autosaveTimeout = setTimeout(() => {
-          commitSave(true);
-        }, 1000);
-      };
-
-      const commitSave = (isAutosave = false) => {
-        const morningIntention = intentInput ? intentInput.value.trim() : "";
-        const eveningReflection = gratitudeTextarea ? gratitudeTextarea.value.trim() : "";
-        const shutdownComplete = shutdownCheckbox ? shutdownCheckbox.checked : false;
-
-        this.store.saveJournalEntry(activeDate, {
-          morningIntention,
-          morningMood: selectedMood,
-          eveningReflection,
-          shutdownComplete
-        });
-
-        if (autosaveStatus) {
-          autosaveStatus.textContent = "✓ Saved";
-          autosaveStatus.classList.remove("saving");
-        }
-
-        if (!isAutosave) {
-          this.showToast("Reflection logged successfully!", "success");
-        }
-      };
-
-      // Input changes for autosave
-      if (intentInput) {
-        intentInput.addEventListener("input", triggerAutosave);
-      }
-      if (gratitudeTextarea) {
-        gratitudeTextarea.addEventListener("input", triggerAutosave);
-      }
-      if (shutdownCheckbox) {
-        shutdownCheckbox.addEventListener("change", () => {
-          triggerAutosave();
-          if (shutdownCheckbox.checked) {
-            this.store.emit("celebrate", { elementId: "btn_j_shutdown_trigger" });
-          }
-        });
-      }
-
-      // Manual commit save trigger
-      if (saveBtn) {
-        saveBtn.addEventListener("click", () => {
-          commitSave(false);
-        });
-      }
-    }
-
-    // -------------------------------------------------------------------------
-    // RENDER TASK LIST VIEWPORTS (INBOX, TODAY, TOMORROW...)
-    // -------------------------------------------------------------------------
-    renderTaskListUI(view) {
-      const titles = {
-        all: "Focus Pipeline",
-        today: "Today's Core Focus",
-        tomorrow: "Tomorrow's Blueprint",
-        upcoming: "Upcoming Horizons",
-        overdue: "Priority Attention",
-        completed: "Victory Archive",
-        later: "Mindful Backlog"
-      };
-      this.viewTitle.textContent = titles[view] || "Focus Pipeline";
-
-      const filtered = this.getFilteredTasks(view);
-      this.viewCount.textContent = `(${filtered.length})`;
-
-      // Update context and visibility for quick add deck
-      this.updateQuickAddContext(view);
-
-      // Manage AI Strategy Banner for Focus Today View
-      const bannerContainer = document.getElementById("today_ai_banner_container");
-      if (view === "today") {
-        if (bannerContainer) {
-          bannerContainer.style.display = "block";
-          this.renderTodayAIBanner(filtered);
-        }
-      } else {
-        if (bannerContainer) {
-          bannerContainer.style.display = "none";
-          bannerContainer.innerHTML = "";
-        }
-      }
-
-      if (filtered.length === 0) {
-        this.taskListContainer.innerHTML = `
-          <div class="empty_state">
-            <svg viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom: 16px; color: var(--text-muted);">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <h3>Zero Cognitive Friction</h3>
-            <p>Your mental slate is completely clear. Savor this clarity, or commit your next breakthrough intention.</p>
-            <button class="sheet_primary_commit" id="empty_state_add_task" style="display: inline-flex; align-items: center; justify-content: center; padding: 0 20px; height: 40px; width: auto; font-weight: 600; font-size: 14px; margin-top: 16px; border-radius: 6px;">+ Capture Core Intention</button>
-          </div>
-        `;
-        setTimeout(() => {
-          const btn = document.getElementById("empty_state_add_task");
-          if (btn) btn.addEventListener("click", () => this.openBottomSheet());
-        }, 50);
-        return;
-      }
-
-      this.taskListContainer.innerHTML = "";
-
-      if (view === "completed") {
-        // Group completed tasks by completion date (or fallback to dueDate)
-        const groups = {};
-        filtered.forEach(task => {
-          let dateKey = "No Date";
-          if (task.completedDate) {
-            dateKey = task.completedDate.split("T")[0];
-          } else if (task.dueDate) {
-            dateKey = task.dueDate;
-          }
-          if (!groups[dateKey]) groups[dateKey] = [];
-          groups[dateKey].push(task);
-        });
-
-        const sortedDates = Object.keys(groups).sort((a, b) => b.localeCompare(a));
-
-        const getFriendlyDateLabel = (dateStr) => {
-          if (dateStr === "No Date") return "Completed (Unscheduled)";
-          const todayStr = getLocalDateString();
-          const yesterday = new Date();
-          yesterday.setDate(yesterday.getDate() - 1);
-          const yesterdayStr = getLocalDateString(yesterday);
-
-          if (dateStr === todayStr) return "Today";
-          if (dateStr === yesterdayStr) return "Yesterday";
-          
-          const d = new Date(dateStr + "T12:00:00");
-          return d.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        };
-
-        const fragment = document.createDocumentFragment();
-        sortedDates.forEach((dateStr, idx) => {
-          const groupTasks = groups[dateStr];
-          const label = getFriendlyDateLabel(dateStr);
-          const isCollapsed = idx > 0; // Collapse older than today/newest group by default
-
-          const section = document.createElement("div");
-          section.className = `completed_group_section ${isCollapsed ? "collapsed" : ""}`;
-          section.setAttribute("data-date", dateStr);
-
-          section.innerHTML = `
-            <div class="completed_group_header">
-              <div class="completed_group_title">
-                <svg class="chevron_icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                  <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
-                <h3>${label}</h3>
-                <span class="count_badge">${groupTasks.length} ${groupTasks.length === 1 ? 'task' : 'tasks'}</span>
-              </div>
-            </div>
-            <div class="completed_group_content"></div>
-          `;
-
-          const contentArea = section.querySelector(".completed_group_content");
-          groupTasks.forEach(task => {
-            const card = this.createTaskCardDOM(task);
-            contentArea.appendChild(card);
-          });
-
-          const header = section.querySelector(".completed_group_header");
-          header.addEventListener("click", () => {
-            section.classList.toggle("collapsed");
-          });
-
-          fragment.appendChild(section);
-        });
-        this.taskListContainer.appendChild(fragment);
-      } else {
-        // Group pending/active tasks by priority (High, Medium, Low)
-        const priorityGroups = {
-          High: [],
-          Medium: [],
-          Low: []
-        };
-        
-        filtered.forEach(task => {
-          const p = task.priority || "Medium";
-          if (priorityGroups[p]) {
-            priorityGroups[p].push(task);
-          } else {
-            priorityGroups["Medium"].push(task);
-          }
-        });
-
-        const fragment = document.createDocumentFragment();
-        ["High", "Medium", "Low"].forEach(pKey => {
-          const groupTasks = priorityGroups[pKey];
-          if (groupTasks.length > 0) {
-            const section = document.createElement("div");
-            section.className = `priority_group_section priority-${pKey.toLowerCase()}`;
-            section.setAttribute("data-priority", pKey);
-            
-            const priorityDisplayNames = {
-              High: "Keystone Priorities",
-              Medium: "Steady Momentum",
-              Low: "Gentle Focus"
-            };
-            const priTitle = priorityDisplayNames[pKey] || `${pKey} Priority`;
-
-            section.innerHTML = `
-              <div class="priority_group_header">
-                <div class="priority_group_title">
-                  <svg class="chevron_icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                  </svg>
-                  <h3>${priTitle}</h3>
-                  <span class="count_badge">${groupTasks.length} ${groupTasks.length === 1 ? 'intention' : 'intentions'}</span>
-                </div>
-              </div>
-              <div class="priority_group_content"></div>
-            `;
-            
-            const contentArea = section.querySelector(".priority_group_content");
-            groupTasks.forEach(task => {
-              const card = this.createTaskCardDOM(task);
-              contentArea.appendChild(card);
-            });
-            
-            const header = section.querySelector(".priority_group_header");
-            header.addEventListener("click", () => {
-              section.classList.toggle("collapsed");
-            });
-            
-            fragment.appendChild(section);
-          }
-        });
-        this.taskListContainer.appendChild(fragment);
-      }
-    }
-
-    getFilteredTasks(view) {
-      const nowStr = getLocalDateString();
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = getLocalDateString(tomorrow);
-
-      let list = this.store.tasks.filter(t => t.id !== "general_focus");
-
-      if (view === "completed") {
-        list = list.filter(t => t.completed);
-      } else if (view === "later") {
-        list = list.filter(t => !t.completed && t.isLater);
-      } else {
-        list = list.filter(t => !t.completed && !t.isLater);
-        if (view === "today") list = list.filter(t => t.dueDate <= nowStr);
-        else if (view === "tomorrow") list = list.filter(t => t.dueDate === tomorrowStr);
-        else if (view === "upcoming") list = list.filter(t => t.dueDate > nowStr && t.dueDate <= this.getNDaysFromNow(7));
-        else if (view === "overdue") list = list.filter(t => t.dueDate < nowStr);
-      }
-
-      if (view === "completed") {
-        list.sort((a, b) => {
-          const ad = a.completedDate || "";
-          const bd = b.completedDate || "";
-          return bd.localeCompare(ad); // Newest completed first!
-        });
-      } else {
-        if (view === "today" && this.todayAITaskOrder && this.todayAITaskOrder.length > 0) {
-          list.sort((a, b) => {
-            const indexA = this.todayAITaskOrder.indexOf(a.id);
-            const indexB = this.todayAITaskOrder.indexOf(b.id);
-            if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-            if (indexA !== -1) return -1;
-            if (indexB !== -1) return 1;
-            const timeA = a.createdAt ? new Date(a.createdAt).getTime() : a.id;
-            const timeB = b.createdAt ? new Date(b.createdAt).getTime() : b.id;
-            return timeB - timeA;
-          });
-        } else {
-          list.sort((a, b) => {
-            const timeA = a.createdAt ? new Date(a.createdAt).getTime() : a.id;
-            const timeB = b.createdAt ? new Date(b.createdAt).getTime() : b.id;
-            return timeB - timeA;
-          });
-        }
-      }
-
-      const search = this.store.filters.search.toLowerCase().trim();
-      const priority = this.store.filters.priority;
-      const category = this.store.filters.category;
-
-      return list.filter(t => {
-        const matchesSearch = t.title.toLowerCase().includes(search) || t.description.toLowerCase().includes(search);
-        const matchesPriority = priority === "All" || t.priority === priority;
-        const matchesCategory = category === "All" || t.category === category;
-        return matchesSearch && matchesPriority && matchesCategory;
-      });
-    }
-
-    getNDaysFromNow(n) {
-      const d = new Date();
-      d.setDate(d.getDate() + n);
-      return getLocalDateString(d);
-    }
-
-    // -------------------------------------------------------------------------
-    // DYNAMIC TASK CARD CREATOR AND SWIPE HANDLERS
-    // -------------------------------------------------------------------------
-    createTaskCardDOM(task) {
-      const card = document.createElement("div");
-      card.className = `task_card priority-${task.priority.toLowerCase()} ${task.completed ? "completed" : ""}`;
-      card.setAttribute("data-id", task.id);
-
-      let remainingBadge = "";
-      if (!task.completed) {
-        if (task.isLater) {
-          remainingBadge = `<span class="badge later">Incubating</span>`;
-        } else {
-          const now = new Date();
-          const due = new Date(task.dueDate + "T23:59:59");
-          const diffMs = due - now;
-          const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
-
-          if (diffDays < 0) remainingBadge = `<span class="badge overdue">Overdue by ${Math.abs(diffDays)}d</span>`;
-          else if (diffDays === 0) remainingBadge = `<span class="badge today">Today's Focus</span>`;
-          else if (diffDays === 1) remainingBadge = `<span class="badge tomorrow">Tomorrow</span>`;
-          else remainingBadge = `<span class="badge upcoming">In ${diffDays} days</span>`;
-        }
-      }
-
-      const hasSub = task.subtasks && task.subtasks.length > 0;
-      const completedSub = hasSub ? task.subtasks.filter(s => s.completed).length : 0;
-      const subPct = hasSub ? Math.round((completedSub / task.subtasks.length) * 100) : 0;
-
-      let aiOrderBadge = "";
-      if (this.todayAITaskOrder && this.todayAITaskOrder.length > 0) {
-        const rank = this.todayAITaskOrder.indexOf(task.id);
-        if (rank === 0) {
-          aiOrderBadge = `<span class="badge ai_rank top" title="AI Ranked #1 Focus"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor" style="display:inline-block; vertical-align:middle; margin-right:3px;"><path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2z"/></svg>#1 Keystone</span>`;
-        } else if (rank > 0) {
-          aiOrderBadge = `<span class="badge ai_rank" title="AI Ranked Sequence #${rank + 1}">#${rank + 1} Sequence</span>`;
-        }
-      }
-
-      card.innerHTML = `
-        <div class="card_swipe_bg left_bg">
-          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-          </svg>
-          <span>Complete</span>
-        </div>
-        <div class="card_swipe_bg right_bg">
-          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
-          <span>Delete</span>
-        </div>
-        
-        <div class="card_content">
-          <div class="card_main_row">
-            <button class="checkbox_btn" aria-label="Toggle Complete">
-              <svg class="check_icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
-                <polyline points="20 6 9 17 4 12"></polyline>
-              </svg>
-            </button>
-            <div class="card_text">
-              <div class="card_title_row">
-                <h3 class="card_title">${this.escapeHTML(task.title)}</h3>
-                ${aiOrderBadge}
-                ${task.recurring !== "none" ? `<span class="recurring_icon" title="Repeats ${task.recurring}"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle;"><path d="M17 2.1l4 4-4 4"></path><path d="M3 12.2v-2a4 4 0 0 1 4-4h14"></path><path d="M7 21.9l-4-4 4-4"></path><path d="M21 11.8v2a4 4 0 0 1-4 4H3"></path></svg></span>` : ""}
-              </div>
-              ${task.description ? `<p class="card_desc">${this.escapeHTML(task.description)}</p>` : ""}
-            </div>
-            <button type="button" class="quick_delete_task_btn" title="Delete task" aria-label="Delete task">
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-                <line x1="10" y1="11" x2="10" y2="17"></line>
-                <line x1="14" y1="11" x2="14" y2="17"></line>
-              </svg>
-            </button>
-          </div>
-
-          <div class="card_meta_row">
-            <span class="meta_item priority_badge priority-${task.priority.toLowerCase()}">${{"High": "KEYSTONE", "Medium": "STEADY", "Low": "GENTLE"}[task.priority] || task.priority.toUpperCase()}</span>
-            <span class="meta_item category_badge">${this.escapeHTML(task.category)}</span>
-            <span class="meta_item date_badge">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                <line x1="16" y1="2" x2="16" y2="6"></line>
-                <line x1="8" y1="2" x2="8" y2="6"></line>
-                <line x1="3" y1="10" x2="21" y2="10"></line>
-              </svg>
-              ${task.isLater ? "Mindful Backlog" : task.dueDate}
-            </span>
-            ${remainingBadge}
-            ${task.estimatedDuration ? `<span class="meta_item duration_badge"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 4px;"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>${task.estimatedDuration}m</span>` : ""}
-            ${task.focusSessions && task.focusSessions.length > 0 ? `<span class="meta_item focus_badge"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 4px;"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2z"></path></svg>${task.focusSessions.reduce((s, fs) => s + (fs.duration || 0), 0)}m flow</span>` : ""}
-            <span class="meta_item xp_badge"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: inline-block; vertical-align: middle; margin-right: 4px;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon></svg>+${(task.estimatedDuration || 25) * 4} XP</span>
-          </div>
-
-          ${hasSub ? `
-            <div class="card_subtasks_summary">
-              <div class="progress_track">
-                <div class="progress_bar" style="width: ${subPct}%"></div>
-              </div>
-              <span class="subtask_ratio">${completedSub}/${task.subtasks.length} subtasks</span>
-            </div>
-          ` : ""}
-
-          <div class="card_actions_expanded">
-            <div class="divider"></div>
-            <div class="subtasks_wrapper">
-              <div class="subtask_list">
-                ${(task.subtasks || []).map(sub => `
-                  <div class="subtask_item" data-sub-id="${sub.id}">
-                    <button class="sub_check_btn ${sub.completed ? "checked" : ""}">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4">
-                        <polyline points="20 6 9 17 4 12"></polyline>
-                      </svg>
-                    </button>
-                    <span class="subtask_title">${this.escapeHTML(sub.title)}</span>
-                    <button class="sub_delete_btn" aria-label="Delete subtask">✕</button>
-                  </div>
-                `).join("")}
-              </div>
-              <div class="add_subtask_row">
-                <input type="text" class="subtask_input" data-task-id="${task.id}" placeholder="+ Add micro-step, press Enter...">
-              </div>
-            </div>
-
-            <!-- Inline AI Subtask Breakdown Slot -->
-            <div class="task_ai_drawer_slot"></div>
-            
-            <div class="card_control_buttons">
-              <button class="action_btn edit_btn" aria-label="Edit Task">
-                Edit
-              </button>
-              ${!task.completed ? `
-                <button class="action_btn ai_breakdown_btn" aria-label="Break down task with AI">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; color: var(--accent-primary);">
-                    <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2z"/>
-                  </svg>
-                  Clarity Breakdown
-                </button>
-                <button class="action_btn play_btn" aria-label="Enter flow state on intention">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
-                    <polygon points="5 3 19 12 5 21 5 3"></polygon>
-                  </svg>
-                  Enter Flow
-                </button>
-                <button class="action_btn later_btn" aria-label="${task.isLater ? 'Focus Now' : 'Incubate'}">
-                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;">
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <polyline points="12 6 12 12 16 14"></polyline>
-                  </svg>
-                  ${task.isLater ? "Focus Now" : "Incubate"}
-                </button>
-              ` : ""}
-              <button class="action_btn delete_btn_manual" aria-label="Release Intention">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
-                  <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                </svg>
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      `;
-
-      const content = card.querySelector(".card_content");
-      content.addEventListener("click", (e) => {
-        const ignores = [".checkbox_btn", ".quick_delete_task_btn", "polyline", "svg", "rect", "line", ".recurring_icon", ".subtask_item", ".sub_check_btn", ".sub_delete_btn", ".subtask_input", "button", "input", ".task_ai_breakdown_deck"];
-        if (ignores.some(sel => e.target.closest(sel))) return;
-        card.classList.toggle("expanded");
-      });
-
-      card.querySelector(".checkbox_btn").addEventListener("click", (e) => {
-        e.stopPropagation();
-        this.store.toggleTaskComplete(task.id);
-      });
-
-      const quickDelBtn = card.querySelector(".quick_delete_task_btn");
-      if (quickDelBtn) {
-        quickDelBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          if (confirm(`Delete "${task.title}"?`)) {
-            this.store.deleteTask(task.id);
-          }
-        });
-      }
-
-      const playBtn = card.querySelector(".play_btn");
-      if (playBtn) {
-        playBtn.addEventListener("click", () => {
-          this.store.setView("timer");
-          this.store.startTimer(task.id);
-        });
-      }
-
-      const aiBreakdownBtn = card.querySelector(".ai_breakdown_btn");
-      if (aiBreakdownBtn) {
-        aiBreakdownBtn.addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.openAIBreakdownDrawer(task, card);
-        });
-      }
-
-      const laterBtn = card.querySelector(".later_btn");
-      if (laterBtn) {
-        laterBtn.addEventListener("click", () => {
-          if (task.isLater) {
-            const todayStr = getLocalDateString();
-            this.store.updateTask(task.id, { isLater: false, dueDate: todayStr });
-          } else {
-            this.store.updateTask(task.id, { isLater: true });
-          }
-        });
-      }
-
-      card.querySelector(".edit_btn").addEventListener("click", () => this.openBottomSheet(task));
-      
-      card.querySelector(".delete_btn_manual").addEventListener("click", () => {
-        if (confirm(`Release "${task.title}"?`)) this.store.deleteTask(task.id);
-      });
-
-      card.querySelectorAll(".subtask_item").forEach(item => {
-        const subId = item.getAttribute("data-sub-id");
-        item.querySelector(".sub_check_btn").addEventListener("click", () => {
-          this.store.toggleSubtask(task.id, subId);
-        });
-        item.querySelector(".sub_delete_btn").addEventListener("click", () => {
-          this.store.deleteSubtask(task.id, subId);
-        });
-      });
-
-      this.attachSwipeGestures(card);
-      return card;
-    }
-
-    attachSwipeGestures(card) {
-      const content = card.querySelector(".card_content");
-      const leftBg = card.querySelector(".left_bg");
-      const rightBg = card.querySelector(".right_bg");
-      let startX = 0;
-      let startY = 0;
-      let isSwiping = false;
-
-      content.addEventListener("touchstart", (e) => {
-        startX = e.touches[0].clientX;
-        startY = e.touches[0].clientY;
-        content.style.transition = "none";
-        isSwiping = false;
-      }, { passive: true });
-
-      content.addEventListener("touchmove", (e) => {
-        const currentX = e.touches[0].clientX;
-        const currentY = e.touches[0].clientY;
-        const diffX = currentX - startX;
-        const diffY = currentY - startY;
-
-        if (Math.abs(diffX) > Math.abs(diffY)) {
-          if (Math.abs(diffX) > 10) {
-            isSwiping = true;
-            if (e.cancelable) e.preventDefault();
-
-            let trans = diffX;
-            if (diffX > 0) {
-              leftBg.style.opacity = Math.min(Math.abs(diffX) / 80, 1);
-              rightBg.style.opacity = 0;
-              trans = Math.min(diffX, 120);
-            } else {
-              rightBg.style.opacity = Math.min(Math.abs(diffX) / 80, 1);
-              leftBg.style.opacity = 0;
-              trans = Math.max(diffX, -120);
-            }
-            content.style.transform = `translateX(${trans}px)`;
-          }
-        }
-      }, { passive: false });
-
-      content.addEventListener("touchend", (e) => {
-        if (!isSwiping) return;
-
-        const currentX = e.changedTouches[0].clientX;
-        const diffX = currentX - startX;
-        const threshold = 100;
-
-        content.style.transition = "transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)";
-        
-        if (diffX > threshold) {
-          content.style.transform = "translateX(100%)";
-          setTimeout(() => {
-            const taskId = parseInt(card.getAttribute("data-id"));
-            this.store.toggleTaskComplete(taskId);
-          }, 200);
-        } else if (diffX < -threshold) {
-          content.style.transform = "translateX(-100%)";
-          setTimeout(() => {
-            const taskId = parseInt(card.getAttribute("data-id"));
-            if (confirm("Are you sure you want to delete this task?")) {
-              this.store.deleteTask(taskId);
-            } else {
-              content.style.transform = "translateX(0)";
-              leftBg.style.opacity = 0;
-              rightBg.style.opacity = 0;
-            }
-          }, 200);
-        } else {
-          content.style.transform = "translateX(0)";
-          leftBg.style.opacity = 0;
-          rightBg.style.opacity = 0;
-        }
-      });
-    }
-
-    // =========================================================================
-    // FOCUS TODAY AI STRATEGIST & SUBTASK BREAKDOWN ENGINE
-    // =========================================================================
-    // =========================================================================
-    // FOCUS TODAY: PSYCHOLOGICAL MOMENTUM & TOMORROW PLANNING ENGINE
-    // =========================================================================
-    loadTomorrowPlan() {
-      try {
-        const raw = localStorage.getItem("aurora_tomorrow_plan");
-        return raw ? JSON.parse(raw) : null;
-      } catch (e) {
-        return null;
-      }
-    }
-
-    saveTomorrowPlan(plan) {
-      this.tomorrowPlan = plan;
-      try {
-        if (plan) {
-          localStorage.setItem("aurora_tomorrow_plan", JSON.stringify(plan));
-          StorageService.savePreference("tomorrow_plan", plan);
-        } else {
-          localStorage.removeItem("aurora_tomorrow_plan");
-          StorageService.savePreference("tomorrow_plan", null);
-        }
-      } catch (e) {
-        console.error("Failed to save tomorrow plan:", e);
-      }
-    }
-
-    getMorningMomentumPlan() {
-      if (!this.tomorrowPlan) return null;
-      const nowStr = getLocalDateString();
-      if (this.tomorrowPlan.targetDate === nowStr && !this.tomorrowPlan.dismissed) {
-        return this.tomorrowPlan;
-      }
-      return null;
-    }
-
-    getPastTodosPsychologyMetrics() {
-      const now = new Date();
-      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const sevenDaysAgoStr = getLocalDateString(sevenDaysAgo);
-      const nowStr = getLocalDateString(now);
-
-      const allCompleted = this.store.tasks.filter(t => t.completed && t.id !== "general_focus");
-      const recentCompleted = allCompleted.filter(t => {
-        if (!t.completedDate) return false;
-        const dStr = t.completedDate.substring(0, 10);
-        return dStr >= sevenDaysAgoStr && dStr <= nowStr;
-      });
-
-      const activeDaysSet = new Set(recentCompleted.map(t => t.completedDate.substring(0, 10)));
-      const activeDaysCount = Math.max(1, activeDaysSet.size);
-
-      const dailyVelocity = activeDaysSet.size > 0 
-        ? +(recentCompleted.length / activeDaysCount).toFixed(1)
-        : (allCompleted.length > 0 ? +(allCompleted.length / 5).toFixed(1) : 2.5);
-
-      const recommendedTaskCap = Math.min(4, Math.max(2, Math.round(dailyVelocity) || 3));
-
-      const categoryCounts = {};
-      allCompleted.forEach(t => {
-        const cat = t.category || "General";
-        categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
-      });
-
-      let topCategory = "Focus";
-      let maxCatCount = 0;
-      Object.entries(categoryCounts).forEach(([cat, count]) => {
-        if (count > maxCatCount) {
-          maxCatCount = count;
-          topCategory = cat;
-        }
-      });
-
-      const overdueTasks = this.store.tasks.filter(t => 
-        !t.completed && !t.isLater && t.id !== "general_focus" && t.dueDate < nowStr
-      );
-
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = getLocalDateString(tomorrow);
-      const alreadyScheduledTomorrow = this.store.tasks.filter(t => 
-        !t.completed && !t.isLater && t.id !== "general_focus" && t.dueDate === tomorrowStr
-      );
-
-      const todayPending = this.store.tasks.filter(t => 
-        !t.completed && !t.isLater && t.id !== "general_focus" && t.dueDate === nowStr
-      );
-
-      return {
-        totalCompletedAllTime: allCompleted.length,
-        recentCompletedCount: recentCompleted.length,
-        dailyVelocity,
-        recommendedTaskCap,
-        topCategory,
-        maxCatCount,
-        overdueCount: overdueTasks.length,
-        overdueTasks,
-        alreadyScheduledTomorrow,
-        todayPending,
-        activeDaysCount
-      };
-    }
-
-    synthesizeMicroStarter(title = "") {
-      const t = title.toLowerCase();
-      if (/write|draft|doc|report|blog|article|content|essay|journal/.test(t)) {
-        return "Open the document and write 1 sentence or bullet outline.";
-      }
-      if (/code|bug|feature|fix|dev|implement|refactor|test|pr|commit|repo|pull request|review/.test(t)) {
-        return "Open the project in your editor and locate the first file.";
-      }
-      if (/read|study|book|learn|course|lecture|research/.test(t)) {
-        return "Open page 1 and read the first 3 headings or 1 paragraph.";
-      }
-      if (/email|message|call|contact|reach|slack|reply|invoice/.test(t)) {
-        return "Open the message box and draft the greeting line.";
-      }
-      if (/gym|workout|exercise|run|walk|fitness|stretch/.test(t)) {
-        return "Put on workout shoes and drink a glass of water.";
-      }
-      if (/clean|organize|tidy|desk|room/.test(t)) {
-        return "Pick up 1 single item from your desk and put it in place.";
-      }
-      return `Open the workspace for "${title}" and write down the single first physical step.`;
-    }
-
-    generateAlgorithmicTomorrowBlueprint(metrics) {
-      const nowStr = getLocalDateString();
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = getLocalDateString(tomorrow);
-
-      let keystone = metrics.overdueTasks.find(t => t.priority === "High") 
-        || metrics.overdueTasks[0] 
-        || metrics.todayPending.find(t => t.priority === "High")
-        || metrics.todayPending[0]
-        || metrics.alreadyScheduledTomorrow[0]
-        || this.store.tasks.find(t => !t.completed && !t.isLater && t.id !== "general_focus")
-        || { id: 0, title: "Deep Focus Keystone Milestone", priority: "High", category: metrics.topCategory };
-
-      const microStarter = this.synthesizeMicroStarter(keystone.title);
-
-      const morningRoutine = (this.store.routines || []).find(r => r.startTime && r.startTime <= "10:00");
-      const intentionTime = morningRoutine ? `${morningRoutine.startTime} (after "${morningRoutine.title}")` : "09:00 AM";
-      const implementationIntention = `When ${intentionTime} arrives, I will sit at my desk and spend 2 minutes executing the starter step.`;
-
-      const cap = Math.max(1, metrics.recommendedTaskCap - 1);
-      const candidates = this.store.tasks.filter(t => 
-        !t.completed && !t.isLater && t.id !== "general_focus" && t.id !== keystone.id
-      );
-
-      const supporting = candidates.slice(0, cap).map(t => ({
-        taskId: t.id,
-        title: t.title,
-        priority: t.priority,
-        category: t.category,
-        estimatedDuration: t.estimatedDuration || 25,
-        role: t.priority === "High" ? "Core Milestone" : "Quick-Win Stepping Stone"
-      }));
-
-      let diagnosis = "";
-      if (metrics.recentCompletedCount > 0) {
-        diagnosis = `Your past to-dos show a proven velocity of ${metrics.dailyVelocity} tasks/day with strong momentum in ${metrics.topCategory}. To protect against the planning fallacy, tomorrow is capped at ${metrics.recommendedTaskCap} high-impact goals so you maintain an unbroken winning streak.`;
-      } else {
-        diagnosis = `Starting fresh requires low activation friction. We selected 1 Keystone Frog with an effortless 2-minute starter to build immediate dopamine momentum tomorrow morning.`;
-      }
-
-      if (metrics.overdueCount > 0) {
-        diagnosis += ` Note: ${metrics.overdueCount} task carried over; we converted it into your primary frog so it no longer drains your mental energy.`;
-      }
-
-      const affirmation = "Cognitive closure established. Your tomorrow is decided. Put down your task list tonight with peace of mind.";
-
-      return {
-        psychologicalDiagnosis: diagnosis,
-        keystoneTaskId: keystone.id,
-        keystoneTitle: keystone.title,
-        keystoneCategory: keystone.category || metrics.topCategory,
-        keystonePriority: keystone.priority || "High",
-        keystoneReason: metrics.overdueTasks.includes(keystone) 
-          ? "Carrying over from earlier; conquering this first eliminates subconscious procrastination dread." 
-          : "Highest leverage objective to guarantee the day is an absolute win.",
-        microStarter,
-        implementationIntention,
-        supportingTasks: supporting,
-        closureAffirmation: affirmation,
-        source: "Behavioral Science Heuristics"
-      };
-    }
-
-    renderMorningMomentumCardHTML(morningPlan) {
-      return `
-        <div class="morning_momentum_bridge_card">
-          <div class="morning_bridge_badge_row">
-            <div class="morning_bridge_title_group">
-              <span class="morning_bridge_pill">🌅 Morning Momentum Bridge</span>
-              <span class="morning_bridge_streak">🔥 ${this.eveningPlanningStreak}-Day Planning Streak</span>
-            </div>
-            <button type="button" class="morning_bridge_dismiss_btn" id="btn_dismiss_morning_bridge" title="Dismiss Morning Bridge">✕</button>
-          </div>
-          <div class="morning_bridge_content">
-            <div class="morning_bridge_text">
-              <div class="morning_bridge_eyebrow">Pre-Committed Yesterday · Zero Morning Friction</div>
-              <h4 class="morning_bridge_title">Anchor Goal: <strong>${this.escapeHTML(morningPlan.keystoneTitle || "Keystone Task")}</strong></h4>
-              <div class="morning_bridge_starter_box">
-                <span class="micro_icon">⚡</span>
-                <div>
-                  <strong>2-Minute Micro-Starter:</strong>
-                  <span>${this.escapeHTML(morningPlan.microStarter || "Take 2 minutes to start the first action.")}</span>
-                </div>
-              </div>
-              ${morningPlan.implementationIntention ? `
-                <div class="morning_bridge_cue_row">
-                  <span class="cue_icon">⏰</span>
-                  <span>${this.escapeHTML(morningPlan.implementationIntention)}</span>
-                </div>
-              ` : ""}
-            </div>
-            <div class="morning_bridge_actions">
-              ${morningPlan.microStarterDone ? `
-                <div class="morning_bridge_done_badge">✓ 2-Min Starter Conquered</div>
-              ` : `
-                <button type="button" class="today_ai_btn primary" id="btn_launch_morning_micro_start">
-                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                  <span>Launch 2-Min Focus</span>
-                </button>
-                <button type="button" class="today_ai_btn secondary" id="btn_complete_morning_micro_start">
-                  <span>✓ Started!</span>
-                </button>
-              `}
-            </div>
-          </div>
-        </div>
-      `;
-    }
-
-    bindMorningCardEvents(morningPlan) {
-      const dismissBtn = document.getElementById("btn_dismiss_morning_bridge");
-      const launchBtn = document.getElementById("btn_launch_morning_micro_start");
-      const completeBtn = document.getElementById("btn_complete_morning_micro_start");
-
-      if (dismissBtn) {
-        dismissBtn.addEventListener("click", () => {
-          morningPlan.dismissed = true;
-          this.saveTomorrowPlan(morningPlan);
-          const filtered = this.getFilteredTasks("today");
-          this.renderTodayAIBanner(filtered);
-        });
-      }
-
-      if (launchBtn) {
-        launchBtn.addEventListener("click", () => {
-          this.launchMorningMicroStart(morningPlan.keystoneTitle, morningPlan.keystoneTaskId);
-        });
-      }
-
-      if (completeBtn) {
-        completeBtn.addEventListener("click", () => {
-          morningPlan.microStarterDone = true;
-          this.saveTomorrowPlan(morningPlan);
-          this.store.emit("celebrate", { elementId: "btn_complete_morning_micro_start" });
-          this.showToast("Morning momentum starter conquered! Your brain is now in flow.", "success");
-          const filtered = this.getFilteredTasks("today");
-          this.renderTodayAIBanner(filtered);
-        });
-      }
-    }
-
-    launchMorningMicroStart(taskTitle, taskId) {
-      let task = null;
-      if (taskId) task = this.store.tasks.find(t => t.id === taskId);
-      if (!task && taskTitle) {
-        task = this.store.tasks.find(t => t.title.toLowerCase() === taskTitle.toLowerCase());
-      }
-
-      this.store.setView("timer");
-      if (task) {
-        this.store.timer.activeTaskId = task.id;
-      }
-      this.store.timer.duration = 120; // 2-minute starter sprint
-      this.store.timer.totalDuration = 120;
-      this.store.startTimer(task ? task.id : null);
-      this.showToast("⚡ 2-Minute Micro-Starter Timer Launched! Zero friction, just start.", "success");
-    }
-
-    renderTodayExecutionContent(container, todayTasks) {
-      const profile = this.personalityProfile;
-
-      container.innerHTML = `
-        <div class="today_ai_header">
-          <div class="today_ai_title_group">
-            <div class="today_ai_sparkle_icon">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2z"/>
-              </svg>
-            </div>
-            <div>
-              <div class="today_ai_title_with_badge">
-                <h3>AI Focus Strategist</h3>
-                ${profile ? `
-                  <span class="today_ai_tag personality_tag" title="Your Cognitive Archetype">${profile.heroIcon || "🧠"} ${this.escapeHTML(profile.archetype)}</span>
-                ` : `
-                  <span class="today_ai_tag">Daily Plan</span>
-                `}
-              </div>
-              <p class="today_ai_subtitle">
-                ${profile ? `Peak Energy: ${this.escapeHTML(profile.chronotypeLabel || "Morning")} · Voice: ${this.escapeHTML(profile.coachVoiceLabel || "Stoic")}` : `Intelligent prioritization, anti-procrastination cues & time blocking`}
-              </p>
-            </div>
-          </div>
-
-          <div class="today_ai_actions">
-            ${!profile ? `
-              <button type="button" id="btn_open_quiz_nudge" class="personality_quiz_nudge_btn">
-                <span>🧠 Take 60s Quiz</span>
-              </button>
-            ` : `
-              <button type="button" id="btn_open_quiz_nudge" class="personality_quiz_nudge_btn" title="Edit Personality Profile">
-                <span>⚙️ ${this.escapeHTML(profile.archetype.replace("The ", ""))}</span>
-              </button>
-            `}
-            <button type="button" id="btn_today_ai_plan" class="today_ai_btn primary">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-              <span>Plan Today's Focus</span>
-            </button>
-            <button type="button" id="btn_today_ai_prioritize" class="today_ai_btn secondary">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
-              <span>⚡ Smart Order</span>
-            </button>
-            ${this.todayAIPlan || (this.todayAITaskOrder && this.todayAITaskOrder.length > 0) ? `
-              <button type="button" id="btn_today_ai_reset" class="today_ai_btn text_only" title="Reset AI Ordering">Reset</button>
-            ` : ""}
-          </div>
-        </div>
-
-        <div id="today_ai_plan_result" class="today_ai_plan_result"></div>
-      `;
-
-      if (this.todayAIPlan) {
-        this.renderTodayAIPlanDetails(this.todayAIPlan, todayTasks);
-      }
-
-      const quizNudgeBtn = document.getElementById("btn_open_quiz_nudge");
-      if (quizNudgeBtn) {
-        quizNudgeBtn.addEventListener("click", () => this.openPersonalityQuiz());
-      }
-
-      const planBtn = document.getElementById("btn_today_ai_plan");
-      const prioritizeBtn = document.getElementById("btn_today_ai_prioritize");
-      const resetBtn = document.getElementById("btn_today_ai_reset");
-
-      if (planBtn) {
-        planBtn.addEventListener("click", () => this.generateTodayAIPlan(todayTasks));
-      }
-      if (prioritizeBtn) {
-        prioritizeBtn.addEventListener("click", () => this.autoPrioritizeTodayTasks(todayTasks));
-      }
-      if (resetBtn) {
-        resetBtn.addEventListener("click", () => {
-          this.todayAIPlan = null;
-          this.todayAITaskOrder = null;
-          this.renderTaskListUI("today");
-          this.showToast("Reset AI daily plan and ordering.", "info");
-        });
-      }
-    }
-
-    renderTomorrowMomentumContent(container) {
-      const metrics = this.getPastTodosPsychologyMetrics();
-      const plan = this.tomorrowPlanDraft || (this.tomorrowPlan && this.tomorrowPlan.targetDate === this.getNDaysFromNow(1) ? this.tomorrowPlan : null);
-
-      container.innerHTML = `
-        <div class="today_ai_header">
-          <div class="today_ai_title_group">
-            <div class="today_ai_sparkle_icon" style="background: rgba(245, 158, 11, 0.12); color: #f59e0b;">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-              </svg>
-            </div>
-            <div>
-              <div class="today_ai_title_with_badge">
-                <h3>Tomorrow Momentum Bridge</h3>
-                <span class="today_ai_tag" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b;">Psychological Setup</span>
-              </div>
-              <p class="today_ai_subtitle">Past to-dos analysis · Planning fallacy shield · Zero morning friction</p>
-            </div>
-          </div>
-
-          <div class="today_ai_actions">
-            <button type="button" id="btn_generate_tomorrow_blueprint" class="today_ai_btn primary">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8L12 2z"/></svg>
-              <span>✨ Plan Tomorrow</span>
-            </button>
-            <button type="button" id="btn_heuristic_tomorrow" class="today_ai_btn secondary">
-              <span>⚡ Fast Heuristic</span>
-            </button>
-            ${plan ? `
-              <button type="button" id="btn_reset_tomorrow_draft" class="today_ai_btn text_only" title="Reset Blueprint">Reset</button>
-            ` : ""}
-          </div>
-        </div>
-
-        <!-- 3-Pillar Evidence Grid from Past To-Dos -->
-        <div class="tomorrow_psych_stats_grid">
-          <div class="psych_stat_card">
-            <span class="psych_stat_badge">Proven Velocity</span>
-            <span class="psych_stat_val">${metrics.dailyVelocity} / day</span>
-            <span class="psych_stat_desc">Based on past 7 days</span>
-          </div>
-          <div class="psych_stat_card">
-            <span class="psych_stat_badge">${this.escapeHTML(metrics.topCategory)} Leader</span>
-            <span class="psych_stat_val">${metrics.recentCompletedCount} Won</span>
-            <span class="psych_stat_desc">Self-efficacy domain</span>
-          </div>
-          <div class="psych_stat_card">
-            <span class="psych_stat_badge">Fallacy Guard</span>
-            <span class="psych_stat_val">Max ${metrics.recommendedTaskCap} Goals</span>
-            <span class="psych_stat_desc">Optimal cognitive capacity</span>
-          </div>
-          <div class="psych_stat_card">
-            <span class="psych_stat_badge">Evening Habit</span>
-            <span class="psych_stat_val">🔥 ${this.eveningPlanningStreak}d Streak</span>
-            <span class="psych_stat_desc">Nightly shutdown ritual</span>
-          </div>
-        </div>
-
-        <div id="tomorrow_blueprint_result_slot"></div>
-      `;
-
-      const resultSlot = document.getElementById("tomorrow_blueprint_result_slot");
-      if (plan && resultSlot) {
-        this.renderTomorrowBlueprintDetails(resultSlot, plan, metrics);
-      } else if (resultSlot) {
-        resultSlot.innerHTML = `
-          <div class="tomorrow_starter_prompt">
-            <div class="starter_prompt_icon">🌙</div>
-            <div class="starter_prompt_text">
-              <h4>Establish Cognitive Closure for Tonight</h4>
-              <p>Planning tomorrow based on your past completion velocity prevents morning hesitation and protects sleep quality. Click <strong>Plan Tomorrow</strong> to generate your psychological setup.</p>
-            </div>
-          </div>
-        `;
-      }
-
-      const generateBtn = document.getElementById("btn_generate_tomorrow_blueprint");
-      const heuristicBtn = document.getElementById("btn_heuristic_tomorrow");
-      const resetBtn = document.getElementById("btn_reset_tomorrow_draft");
-
-      if (generateBtn) {
-        generateBtn.addEventListener("click", () => this.generateTomorrowAIPlan(metrics));
-      }
-      if (heuristicBtn) {
-        heuristicBtn.addEventListener("click", () => {
-          const draft = this.generateAlgorithmicTomorrowBlueprint(metrics);
-          this.tomorrowPlanDraft = draft;
-          const slot = document.getElementById("tomorrow_blueprint_result_slot");
-          if (slot) this.renderTomorrowBlueprintDetails(slot, draft, metrics);
-        });
-      }
-      if (resetBtn) {
-        resetBtn.addEventListener("click", () => {
-          this.tomorrowPlanDraft = null;
-          this.saveTomorrowPlan(null);
-          const filtered = this.getFilteredTasks("today");
-          this.renderTodayAIBanner(filtered);
-          this.showToast("Reset tomorrow's planning blueprint.", "info");
-        });
-      }
-    }
-
-    renderTomorrowBlueprintDetails(slot, plan, metrics) {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = getLocalDateString(tomorrow);
-      const isCommitted = plan.committed && plan.targetDate === tomorrowStr;
-
-      slot.innerHTML = `
-        <div class="tomorrow_plan_card">
-          <!-- 1. Behavioral Psychology Diagnosis -->
-          <div class="tomorrow_diagnosis_box">
-            <div class="diagnosis_header">
-              <span class="diagnosis_icon">🧠</span>
-              <strong>Behavioral Analysis & Velocity Alignment:</strong>
-            </div>
-            <p class="diagnosis_text">${this.escapeHTML(plan.psychologicalDiagnosis || "")}</p>
-          </div>
-
-          <!-- 2. Keystone Frog (The Anchor Goal) -->
-          <div class="tomorrow_keystone_box">
-            <div class="keystone_badge_row">
-              <span class="keystone_badge">🎯 #1 Keystone Frog · The Anchor Goal</span>
-              <span class="keystone_priority_tag ${String(plan.keystonePriority || 'High').toLowerCase()}">${this.escapeHTML(plan.keystonePriority || "High")}</span>
-            </div>
-            <h4 class="keystone_title">${this.escapeHTML(plan.keystoneTitle)}</h4>
-            <p class="keystone_reason">${this.escapeHTML(plan.keystoneReason || "Highest leverage goal.")}</p>
-
-            <!-- 2-Minute Micro-Starter Friction Destroyer -->
-            <div class="tomorrow_micro_starter_box">
-              <span class="micro_icon">⚡</span>
-              <div class="micro_content">
-                <strong>2-Minute Micro-Starter (Anti-Avoidance Cue):</strong>
-                <p id="micro_starter_display" class="micro_text">${this.escapeHTML(plan.microStarter)}</p>
-              </div>
-            </div>
-
-            <!-- Implementation Intention Anchor (Gollwitzer If-Then) -->
-            ${plan.implementationIntention ? `
-              <div class="tomorrow_intention_box">
-                <span class="intention_icon">⏰</span>
-                <div class="intention_content">
-                  <strong>Implementation Intention (If-Then Habit):</strong>
-                  <p class="intention_text">${this.escapeHTML(plan.implementationIntention)}</p>
-                </div>
-              </div>
-            ` : ""}
-          </div>
-
-          <!-- 3. Supporting Stepping Stones (Capped by Velocity) -->
-          ${plan.supportingTasks && plan.supportingTasks.length > 0 ? `
-            <div class="tomorrow_supporting_section">
-              <div class="supporting_section_header">
-                <span class="section_label">Supporting Stepping Stones (Velocity Guard: ${plan.supportingTasks.length} added)</span>
-              </div>
-              <div class="tomorrow_supporting_list">
-                ${plan.supportingTasks.map((t) => `
-                  <div class="tomorrow_supporting_item">
-                    <label class="supporting_checkbox_label">
-                      <input type="checkbox" class="supporting_task_cb" data-task-id="${t.taskId || ''}" data-task-title="${this.escapeHTML(t.title)}" checked />
-                      <span class="supporting_task_title">${this.escapeHTML(t.title)}</span>
-                    </label>
-                    <div class="supporting_meta">
-                      <span class="supporting_role_badge">${this.escapeHTML(t.role || 'Quick Win')}</span>
-                      <span class="step_slot">${t.estimatedDuration || 25}m</span>
-                    </div>
-                  </div>
-                `).join("")}
-              </div>
-            </div>
-          ` : ""}
-
-          <!-- 4. Zeigarnik Evening Shutdown Affirmation -->
-          <div class="tomorrow_zeigarnik_box">
-            <span class="shutdown_moon">🌙</span>
-            <span>"${this.escapeHTML(plan.closureAffirmation || "Tomorrow is set. Shutdown complete. Rest your executive control.")}"</span>
-          </div>
-
-          <!-- 5. Commit & Lock-in Button -->
-          <div class="tomorrow_action_row">
-            ${isCommitted ? `
-              <div class="tomorrow_committed_banner">
-                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
-                <span>Locked in for Tomorrow (${tomorrowStr})! Morning launchpad primed.</span>
-              </div>
-            ` : `
-              <button type="button" class="today_ai_btn primary lock_tomorrow_btn" id="btn_lock_tomorrow_blueprint">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-                <span>🔒 Lock In & Schedule to Tomorrow</span>
-              </button>
-            `}
-          </div>
-        </div>
-      `;
-
-      const lockBtn = document.getElementById("btn_lock_tomorrow_blueprint");
-      if (lockBtn) {
-        lockBtn.addEventListener("click", () => this.lockInTomorrowPlan(plan));
-      }
-    }
-
-    lockInTomorrowPlan(plan) {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = getLocalDateString(tomorrow);
-      const nowStr = getLocalDateString();
-
-      let keystoneTask = null;
-      if (plan.keystoneTaskId) {
-        keystoneTask = this.store.tasks.find(t => t.id === plan.keystoneTaskId);
-      }
-      if (!keystoneTask && plan.keystoneTitle) {
-        keystoneTask = this.store.tasks.find(t => t.title.toLowerCase() === plan.keystoneTitle.toLowerCase());
-      }
-
-      if (keystoneTask) {
-        this.store.updateTask(keystoneTask.id, { dueDate: tomorrowStr, isLater: false });
-      } else if (plan.keystoneTitle) {
-        keystoneTask = this.store.addTask({
-          title: plan.keystoneTitle,
-          dueDate: tomorrowStr,
-          priority: plan.keystonePriority || "High",
-          category: plan.keystoneCategory || "Focus"
-        });
-        plan.keystoneTaskId = keystoneTask.id;
-      }
-
-      const checkboxes = document.querySelectorAll(".supporting_task_cb:checked");
-      const selectedSupportingIds = [];
-      checkboxes.forEach(cb => {
-        const taskId = cb.getAttribute("data-task-id");
-        const taskTitle = cb.getAttribute("data-task-title");
-        let task = null;
-        if (taskId) task = this.store.tasks.find(t => String(t.id) === String(taskId));
-        if (!task && taskTitle) task = this.store.tasks.find(t => t.title === taskTitle);
-
-        if (task) {
-          this.store.updateTask(task.id, { dueDate: tomorrowStr, isLater: false });
-          selectedSupportingIds.push(task.id);
-        }
-      });
-
-      const planRecord = {
-        createdDate: nowStr,
-        targetDate: tomorrowStr,
-        keystoneTaskId: keystoneTask ? keystoneTask.id : plan.keystoneTaskId,
-        keystoneTitle: plan.keystoneTitle,
-        keystoneCategory: plan.keystoneCategory || "Focus",
-        keystonePriority: plan.keystonePriority || "High",
-        microStarter: plan.microStarter,
-        implementationIntention: plan.implementationIntention,
-        supportingTaskIds: selectedSupportingIds,
-        psychologicalDiagnosis: plan.psychologicalDiagnosis,
-        closureAffirmation: plan.closureAffirmation,
-        committed: true,
-        dismissed: false,
-        microStarterDone: false
-      };
-
-      this.saveTomorrowPlan(planRecord);
-      this.tomorrowPlanDraft = planRecord;
-
-      const lastPlanDate = localStorage.getItem("aurora_last_plan_date");
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = getLocalDateString(yesterday);
-
-      if (lastPlanDate === yesterdayStr) {
-        this.eveningPlanningStreak += 1;
-      } else if (lastPlanDate !== nowStr) {
-        this.eveningPlanningStreak = 1;
-      }
-      localStorage.setItem("aurora_last_plan_date", nowStr);
-      localStorage.setItem("aurora_evening_streak", this.eveningPlanningStreak.toString());
-
-      this.store.emit("celebrate", { elementId: "btn_lock_tomorrow_blueprint" });
-      this.showToast("🌙 Tomorrow's Momentum Blueprint locked in! Sleep with peace of mind.", "success");
-
-      const filtered = this.getFilteredTasks("today");
-      this.renderTodayAIBanner(filtered);
-    }
-
-    async generateTomorrowAIPlan(metrics) {
-      const resultSlot = document.getElementById("tomorrow_blueprint_result_slot");
-      if (!resultSlot) return;
-
-      if (!this.geminiApiKey) {
-        const draft = this.generateAlgorithmicTomorrowBlueprint(metrics);
-        this.tomorrowPlanDraft = draft;
-        this.renderTomorrowBlueprintDetails(resultSlot, draft, metrics);
-        this.showToast("Generated with Behavioral Science heuristics! Add Gemini API Key for deep AI coaching.", "info");
-        return;
-      }
-
-      resultSlot.innerHTML = `
-        <div class="ai_coach_loading" style="padding: 20px 0;">
-          <div class="ai_coach_spinner"></div>
-          <span>Analyzing historical velocity, category balance, and anti-friction cues for tomorrow...</span>
-        </div>
-      `;
-
-      const candidateTasks = this.store.tasks
-        .filter(t => !t.completed && t.id !== "general_focus")
-        .slice(0, 10)
-        .map(t => ({
-          id: t.id,
-          title: t.title,
-          priority: t.priority,
-          category: t.category,
-          dueDate: t.dueDate,
-          isOverdue: t.dueDate < getLocalDateString(),
-          estimatedDuration: t.estimatedDuration || 25
-        }));
-
-      const routinesBrief = (this.store.routines || [])
-        .filter(r => r.startTime <= "12:00")
-        .map(r => `${r.startTime} (${r.title})`)
-        .join(", ");
-
-      const prompt = `You are a world-class behavioral psychologist and productivity strategist (James Clear, BJ Fogg, Peter Gollwitzer).
-Analyze the user's past todo history and current backlog to create a psychological TOMORROW BLUEPRINT.
-
-PAST TODOS PERFORMANCE:
-- Proven daily velocity: ${metrics.dailyVelocity} tasks/day
-- Completed in past 7 days: ${metrics.recentCompletedCount} tasks
-- Top momentum category: ${metrics.topCategory}
-- Overdue friction tasks count: ${metrics.overdueCount}
-- Evening planning streak: ${this.eveningPlanningStreak} days
-- Morning routine schedule: ${routinesBrief || "09:00 AM start"}
-
-CURRENT CANDIDATE TASKS:
-${JSON.stringify(candidateTasks, null, 2)}
-
-PSYCHOLOGICAL RULES:
-1. Prevent the Planning Fallacy: Capped at maximum ${metrics.recommendedTaskCap} total tasks for tomorrow.
-2. Select 1 Keystone Frog (highest leverage anchor goal).
-3. Provide an effortless 2-Minute Micro-Starter (first physical movement to eliminate morning cold-start resistance).
-4. Provide an 'If-Then' Implementation Intention anchored to their morning routine or 09:00 AM.
-5. Provide up to ${Math.max(1, metrics.recommendedTaskCap - 1)} Supporting Stepping Stones (quick wins / momentum maintainers).
-6. Provide an evening cognitive closure affirmation (Zeigarnik shutdown).
-
-Return ONLY a valid JSON object matching this schema:
-{
-  "psychologicalDiagnosis": "2 sentences analyzing momentum, velocity alignment, and anti-procrastination reasoning.",
-  "keystoneTaskId": ${candidateTasks[0] ? candidateTasks[0].id : 0},
-  "keystoneTitle": "Task title",
-  "keystoneCategory": "Category",
-  "keystonePriority": "High",
-  "keystoneReason": "Why this is the #1 highest leverage frog for tomorrow.",
-  "microStarter": "A microscopic 2-minute starter physical action.",
-  "implementationIntention": "When [time or routine cue], I will sit down and execute the 2-minute starter.",
-  "supportingTasks": [
-    {
-      "taskId": ${candidateTasks[1] ? candidateTasks[1].id : 0},
-      "title": "Supporting task title",
-      "priority": "Medium",
-      "category": "Work",
-      "estimatedDuration": 25,
-      "role": "Quick-Win Stepping Stone"
-    }
-  ],
-  "closureAffirmation": "Evening shutdown statement to clear mental bandwidth."
-}`;
-
-      try {
-        const { data } = await this.callGeminiWithFallback({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.2,
-            responseMimeType: "application/json"
-          }
-        });
-
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!text) throw new Error("Empty response from AI");
-
-        const plan = JSON.parse(text);
-        plan.source = "Gemini AI";
-        this.tomorrowPlanDraft = plan;
-        this.renderTomorrowBlueprintDetails(resultSlot, plan, metrics);
-      } catch (err) {
-        console.error("AI Tomorrow Plan error, falling back to heuristics:", err);
-        const draft = this.generateAlgorithmicTomorrowBlueprint(metrics);
-        this.tomorrowPlanDraft = draft;
-        this.renderTomorrowBlueprintDetails(resultSlot, draft, metrics);
-        this.showToast("Generated blueprint with Behavioral Science engine!", "info");
-      }
-    }
-
-    renderTodayAIBanner(todayTasks) {
-      const container = document.getElementById("today_ai_banner_container");
-      if (!container) return;
-
-      const morningPlan = this.getMorningMomentumPlan();
-      const hasLockedPlan = this.tomorrowPlan && this.tomorrowPlan.targetDate === this.getNDaysFromNow(1) && this.tomorrowPlan.committed;
-
-      container.innerHTML = `
-        ${morningPlan ? this.renderMorningMomentumCardHTML(morningPlan) : ""}
-
-        <div class="today_ai_deck">
-          <div class="focus_mode_tabs_bar">
-            <button type="button" class="focus_mode_tab ${this.focusAITab === 'today' ? 'active' : ''}" id="tab_focus_today_mode">
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-              <span>Today's Execution (${todayTasks.length})</span>
-            </button>
-            <button type="button" class="focus_mode_tab ${this.focusAITab === 'tomorrow' ? 'active' : ''}" id="tab_focus_tomorrow_mode">
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-              <span>Plan Tomorrow's Momentum</span>
-              ${hasLockedPlan ? `<span class="focus_tab_badge locked">Locked In ✓</span>` : `<span class="focus_tab_badge">Evening Setup</span>`}
-            </button>
-          </div>
-
-          <div id="focus_ai_content_area"></div>
-        </div>
-      `;
-
-      if (morningPlan) {
-        this.bindMorningCardEvents(morningPlan);
-      }
-
-      const todayTabBtn = document.getElementById("tab_focus_today_mode");
-      const tomorrowTabBtn = document.getElementById("tab_focus_tomorrow_mode");
-      if (todayTabBtn) {
-        todayTabBtn.addEventListener("click", () => {
-          this.focusAITab = "today";
-          this.renderTodayAIBanner(todayTasks);
-        });
-      }
-      if (tomorrowTabBtn) {
-        tomorrowTabBtn.addEventListener("click", () => {
-          this.focusAITab = "tomorrow";
-          this.renderTodayAIBanner(todayTasks);
-        });
-      }
-
-      const contentArea = document.getElementById("focus_ai_content_area");
-      if (!contentArea) return;
-
-      if (this.focusAITab === "today") {
-        this.renderTodayExecutionContent(contentArea, todayTasks);
-      } else {
-        this.renderTomorrowMomentumContent(contentArea);
-      }
-    }
-
-    renderTodayAIPlanDetails(plan, todayTasks) {
-      const resultEl = document.getElementById("today_ai_plan_result");
-      if (!resultEl) return;
-
-      const topTask = todayTasks.find(t => t.id === plan.topFocusTaskId) || todayTasks[0];
-      const profile = this.personalityProfile;
-
-      resultEl.innerHTML = `
-        <div class="today_ai_plan_card">
-          ${plan.personaMotto ? `
-            <div style="font-size: 12px; font-weight: 700; color: var(--accent-primary); margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
-              <span>${profile ? profile.heroIcon || "🧠" : "✨"}</span>
-              <em>"${this.escapeHTML(plan.personaMotto)}"</em>
-            </div>
-          ` : ""}
-          <p class="today_ai_summary">"${this.escapeHTML(plan.executiveSummary || "")}"</p>
-
-          ${topTask ? `
-            <div class="today_ai_conquer_box">
-              <div class="conquer_info">
-                <span class="conquer_badge">🎯 Start Here · #1 Priority Keystone</span>
-                <strong class="conquer_title">${this.escapeHTML(topTask.title)}</strong>
-                <p class="conquer_reason">${this.escapeHTML(plan.topFocusReason || "Highest leverage goal for today.")}</p>
-              </div>
-              <button type="button" class="today_ai_btn primary" id="btn_ai_launch_top_task">
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                <span>Focus in Timer</span>
-              </button>
-            </div>
-          ` : ""}
-
-          ${plan.antiProcrastinationTip ? `
-            <div class="today_ai_inertia_box">
-              <span class="micro_icon" style="font-size: 16px;">⚡</span>
-              <div>
-                <strong>Bespoke 2-Minute Micro-Starter:</strong>
-                <span>${this.escapeHTML(plan.antiProcrastinationTip)}</span>
-              </div>
-            </div>
-          ` : ""}
-
-          <div class="today_ai_timeline_section">
-            <span class="timeline_section_label">Recommended Flow (${plan.totalEstimatedMinutes || 50}m Total · Matched to ${this.escapeHTML(profile ? profile.chronotypeLabel.split('(')[0].trim() : 'Peak Energy')})</span>
-            <div class="today_ai_timeline_list">
-              ${(plan.recommendedOrder || []).map((step, idx) => {
-                const task = todayTasks.find(t => t.id === step.taskId);
-                const taskTitle = task ? task.title : (step.taskTitle || "Task");
-                return `
-                  <div class="today_ai_timeline_item">
-                    <div class="step_left">
-                      <span class="step_number">#${idx + 1}</span>
-                      <strong class="step_task_title">${this.escapeHTML(taskTitle)}</strong>
-                    </div>
-                    <div class="step_meta">
-                      ${step.timeSlot ? `<span class="step_slot">${this.escapeHTML(step.timeSlot)}</span>` : ""}
-                      ${step.energyTag ? `<span class="step_energy">${this.escapeHTML(step.energyTag)}</span>` : ""}
-                    </div>
-                  </div>
-                `;
-              }).join("")}
-            </div>
-          </div>
-
-          ${plan.overflowTasks && plan.overflowTasks.length > 0 ? `
-            <div class="today_ai_overflow_advisory" id="today_overflow_advisory_box">
-              <div class="overflow_header">
-                <span class="overflow_icon">⚖️</span>
-                <div>
-                  <strong>Cognitive Bandwidth Advisory (${plan.overflowTasks.length} task${plan.overflowTasks.length > 1 ? 's' : ''} exceed your cap)</strong>
-                  <p class="overflow_desc">Your ${this.escapeHTML(profile ? profile.archetype : "personality")} thrives on high focus rather than cognitive fatigue. We recommend deferring these to protect your completion momentum:</p>
-                </div>
-              </div>
-              <div class="overflow_tasks_list">
-                ${plan.overflowTasks.map(ot => {
-                  const task = todayTasks.find(t => t.id === ot.taskId);
-                  return `
-                    <div class="overflow_task_pill">
-                      <span class="overflow_task_name">${this.escapeHTML(task ? task.title : 'Task #' + ot.taskId)}</span>
-                      <span class="overflow_reason">${this.escapeHTML(ot.reason || 'Exceeds daily focus capacity')}</span>
-                    </div>
-                  `;
-                }).join("")}
-              </div>
-              <div class="overflow_actions_row">
-                <button type="button" class="today_ai_btn secondary" id="btn_defer_overflow_tasks">
-                  <span>Move ${plan.overflowTasks.length} to Tomorrow</span>
-                </button>
-                <button type="button" class="today_ai_btn text_only" id="btn_keep_all_today">
-                  <span>Keep All in Today</span>
-                </button>
-              </div>
-            </div>
-          ` : ""}
-        </div>
-      `;
-
-      const launchBtn = document.getElementById("btn_ai_launch_top_task");
-      if (launchBtn && topTask) {
-        launchBtn.addEventListener("click", () => {
-          this.store.setView("timer");
-          this.store.startTimer(topTask.id);
-        });
-      }
-
-      const deferBtn = document.getElementById("btn_defer_overflow_tasks");
-      const keepBtn = document.getElementById("btn_keep_all_today");
-
-      if (deferBtn && plan.overflowTasks) {
-        deferBtn.addEventListener("click", () => {
-          const tomorrow = new Date();
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          const tomorrowStr = getLocalDateString(tomorrow);
-
-          plan.overflowTasks.forEach(ot => {
-            this.store.updateTask(ot.taskId, { dueDate: tomorrowStr, isLater: false });
-          });
-
-          this.showToast(`⚡ Sheltered ${plan.overflowTasks.length} tasks to Tomorrow. Cognitive focus restored!`, "success");
-          this.todayAIPlan = null;
-          const filtered = this.getFilteredTasks("today");
-          this.renderTodayAIBanner(filtered);
-          this.renderTaskListUI("today");
-        });
-      }
-
-      if (keepBtn) {
-        keepBtn.addEventListener("click", () => {
-          const advBox = document.getElementById("today_overflow_advisory_box");
-          if (advBox) advBox.style.display = "none";
-          this.showToast("All tasks kept in Today's list.", "info");
-        });
-      }
-    }
-
-    generateAlgorithmicPersonalityPlan(todayTasks) {
-      const profile = this.personalityProfile || {
-        archetype: "The Balanced Achiever",
-        chronotype: "early_falcon",
-        chronotypeLabel: "Early Falcon (06:00 - 10:00)",
-        procrastination: "perfectionism",
-        pacing: "sprints",
-        coachVoice: "stoic",
-        coachVoiceLabel: "The Stoic Strategist",
-        capacityLimit: 3
-      };
-
-      const priorityWeights = { High: 3, Medium: 2, Low: 1 };
-      const sorted = [...todayTasks].sort((a, b) => {
-        const pDiff = (priorityWeights[b.priority] || 2) - (priorityWeights[a.priority] || 2);
-        if (pDiff !== 0) return pDiff;
-        return (a.estimatedDuration || 25) - (b.estimatedDuration || 25);
-      });
-
-      const cap = Math.max(1, profile.capacityLimit || 3);
-      const chosen = sorted.slice(0, cap);
-      const overflow = sorted.slice(cap);
-
-      const keystone = chosen[0] || todayTasks[0];
-
-      const startHours = {
-        early_falcon: 8,
-        midday_climber: 11,
-        twilight_owl: 18,
-        variable: 9
-      };
-      let curHour = startHours[profile.chronotype] || 9;
-      let curMin = 0;
-
-      const recommendedOrder = chosen.map((t, idx) => {
-        const startStr = `${String(curHour).padStart(2, '0')}:${String(curMin).padStart(2, '0')}`;
-        const dur = t.estimatedDuration || 25;
-        curMin += dur;
-        while (curMin >= 60) {
-          curHour += 1;
-          curMin -= 60;
-        }
-        const endStr = `${String(curHour).padStart(2, '0')}:${String(curMin).padStart(2, '0')}`;
-        curMin += 10;
-        while (curMin >= 60) {
-          curHour += 1;
-          curMin -= 60;
-        }
-
-        return {
-          taskId: t.id,
-          taskTitle: t.title,
-          order: idx + 1,
-          timeSlot: `${startStr} - ${endStr} (${idx === 0 ? 'Peak Window' : 'Secondary Block'})`,
-          energyTag: idx === 0 ? 'Keystone Focus' : 'Supporting Goal',
-          strategyNote: idx === 0 ? 'Tackle this during your peak executive window.' : 'Maintain steady momentum without context switching.'
-        };
-      });
-
-      const microStarters = {
-        perfectionism: `Spend exactly 120 seconds jotting an intentionally imperfect 3-bullet draft of "${keystone.title}". Zero judgment allowed.`,
-        overwhelm: `Look only at step 1 of "${keystone.title}". Hide everything else from your desk for the next 2 minutes.`,
-        boredom: `Set a 15-minute speed run for "${keystone.title}". Race the countdown timer to build instant dopamine.`,
-        fatigue: `Open "${keystone.title}", sit comfortably, and read the goal objective with zero expectation to finish it right now.`
-      };
-
-      const summaries = {
-        stoic: {
-          motto: "Discipline is freedom. Focus on what is in your control.",
-          summary: `Your ${profile.archetype} profile demands clarity over chaos. Conquering ${keystone.title} first secures today's momentum.`
-        },
-        hype: {
-          motto: "Unstoppable energy! Strike fast and win the day! 🔥",
-          summary: `Ready to crush it! Lock into ${keystone.title} during your peak window and ride that victory high all day!`
-        },
-        scientist: {
-          motto: "Aligning cognitive demand with circadian biological rhythms.",
-          summary: `Based on your ${profile.chronotypeLabel} energy curve, executing ${keystone.title} early maximizes prefrontal cortex throughput.`
-        },
-        empathetic: {
-          motto: "Sustainable progress over stressful perfection. One gentle step at a time.",
-          summary: `Protect your peace and energy today. Finishing ${keystone.title} is more than enough for a fulfilling day.`
-        }
-      };
-
-      const voiceData = summaries[profile.coachVoice] || summaries.stoic;
-      const totalMins = chosen.reduce((acc, t) => acc + (t.estimatedDuration || 25), 0);
-
-      return {
-        isHeuristic: true,
-        archetypeBadge: profile.archetype,
-        personaMotto: voiceData.motto,
-        executiveSummary: voiceData.summary,
-        topFocusTaskId: keystone.id,
-        topFocusReason: `Primary keystone goal matched to your ${profile.chronotypeLabel} window.`,
-        antiProcrastinationTip: microStarters[profile.procrastination] || microStarters.perfectionism,
-        recommendedOrder,
-        overflowTasks: overflow.map(ot => ({
-          taskId: ot.taskId || ot.id,
-          reason: `Exceeds your sustainable ${cap}-goal capacity cap to shield against overwhelm.`
-        })),
-        totalEstimatedMinutes: totalMins
-      };
-    }
-
-    async generateTodayAIPlan(todayTasks) {
-      const resultEl = document.getElementById("today_ai_plan_result");
-      if (!resultEl) return;
-
-      if (todayTasks.length === 0) {
-        resultEl.innerHTML = `
-          <div class="ai_coach_placeholder" style="margin-top: 12px;">
-            <p><strong>No active tasks in Today's list!</strong> Add tasks using the + button to generate your personalized AI daily focus plan.</p>
-          </div>
-        `;
-        return;
-      }
-
-      const profile = this.personalityProfile || {
-        archetype: "The Balanced Achiever",
-        chronotype: "early_falcon",
-        chronotypeLabel: "Early Falcon (06:00 - 10:00)",
-        procrastination: "perfectionism",
-        procrastinationLabel: "Perfectionist Resistance",
-        pacing: "sprints",
-        pacingLabel: "Sprint Intervals",
-        coachVoice: "stoic",
-        coachVoiceLabel: "The Stoic Strategist",
-        capacityLimit: 3
-      };
-
-      // If no API key configured, use local algorithmic personality engine
-      if (!this.geminiApiKey) {
-        const plan = this.generateAlgorithmicPersonalityPlan(todayTasks);
-        this.todayAIPlan = plan;
-        if (plan.recommendedOrder && Array.isArray(plan.recommendedOrder)) {
-          this.todayAITaskOrder = plan.recommendedOrder.map(r => r.taskId);
-        }
-        this.renderTodayAIPlanDetails(plan, todayTasks);
-        this.renderTaskListUI("today");
-        this.showToast(`⚡ ${profile.archetype} daily plan generated from local heuristics.`, "info");
-        return;
-      }
-
-      resultEl.innerHTML = `
-        <div class="ai_coach_loading" style="padding: 16px 0;">
-          <div class="ai_coach_spinner"></div>
-          <span>Gemini AI is calibrating your daily game plan for ${this.escapeHTML(profile.archetype)} (${this.escapeHTML(profile.coachVoiceLabel)})...</span>
-        </div>
-      `;
-
-      const now = new Date();
-      const tasksPayload = todayTasks.map(t => {
-        const due = new Date(t.dueDate + "T23:59:59");
-        const diffDays = Math.ceil((due - now) / (1000 * 60 * 60 * 24));
-        return {
-          id: t.id,
-          title: t.title,
-          priority: t.priority,
-          category: t.category,
-          estimatedDuration: t.estimatedDuration || 25,
-          isOverdue: diffDays < 0,
-          overdueDays: diffDays < 0 ? Math.abs(diffDays) : 0,
-          subtasksCount: t.subtasks ? t.subtasks.length : 0
-        };
-      });
-
-      const prompt = `You are an elite behavioral psychologist and productivity coach speaking strictly in the persona of: "${profile.coachVoiceLabel}".
-The user has the cognitive personality archetype: "${profile.archetype}".
-User Psychological Profile:
-- Peak Energy Window: ${profile.chronotypeLabel}
-- Procrastination Friction Trigger: ${profile.procrastinationLabel}
-- Preferred Flow Pacing: ${profile.pacingLabel}
-- Daily Sustainable Capacity Cap: ${profile.capacityLimit} high-leverage goals.
-
-Active tasks scheduled for the user's TODAY focus view:
-${JSON.stringify(tasksPayload, null, 2)}
-
-Directives:
-1. CURATION & CAP: Select up to ${profile.capacityLimit} primary tasks for today. If there are more tasks than this cap, place the excess tasks into "overflowTasks" and explain why deferring them to Tomorrow protects cognitive momentum.
-2. CHRONOTYPE ALIGNMENT: Schedule the hardest/keystone task during their peak energy window (${profile.chronotypeLabel}).
-3. BESPOKE MICRO-STARTER: Create a microscopic 2-minute starter cue formulated specifically to break their procrastination trap (${profile.procrastinationLabel}).
-4. TONE: Speak strictly in the voice of ${profile.coachVoiceLabel}.
-
-Return ONLY a valid JSON object matching this schema:
-{
-  "archetypeBadge": "${profile.archetype}",
-  "personaMotto": "A short, memorable 1-sentence motto in your coach voice",
-  "executiveSummary": "1-2 punchy sentences assessing today's plan in your coach voice",
-  "topFocusTaskId": ${tasksPayload[0].id},
-  "topFocusReason": "Why this specific task is the keystone goal today",
-  "antiProcrastinationTip": "A microscopic 2-minute starter cue formulated for their procrastination trap",
-  "recommendedOrder": [
-    {
-      "taskId": ${tasksPayload[0].id},
-      "order": 1,
-      "timeSlot": "e.g. 09:00 - 09:30 (Peak Energy Window)",
-      "energyTag": "Keystone Focus",
-      "strategyNote": "Execution tip in 1 short sentence"
-    }
-  ],
-  "overflowTasks": [
-    {
-      "taskId": ${tasksPayload[0].id},
-      "reason": "Why deferring this relieves cognitive overload and preserves focus"
-    }
-  ],
-  "totalEstimatedMinutes": 50
-}`;
-
-      try {
-        const { data } = await this.callGeminiWithFallback({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.25,
-            responseMimeType: "application/json"
-          }
-        });
-
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!text) throw new Error("Empty response from AI");
-
-        const plan = JSON.parse(text);
-        this.todayAIPlan = plan;
-        if (plan.recommendedOrder && Array.isArray(plan.recommendedOrder)) {
-          this.todayAITaskOrder = plan.recommendedOrder.map(r => r.taskId);
-        }
-        this.renderTodayAIPlanDetails(plan, todayTasks);
-        this.renderTaskListUI("today");
-      } catch (err) {
-        console.warn("AI Daily Plan error, falling back to local personality heuristics:", err);
-        const fallbackPlan = this.generateAlgorithmicPersonalityPlan(todayTasks);
-        this.todayAIPlan = fallbackPlan;
-        if (fallbackPlan.recommendedOrder && Array.isArray(fallbackPlan.recommendedOrder)) {
-          this.todayAITaskOrder = fallbackPlan.recommendedOrder.map(r => r.taskId);
-        }
-        this.renderTodayAIPlanDetails(fallbackPlan, todayTasks);
-        this.renderTaskListUI("today");
-      }
-    }
-
-    async autoPrioritizeTodayTasks(todayTasks) {
-      if (!this.geminiApiKey) {
-        this.generateTodayAIPlan(todayTasks);
-        return;
-      }
-      if (todayTasks.length <= 1) {
-        this.showToast("Only 1 task scheduled for today — already #1 priority!", "info");
-        this.todayAITaskOrder = todayTasks.map(t => t.id);
-        this.renderTaskListUI("today");
-        return;
-      }
-
-      const prioritizeBtn = document.getElementById("btn_today_ai_prioritize");
-      if (prioritizeBtn) {
-        prioritizeBtn.disabled = true;
-        prioritizeBtn.innerHTML = `<span>Ordering...</span>`;
-      }
-
-      const now = new Date();
-      const payload = todayTasks.map(t => {
-        const due = new Date(t.dueDate + "T23:59:59");
-        const diffDays = Math.ceil((due - now) / (1000 * 60 * 60 * 24));
-        return {
-          id: t.id,
-          title: t.title,
-          priority: t.priority,
-          overdueDays: diffDays < 0 ? Math.abs(diffDays) : 0,
-          estimatedDuration: t.estimatedDuration || 25
-        };
-      });
-
-      const prompt = `Rank these today tasks from highest leverage/impact to lowest:
-${JSON.stringify(payload, null, 2)}
-Return ONLY a JSON array of task IDs in recommended execution order: [${payload.map(p => p.id).join(", ")}]`;
-
-      try {
-        const { data } = await this.callGeminiWithFallback({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.1,
-            responseMimeType: "application/json"
-          }
-        });
-
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        const orderedIds = JSON.parse(text);
-
-        if (Array.isArray(orderedIds)) {
-          this.todayAITaskOrder = orderedIds;
-          this.showToast("Tasks prioritized by AI! #1 Priority highlighted.", "success");
-          this.renderTaskListUI("today");
-        }
-      } catch (err) {
-        console.error("Prioritization error:", err);
-        this.showToast("Unable to prioritize tasks with AI.", "error");
-      } finally {
-        if (prioritizeBtn) {
-          prioritizeBtn.disabled = false;
-          prioritizeBtn.innerHTML = `
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
-            <span>⚡ Smart Order</span>
-          `;
-        }
-      }
-    }
-
-    async openAIBreakdownDrawer(task, card) {
-      const slot = card.querySelector(".task_ai_drawer_slot");
-      if (!slot) return;
-
-      if (slot.innerHTML.trim() !== "") {
-        slot.innerHTML = "";
-        return;
-      }
-
-      if (!this.geminiApiKey) {
-        slot.innerHTML = `
-          <div class="task_ai_breakdown_deck">
-            <p style="font-size: 12px; font-weight: 700; color: var(--text-primary); margin-bottom: 4px;">Gemini API Key Required</p>
-            <p style="font-size: 11.5px; color: var(--text-secondary); margin-bottom: 8px;">Configure your free Google Gemini API key in Settings to activate AI subtask breakdowns.</p>
-            <button type="button" class="today_ai_btn primary btn_slot_settings" style="height: 30px; font-size: 11px;">Go to Settings</button>
-          </div>
-        `;
-        slot.querySelector(".btn_slot_settings").addEventListener("click", (e) => {
-          e.stopPropagation();
-          this.store.setView("settings");
-        });
-        return;
-      }
-
-      slot.innerHTML = `
-        <div class="task_ai_breakdown_deck">
-          <div class="ai_coach_loading" style="padding: 10px 0;">
-            <div class="ai_coach_spinner"></div>
-            <span>Gemini AI is generating subtasks & action cues...</span>
-          </div>
-        </div>
-      `;
-
-      const prompt = `You are an expert productivity engineer. Break down this task into 3 to 5 concrete, actionable, small subtasks (each taking 5-30 minutes).
-If the title has typos, misspellings (e.g. 'domin' -> 'domain', 'EMail' -> 'Email'), or is compound/vague, provide a clean, professional refinedTitle.
-Task Title: "${task.title}"
-Task Description: "${task.description || "None"}"
-Estimated Duration: ${task.estimatedDuration || 25} minutes.
-
-Return ONLY a valid JSON object matching this schema:
-{
-  "refinedTitle": "Corrected and concise title",
-  "firstMicroStep": "A microscopic 2-minute starter action to overcome inertia",
-  "subtasks": [
-    "Concrete actionable step 1",
-    "Concrete actionable step 2",
-    "Concrete actionable step 3"
-  ]
-}`;
-
-      try {
-        const { data } = await this.callGeminiWithFallback({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            temperature: 0.2,
-            responseMimeType: "application/json"
-          }
-        });
-
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        const result = JSON.parse(text);
-
-        const hasRefined = result.refinedTitle && result.refinedTitle.toLowerCase().trim() !== task.title.toLowerCase().trim();
-
-        slot.innerHTML = `
-          <div class="task_ai_breakdown_deck">
-            <div class="task_ai_header_row">
-              <div class="task_ai_title_group">
-                <span class="task_ai_sparkle">✨</span>
-                <strong>AI Action Steps & Subtasks</strong>
-              </div>
-              <button type="button" class="task_ai_close_btn" title="Close">✕</button>
-            </div>
-
-            ${result.firstMicroStep ? `
-              <div class="task_ai_micro_step">
-                <span class="micro_icon">⚡</span>
-                <span><strong>2-Min Starter:</strong> ${this.escapeHTML(result.firstMicroStep)}</span>
-              </div>
-            ` : ""}
-
-            ${hasRefined ? `
-              <div class="task_ai_refined_title_row">
-                <span>Clean Title: <em>"${this.escapeHTML(result.refinedTitle)}"</em></span>
-                <button type="button" class="task_ai_apply_title_btn">Apply Title</button>
-              </div>
-            ` : ""}
-
-            <div class="task_ai_subtasks_list">
-              ${(result.subtasks || []).map(sub => `
-                <div class="task_ai_subtask_row">
-                  <span class="check_bullet">✓</span>
-                  <span class="subtask_text">${this.escapeHTML(sub)}</span>
-                </div>
-              `).join("")}
-            </div>
-
-            <div class="task_ai_actions_row">
-              <button type="button" class="today_ai_btn primary task_ai_commit_btn">
-                <span>✓ Add All (${result.subtasks ? result.subtasks.length : 0}) to Checklist</span>
-              </button>
-              <button type="button" class="today_ai_btn secondary task_ai_dismiss_btn">Dismiss</button>
-            </div>
-          </div>
-        `;
-
-        slot.querySelector(".task_ai_close_btn").addEventListener("click", (e) => {
-          e.stopPropagation();
-          slot.innerHTML = "";
-        });
-
-        slot.querySelector(".task_ai_dismiss_btn").addEventListener("click", (e) => {
-          e.stopPropagation();
-          slot.innerHTML = "";
-        });
-
-        const applyTitleBtn = slot.querySelector(".task_ai_apply_title_btn");
-        if (applyTitleBtn) {
-          applyTitleBtn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            this.store.updateTask(task.id, { title: result.refinedTitle });
-            this.showToast(`Updated task title to "${result.refinedTitle}"`, "success");
-            applyTitleBtn.disabled = true;
-            applyTitleBtn.textContent = "Applied ✓";
-          });
-        }
-
-        slot.querySelector(".task_ai_commit_btn").addEventListener("click", (e) => {
-          e.stopPropagation();
-          if (result.subtasks && result.subtasks.length > 0) {
-            this.store.addSubtasks(task.id, result.subtasks);
-            this.showToast(`Added ${result.subtasks.length} subtasks to task checklist!`, "success");
-          }
-          slot.innerHTML = "";
-          setTimeout(() => {
-            const reRenderedCard = document.querySelector(`.task_card[data-id="${task.id}"]`);
-            if (reRenderedCard) reRenderedCard.classList.add("expanded");
-          }, 60);
-        });
-      } catch (err) {
-        console.error("Subtask generation error:", err);
-        slot.innerHTML = `
-          <div class="task_ai_breakdown_deck">
-            <p style="color: #ef4444; font-size: 11.5px; font-weight: 600;">Failed to generate subtasks. Please check API key.</p>
-          </div>
-        `;
-      }
-    }
-
-    // -------------------------------------------------------------------------
-    // SYSTEM BOTTOM SHEET EDITORS (TASKS)
-    // -------------------------------------------------------------------------
-    openBottomSheet(task = null, initialData = null) {
-      this.closeRoutineSheet();
-      this.closeHabitSheet();
-      this.bottomSheet.classList.add("visible");
-      this.bottomSheetOverlay.classList.add("visible");
-      document.body.classList.add("modal-open");
-
-      const dateChips = this.sheetForm.querySelectorAll(".date_chip");
-      const dateInput = document.getElementById("task_due_date");
-      const sheetSubtitle = document.getElementById("sheet_subtitle");
-      const advContent = document.getElementById("sheet_adv_content");
-      const advChevron = document.getElementById("sheet_adv_chevron");
-
-      if (task) {
-        this.activeEditingTaskId = task.id;
-        this.sheetTitle.textContent = "Refine Task Details";
-        if (sheetSubtitle) sheetSubtitle.textContent = "Update deadline, category, or recurrence parameters.";
-        this.sheetSubmitBtn.textContent = "Save Changes";
-        if (this.sheetDeleteBtn) this.sheetDeleteBtn.style.display = "inline-flex";
-
-        document.getElementById("task_title").value = task.title;
-        document.getElementById("task_desc").value = task.description || "";
-        document.getElementById("task_due_date").value = task.isLater ? "" : task.dueDate;
-        document.getElementById("task_priority").value = task.priority;
-        this.updatePriorityPillsUI(task.priority);
-        document.getElementById("task_category").value = task.category || "Inbox";
-        document.getElementById("task_duration").value = task.estimatedDuration || 25;
-        document.getElementById("task_recurring").value = task.recurring || "none";
-
-        // Handle accordion state for recurring tasks
-        if (advContent && advChevron) {
-          const hasRecurrence = task.recurring && task.recurring !== "none";
-          advContent.style.display = hasRecurrence ? "block" : "none";
-          advChevron.textContent = hasRecurrence ? "▴" : "▾";
-        }
-
-        const todayStr = getLocalDateString();
-        const tom = new Date(); tom.setDate(tom.getDate() + 1); const tomStr = getLocalDateString(tom);
-        const nW = new Date(); nW.setDate(nW.getDate() + 7); const nWStr = getLocalDateString(nW);
-
-        let chipMatched = false;
-        dateChips.forEach(c => {
-          c.classList.remove("active");
-          const offsetStr = c.getAttribute("data-days");
-          if (offsetStr) {
-            const offset = parseInt(offsetStr);
-            if (offset === 0 && task.dueDate === todayStr && !task.isLater) { c.classList.add("active"); chipMatched = true; }
-            if (offset === 1 && task.dueDate === tomStr && !task.isLater) { c.classList.add("active"); chipMatched = true; }
-            if (offset === 7 && task.dueDate === nWStr && !task.isLater) { c.classList.add("active"); chipMatched = true; }
-          } else if (task.isLater && c.id === "chip_do_later") {
-            c.classList.add("active");
-            chipMatched = true;
-          }
-        });
-
-        if (!chipMatched && !task.isLater && task.dueDate) {
-          const customChip = document.getElementById("chip_custom_date");
-          if (customChip) customChip.classList.add("active");
-          if (dateInput) dateInput.style.display = "block";
-        } else {
-          if (dateInput) dateInput.style.display = "none";
-        }
-      } else {
-        this.activeEditingTaskId = null;
-        this.sheetTitle.textContent = "Capture New Goal";
-        if (sheetSubtitle) sheetSubtitle.textContent = "Configure task objective and execution parameters.";
-        this.sheetSubmitBtn.textContent = "Commit Task";
-        if (this.sheetDeleteBtn) this.sheetDeleteBtn.style.display = "none";
-
-        this.sheetForm.reset();
-
-        // Collapse advanced accordion by default for compact view
-        if (advContent && advChevron) {
-          advContent.style.display = "none";
-          advChevron.textContent = "▾";
-        }
-
-        const initialTitle = initialData?.title || "";
-        const initialPriority = initialData?.priority || this.quickAddState?.priority || "Medium";
-        const initialCategory = initialData?.category || this.quickAddState?.category || "Inbox";
-        const dateMode = initialData?.dateMode || this.quickAddState?.dateMode || "today";
-
-        document.getElementById("task_title").value = initialTitle;
-        document.getElementById("task_desc").value = "";
-        document.getElementById("task_priority").value = initialPriority;
-        this.updatePriorityPillsUI(initialPriority);
-        document.getElementById("task_category").value = initialCategory;
-        document.getElementById("task_duration").value = 25;
-        document.getElementById("task_recurring").value = "none";
-
-        dateChips.forEach(c => c.classList.remove("active"));
-        if (dateInput) dateInput.style.display = "none";
-
-        if (dateMode === "tomorrow") {
-          const tom = new Date(); tom.setDate(tom.getDate() + 1);
-          document.getElementById("task_due_date").value = getLocalDateString(tom);
-          const tomChip = Array.from(dateChips).find(c => c.getAttribute("data-days") === "1");
-          if (tomChip) tomChip.classList.add("active");
-        } else if (dateMode === "later") {
-          document.getElementById("task_due_date").value = "";
-          const laterChip = document.getElementById("chip_do_later");
-          if (laterChip) laterChip.classList.add("active");
-        } else {
-          document.getElementById("task_due_date").value = getLocalDateString();
-          const todayChip = Array.from(dateChips).find(c => c.getAttribute("data-days") === "0");
-          if (todayChip) todayChip.classList.add("active");
-        }
-      }
-
-      setTimeout(() => document.getElementById("task_title").focus(), 200);
-    }
-
-    closeBottomSheet() {
-      this.bottomSheet.classList.remove("visible");
-      this.bottomSheetOverlay.classList.remove("visible");
-      document.body.classList.remove("modal-open");
-      if (this.sheetDeleteBtn) this.sheetDeleteBtn.style.display = "none";
-      const dateInput = document.getElementById("task_due_date");
-      if (dateInput) dateInput.style.display = "none";
-      this.activeEditingTaskId = null;
-      this.isSubmitting = false;
-      if (this.sheetSubmitBtn) this.sheetSubmitBtn.disabled = false;
-    }
-
-    // -------------------------------------------------------------------------
-    // PERSONALITY PROFILER & PRODUCTIVITY DNA DIALOG CONTROLLERS
-    // -------------------------------------------------------------------------
-    openPersonalityQuiz() {
-      if (!this.personalityDialog) return;
-      this.currentQuizStep = 1;
-      this.quizAnswers = this.personalityProfile ? {
-        chronotype: this.personalityProfile.chronotype,
-        procrastination: this.personalityProfile.procrastination,
-        pacing: this.personalityProfile.pacing,
-        coach_voice: this.personalityProfile.coachVoice,
-        capacity_limit: String(this.personalityProfile.capacityLimit || "3")
-      } : {};
-
-      this.personalityDialog.style.display = "flex";
-      document.body.classList.add("modal-open");
-      this.renderQuizStep(1);
-    }
-
-    closePersonalityQuiz() {
-      if (!this.personalityDialog) return;
-      this.personalityDialog.style.display = "none";
-      document.body.classList.remove("modal-open");
-    }
-
-    renderQuizStep(step) {
-      if (!this.personalityStepContent) return;
-      this.currentQuizStep = step;
-
-      // Update Stepper Dots
-      if (this.personalityStepperBar) {
-        const dots = this.personalityStepperBar.querySelectorAll(".stepper_dot");
-        dots.forEach((dot, idx) => {
-          const dotStep = idx + 1;
-          dot.classList.remove("active", "completed");
-          if (dotStep < step || step > 5) {
-            dot.classList.add("completed");
-          } else if (dotStep === step) {
-            dot.classList.add("active");
-          }
-        });
-      }
-
-      // Step 1 to 5: Questions
-      if (step >= 1 && step <= 5) {
-        const qIndex = step - 1;
-        const q = PERSONALITY_QUESTIONS[qIndex];
-        const selectedVal = this.quizAnswers[q.id];
-
-        const titleEl = document.getElementById("personality_dialog_title");
-        if (titleEl) titleEl.textContent = "Productivity DNA Profiler";
-
-        this.personalityStepContent.innerHTML = `
-          <div class="quiz_step_header">
-            <span class="quiz_step_kicker">${this.escapeHTML(q.kicker)}</span>
-            <h3 class="quiz_step_title">${this.escapeHTML(q.title)}</h3>
-            <p class="quiz_step_subtitle">${this.escapeHTML(q.subtitle)}</p>
-          </div>
-          <div class="quiz_options_grid">
-            ${q.options.map(opt => `
-              <div class="personality_option_card ${selectedVal === opt.value ? 'selected' : ''}" data-val="${opt.value}">
-                <div class="option_icon_box">${opt.icon}</div>
-                <div class="option_text_col">
-                  <span class="option_label">${this.escapeHTML(opt.label)}</span>
-                  <span class="option_desc">${this.escapeHTML(opt.desc)}</span>
-                </div>
-              </div>
-            `).join("")}
-          </div>
-        `;
-
-        // Card Selection binds
-        this.personalityStepContent.querySelectorAll(".personality_option_card").forEach(card => {
-          card.addEventListener("click", () => {
-            const val = card.getAttribute("data-val");
-            this.quizAnswers[q.id] = val;
-            this.personalityStepContent.querySelectorAll(".personality_option_card").forEach(c => c.classList.remove("selected"));
-            card.classList.add("selected");
-          });
-        });
-
-        if (this.personalityPrevBtn) {
-          this.personalityPrevBtn.style.display = step > 1 ? "inline-block" : "none";
-        }
-        if (this.personalityNextBtn) {
-          this.personalityNextBtn.textContent = step === 5 ? "Calculate Archetype" : "Continue";
-        }
-      } else if (step === 6) {
-        // Step 6: Archetype Result Screen
-        const archetypeData = computeArchetype(this.quizAnswers);
-        const chronoOpt = PERSONALITY_QUESTIONS[0].options.find(o => o.value === this.quizAnswers.chronotype);
-        const coachOpt = PERSONALITY_QUESTIONS[3].options.find(o => o.value === this.quizAnswers.coach_voice);
-        const pacingOpt = PERSONALITY_QUESTIONS[2].options.find(o => o.value === this.quizAnswers.pacing);
-
-        const titleEl = document.getElementById("personality_dialog_title");
-        if (titleEl) titleEl.textContent = "Your Productivity Archetype";
-
-        this.personalityStepContent.innerHTML = `
-          <div class="personality_result_container">
-            <div class="personality_badge_hero">
-              <div class="personality_hero_icon">${archetypeData.heroIcon}</div>
-              <h3 class="personality_hero_title">${this.escapeHTML(archetypeData.archetype)}</h3>
-              <p class="personality_hero_subtitle">${this.escapeHTML(archetypeData.strategyTip)}</p>
-            </div>
-
-            <div class="personality_traits_grid">
-              <div class="trait_card superpower">
-                <span class="trait_label">⚡ Cognitive Superpower</span>
-                <span class="trait_desc">${this.escapeHTML(archetypeData.superpower)}</span>
-              </div>
-              <div class="trait_card blindspot">
-                <span class="trait_label">⚠️ Psychological Trap</span>
-                <span class="trait_desc">${this.escapeHTML(archetypeData.blindspot)}</span>
-              </div>
-            </div>
-
-            <div class="personality_config_summary">
-              <span class="personality_summary_pill">🌅 ${this.escapeHTML(chronoOpt ? chronoOpt.label.split('(')[0].trim() : 'Peak Energy')}</span>
-              <span class="personality_summary_pill">⏱️ ${this.escapeHTML(pacingOpt ? pacingOpt.label.split('(')[0].trim() : 'Pacing Style')}</span>
-              <span class="personality_summary_pill">🎙️ ${this.escapeHTML(coachOpt ? coachOpt.label : 'Companion Voice')}</span>
-              <span class="personality_summary_pill">🎯 Cap: ${this.quizAnswers.capacity_limit || 3} Goals/Day</span>
-            </div>
-          </div>
-        `;
-
-        if (this.personalityPrevBtn) {
-          this.personalityPrevBtn.style.display = "inline-block";
-        }
-        if (this.personalityNextBtn) {
-          this.personalityNextBtn.textContent = "Apply & Activate Profile";
-        }
-      }
-    }
-
-    handlePersonalityNext() {
-      if (this.currentQuizStep >= 1 && this.currentQuizStep <= 5) {
-        const qIndex = this.currentQuizStep - 1;
-        const q = PERSONALITY_QUESTIONS[qIndex];
-        if (!this.quizAnswers[q.id]) {
-          // Default to first option if none selected
-          this.quizAnswers[q.id] = q.options[0].value;
-        }
-        this.renderQuizStep(this.currentQuizStep + 1);
-      } else if (this.currentQuizStep === 6) {
-        this.savePersonalityProfile();
-      }
-    }
-
-    handlePersonalityPrev() {
-      if (this.currentQuizStep > 1) {
-        this.renderQuizStep(this.currentQuizStep - 1);
-      }
-    }
-
-    savePersonalityProfile() {
-      const archetypeData = computeArchetype(this.quizAnswers);
-      const chronoOpt = PERSONALITY_QUESTIONS[0].options.find(o => o.value === this.quizAnswers.chronotype);
-      const procOpt = PERSONALITY_QUESTIONS[1].options.find(o => o.value === this.quizAnswers.procrastination);
-      const pacingOpt = PERSONALITY_QUESTIONS[2].options.find(o => o.value === this.quizAnswers.pacing);
-      const coachOpt = PERSONALITY_QUESTIONS[3].options.find(o => o.value === this.quizAnswers.coach_voice);
-
-      const profile = {
-        archetype: archetypeData.archetype,
-        heroIcon: archetypeData.heroIcon,
-        superpower: archetypeData.superpower,
-        blindspot: archetypeData.blindspot,
-        strategyTip: archetypeData.strategyTip,
-        chronotype: this.quizAnswers.chronotype || "early_falcon",
-        chronotypeLabel: chronoOpt ? chronoOpt.label : "Morning",
-        procrastination: this.quizAnswers.procrastination || "perfectionism",
-        procrastinationLabel: procOpt ? procOpt.label : "Perfectionist Resistance",
-        pacing: this.quizAnswers.pacing || "sprints",
-        pacingLabel: pacingOpt ? pacingOpt.label : "Sprint Intervals",
-        coachVoice: this.quizAnswers.coach_voice || "stoic",
-        coachVoiceLabel: coachOpt ? coachOpt.label : "The Stoic Strategist",
-        capacityLimit: parseInt(this.quizAnswers.capacity_limit || "3", 10),
-        updatedAt: new Date().toISOString()
-      };
-
-      this.store.setPersonalityProfile(profile);
-      this.closePersonalityQuiz();
-      this.showToast(`🧠 ${profile.archetype} activated! Today's AI strategist is personalized.`, "success");
-
-      // Invalidate existing AI plan so it regenerates tailored to the new profile
-      this.todayAIPlan = null;
-      this.render();
     }
 
-    // -------------------------------------------------------------------------
-    // QUICK-ADD TASK DECK & ADVANCED MODAL CONTROLLERS
-    // -------------------------------------------------------------------------
     bindQuickAddInteractions() {
-      if (!this.quickAddInput) return;
-
-      // Pressing Enter inside input creates task immediately
-      this.quickAddInput.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
+      if (this.quickAddForm) {
+        this.quickAddForm.addEventListener("submit", (e) => {
           e.preventDefault();
           this.submitQuickAdd();
-        } else if (e.key === "Escape") {
-          this.quickAddInput.blur();
-        }
-      });
-
-      // Save button click
-      if (this.qaBtnCommit) {
-        this.qaBtnCommit.addEventListener("click", () => this.submitQuickAdd());
+        });
       }
 
-      // Date Chip Cycle: Today -> Tomorrow -> Later -> Today
+      if (this.quickAddInput) {
+        this.quickAddInput.addEventListener("keydown", (e) => {
+          if (isIMEComposing(e)) return;
+          if (e.key === "Escape") {
+            this.quickAddInput.blur();
+          }
+        });
+      }
+
+      if (this.qaCaptureTabBtn) {
+        this.qaCaptureTabBtn.addEventListener("click", async () => {
+          const res = await sendExtensionMessage({ type: "CAPTURE_ACTIVE_TAB" });
+          if (res && res.success && res.tab) {
+            this.quickAddState.attachedTab = {
+              title: res.tab.title || res.tab.url || "Active Tab",
+              url: sanitizeUrl(res.tab.url || "")
+            };
+            if (this.quickAddInput && !this.quickAddInput.value.trim()) {
+              this.quickAddInput.value = this.quickAddState.attachedTab.title;
+            }
+            this.updateAttachedTabChipUI();
+            if (this.quickAddInput) this.quickAddInput.focus();
+          } else {
+            this.showToast(res && res.error ? res.error : "Active tab capture works inside the Chrome Extension", "info");
+          }
+        });
+      }
+
+      if (this.qaClearTabBtn) {
+        this.qaClearTabBtn.addEventListener("click", () => {
+          this.quickAddState.attachedTab = null;
+          this.updateAttachedTabChipUI();
+        });
+      }
+
       if (this.qaChipDate) {
         this.qaChipDate.addEventListener("click", () => {
           const modes = ["today", "tomorrow", "later"];
-          const currentIdx = modes.indexOf(this.quickAddState.dateMode);
-          const nextMode = modes[(currentIdx + 1) % modes.length];
+          const nextMode = modes[(modes.indexOf(this.quickAddState.dateMode) + 1) % modes.length];
           this.quickAddState.dateMode = nextMode;
-          const labels = { today: "Today", tomorrow: "Tomorrow", later: "Later" };
+          const labels = { today: "Today", tomorrow: "Tomorrow", later: "Backlog" };
           if (this.qaDateText) this.qaDateText.textContent = labels[nextMode];
         });
       }
 
-      // Priority Chip Cycle: Med -> High -> Low -> Med
       if (this.qaChipPriority) {
         this.qaChipPriority.addEventListener("click", () => {
-          const priOrder = ["Medium", "High", "Low"];
-          const currentIdx = priOrder.indexOf(this.quickAddState.priority);
-          const nextPri = priOrder[(currentIdx + 1) % priOrder.length];
+          const order = ["Medium", "High", "Low"];
+          const nextPri = order[(order.indexOf(this.quickAddState.priority) + 1) % order.length];
           this.quickAddState.priority = nextPri;
-          const displayLabels = { Medium: "Steady", High: "Keystone", Low: "Gentle" };
-          if (this.qaPriorityText) this.qaPriorityText.textContent = displayLabels[nextPri] || nextPri;
+          const labels = { Medium: "Steady", High: "Keystone", Low: "Gentle" };
+          if (this.qaPriorityText) this.qaPriorityText.textContent = labels[nextPri];
           const dot = this.qaChipPriority.querySelector(".qa_p_dot");
-          if (dot) {
-            dot.className = "qa_p_dot " + (nextPri === "Medium" ? "med" : nextPri.toLowerCase());
-          }
+          if (dot) dot.className = "qa_p_dot " + (nextPri === "Medium" ? "med" : nextPri.toLowerCase());
         });
       }
 
-      // Category Chip Cycle
       if (this.qaChipCategory) {
         this.qaChipCategory.addEventListener("click", () => {
-          const cats = ["Inbox", "Work", "Personal", "Health", "Finance"];
-          const currentIdx = cats.indexOf(this.quickAddState.category);
-          const nextCat = cats[(currentIdx + 1) % cats.length];
+          const cats = this.store.getCategories();
+          const idx = cats.indexOf(this.quickAddState.category);
+          const nextCat = cats[(idx + 1) % cats.length];
           this.quickAddState.category = nextCat;
           if (this.qaCategoryText) this.qaCategoryText.textContent = nextCat;
         });
       }
 
-      // Advanced Setup Button -> opens redesigned bottom sheet with typed title pre-filled
       if (this.qaBtnAdvanced) {
         this.qaBtnAdvanced.addEventListener("click", () => {
-          const title = this.quickAddInput.value.trim();
+          const title = this.quickAddInput ? this.quickAddInput.value.trim() : "";
           this.openBottomSheet(null, {
             title,
+            url: this.quickAddState.attachedTab ? this.quickAddState.attachedTab.url : "",
             priority: this.quickAddState.priority,
             category: this.quickAddState.category,
             dateMode: this.quickAddState.dateMode
           });
-          this.quickAddInput.value = "";
+          if (this.quickAddInput) this.quickAddInput.value = "";
+          this.quickAddState.attachedTab = null;
+          this.updateAttachedTabChipUI();
         });
+      }
+    }
+
+    updateAttachedTabChipUI() {
+      if (!this.qaAttachedTabChip) return;
+      const tab = this.quickAddState.attachedTab;
+      if (tab && tab.url) {
+        this.qaAttachedTabChip.hidden = false;
+        if (this.qaAttachedTabTitle) {
+          this.qaAttachedTabTitle.textContent = tab.title || tab.url;
+        }
+      } else {
+        this.qaAttachedTabChip.hidden = true;
       }
     }
 
@@ -6747,523 +2883,2299 @@ Return ONLY a valid JSON object matching this schema:
 
       let dueDate = getLocalDateString();
       let isLater = false;
+      if (this.quickAddState.dateMode === "tomorrow") dueDate = getNDaysFromNow(1);
+      else if (this.quickAddState.dateMode === "later") isLater = true;
 
-      if (this.quickAddState.dateMode === "tomorrow") {
-        const tom = new Date();
-        tom.setDate(tom.getDate() + 1);
-        dueDate = getLocalDateString(tom);
-      } else if (this.quickAddState.dateMode === "later") {
-        isLater = true;
-        dueDate = getLocalDateString();
-      }
-
-      const taskData = {
+      const task = this.store.addTask({
         title,
         description: "",
+        url: this.quickAddState.attachedTab ? this.quickAddState.attachedTab.url : "",
         dueDate,
         priority: this.quickAddState.priority || "Medium",
         category: this.quickAddState.category || "Inbox",
         estimatedDuration: 25,
         recurring: "none",
         isLater
-      };
+      });
 
-      const newTask = this.store.addTask(taskData);
       this.quickAddInput.value = "";
+      this.quickAddState.attachedTab = null;
+      this.updateAttachedTabChipUI();
       this.quickAddInput.focus();
 
-      if (newTask) {
-        // Highlight created task card with celebration particles
-        setTimeout(() => {
-          this.triggerCelebration(newTask.id);
-        }, 150);
+      if (task) {
+        setTimeout(() => this.triggerCelebration(task.id), 120);
       }
     }
 
-    updateQuickAddContext(view) {
-      if (!this.quickAddContainer) return;
-      if (view === "completed") {
-        this.quickAddContainer.style.display = "none";
+    bindEveningClosureInteractions() {
+      const moodGroup = document.getElementById("evening_closure_mood_group");
+      let selectedMood = "calm";
+      if (moodGroup) {
+        moodGroup.addEventListener("click", (e) => {
+          const btn = e.target.closest("button[data-mood]");
+          if (!btn) return;
+          selectedMood = btn.getAttribute("data-mood");
+          moodGroup.querySelectorAll("button[data-mood]").forEach((b) => {
+            b.classList.toggle("active", b === btn);
+          });
+        });
+      }
+
+      const commitBtn = document.getElementById("evening_closure_commit_btn");
+      if (commitBtn) {
+        commitBtn.addEventListener("click", () => {
+          const input = document.getElementById("evening_closure_win_input");
+          const winText = input ? input.value.trim() : "";
+          const todayStr = getLocalDateString();
+          const prev = this.store.journal[todayStr] || {};
+          const merged = winText
+            ? (prev.eveningReflection ? `${prev.eveningReflection}\n- Win: ${winText}` : `- Win: ${winText}`)
+            : (prev.eveningReflection || "Completed mindful evening shutdown.");
+
+          this.store.saveJournalEntry(todayStr, {
+            eveningReflection: merged,
+            morningMood: selectedMood,
+            shutdownComplete: true
+          });
+          if (input) input.value = "";
+          this.eveningClosureDismissedDate = todayStr;
+          Storage.savePreference("evening_closure_dismissed", todayStr).catch(() => {});
+          this.store.awardXP(40);
+          this.showToast("Evening closure logged (+40 XP). Rest well.", "success");
+          this.renderEveningClosureCard();
+        });
+      }
+
+      const dismissBtn = document.getElementById("evening_closure_dismiss_btn");
+      if (dismissBtn) {
+        dismissBtn.addEventListener("click", () => {
+          const todayStr = getLocalDateString();
+          this.eveningClosureDismissedDate = todayStr;
+          Storage.savePreference("evening_closure_dismissed", todayStr).catch(() => {});
+          this.renderEveningClosureCard();
+        });
+      }
+    }
+
+    bindTaskDialogInteractions() {
+      if (this.closeSheetBtn) this.closeSheetBtn.addEventListener("click", () => this.closeBottomSheet());
+      const cancelBtn = document.getElementById("btn_cancel_sheet");
+      if (cancelBtn) cancelBtn.addEventListener("click", () => this.closeBottomSheet());
+
+      if (this.sheetDeleteBtn) {
+        this.sheetDeleteBtn.addEventListener("click", async () => {
+          if (this.activeEditingTaskId === null) return;
+          const task = this.store.getTaskById(this.activeEditingTaskId);
+          this.closeBottomSheet();
+          if (task) this.store.deleteTask(task.id);
+        });
+      }
+
+      if (this.sheetForm) {
+        this.sheetForm.addEventListener("submit", (e) => {
+          e.preventDefault();
+          this.handleTaskFormSubmission();
+        });
+
+        // Custom category tag creation via native #confirm_dialog
+        const catSelect = document.getElementById("task_category");
+        let prevCat = "Inbox";
+        if (catSelect) {
+          catSelect.addEventListener("focus", () => {
+            if (catSelect.value !== "custom") prevCat = catSelect.value;
+          });
+          catSelect.addEventListener("change", async () => {
+            if (catSelect.value !== "custom") {
+              prevCat = catSelect.value;
+              return;
+            }
+            const tag = await this.showConfirmDialog({
+              title: "Create Category Tag",
+              message: "Enter a short tag name for grouping tasks.",
+              requireInput: true,
+              inputLabel: "Category Name",
+              inputPlaceholder: "e.g., Design, Study, Home",
+              okLabel: "Add Tag"
+            });
+            const clean = tag ? tag.trim() : "";
+            if (clean) {
+              const formatted = clean.charAt(0).toUpperCase() + clean.slice(1);
+              if (!Array.from(catSelect.options).some((o) => o.value === formatted)) {
+                const opt = document.createElement("option");
+                opt.value = formatted;
+                opt.textContent = formatted;
+                catSelect.insertBefore(opt, catSelect.options[catSelect.options.length - 1]);
+              }
+              catSelect.value = formatted;
+              prevCat = formatted;
+            } else {
+              catSelect.value = prevCat;
+            }
+          });
+        }
+
+        // Priority pills
+        const pillGroup = document.getElementById("priority_pill_group");
+        const priSelect = document.getElementById("task_priority");
+        if (pillGroup && priSelect) {
+          pillGroup.addEventListener("click", (e) => {
+            const pill = e.target.closest(".priority_pill_option");
+            if (!pill) return;
+            const val = pill.getAttribute("data-priority");
+            if (!val) return;
+            priSelect.value = val;
+            this.updatePriorityPillsUI(val);
+          });
+        }
+
+        // Date chips
+        const dateChips = this.sheetForm.querySelectorAll(".date_chip");
+        const dateInput = document.getElementById("task_due_date");
+        dateChips.forEach((chip) => {
+          chip.addEventListener("click", () => {
+            dateChips.forEach((c) => c.classList.remove("active"));
+            chip.classList.add("active");
+            const daysStr = chip.getAttribute("data-days");
+            if (daysStr !== null && dateInput) {
+              dateInput.value = getNDaysFromNow(parseInt(daysStr, 10) || 0);
+              dateInput.hidden = true;
+              dateInput.style.display = "none";
+            } else if (chip.id === "chip_custom_date" && dateInput) {
+              dateInput.hidden = false;
+              dateInput.style.display = "block";
+              if (!dateInput.value) dateInput.value = getLocalDateString();
+              dateInput.focus();
+            } else if (dateInput) {
+              dateInput.value = "";
+              dateInput.hidden = true;
+              dateInput.style.display = "none";
+            }
+          });
+        });
+      }
+    }
+
+    bindRoutineDialogInteractions() {
+      if (this.closeRoutineSheetBtn) {
+        this.closeRoutineSheetBtn.addEventListener("click", () => this.closeRoutineSheet());
+      }
+      if (this.routineForm) {
+        this.routineForm.addEventListener("submit", (e) => {
+          e.preventDefault();
+          this.handleRoutineFormSubmission();
+        });
+      }
+    }
+
+    bindHabitDialogInteractions() {
+      if (this.closeHabitSheetBtn) {
+        this.closeHabitSheetBtn.addEventListener("click", () => this.closeHabitSheet());
+      }
+      if (this.habitForm) {
+        this.habitForm.addEventListener("submit", (e) => {
+          e.preventDefault();
+          if (this.isSubmitting) return;
+          const title = (document.getElementById("habit_title")?.value || "").trim();
+          const cat = document.getElementById("habit_category")?.value || "Routine";
+          const color = document.getElementById("habit_color")?.value || "indigo";
+          if (!title) return;
+
+          this.isSubmitting = true;
+          if (this.activeEditingHabitId !== null) {
+            this.store.updateHabit(this.activeEditingHabitId, { title, category: cat, color });
+            this.evaluateHabitWithAI(title, this.activeEditingHabitId);
+          } else {
+            const created = this.store.addHabit(title, cat, color);
+            if (created) this.evaluateHabitWithAI(title, created.id);
+          }
+          this.closeHabitSheet();
+        });
+      }
+    }
+
+    bindPersonalityDialogInteractions() {
+      if (this.closePersonalityDialogBtn) {
+        this.closePersonalityDialogBtn.addEventListener("click", () => this.closePersonalityQuiz());
+      }
+      if (this.personalitySkipBtn) {
+        this.personalitySkipBtn.addEventListener("click", () => this.closePersonalityQuiz());
+      }
+      if (this.personalityPrevBtn) {
+        this.personalityPrevBtn.addEventListener("click", () => this.handlePersonalityPrev());
+      }
+      if (this.personalityNextBtn) {
+        this.personalityNextBtn.addEventListener("click", () => this.handlePersonalityNext());
+      }
+    }
+
+    bindConfirmDialogInteractions() {
+      if (!this.confirmDialog) return;
+      if (this.confirmCancelBtn) {
+        this.confirmCancelBtn.addEventListener("click", () => {
+          const resolve = this.confirmResolver;
+          this.confirmResolver = null;
+          this.closeDialog(this.confirmDialog);
+          if (resolve) resolve(this.confirmRequireInput ? null : false);
+        });
+      }
+      if (this.confirmForm) {
+        this.confirmForm.addEventListener("submit", (e) => {
+          e.preventDefault();
+          if (this.confirmRequireInput && this.confirmInput) {
+            const val = this.confirmInput.value.trim();
+            if (this.confirmMatchText && val !== this.confirmMatchText) {
+              this.showToast(`Type "${this.confirmMatchText}" exactly to confirm`, "error");
+              this.confirmInput.focus();
+              return;
+            }
+            const resolve = this.confirmResolver;
+            this.confirmResolver = null;
+            this.closeDialog(this.confirmDialog);
+            if (resolve) resolve(val);
+            return;
+          }
+          const resolve = this.confirmResolver;
+          this.confirmResolver = null;
+          this.closeDialog(this.confirmDialog);
+          if (resolve) resolve(true);
+        });
+      }
+      this.confirmDialog.addEventListener("cancel", () => {
+        if (this.confirmResolver) {
+          const resolve = this.confirmResolver;
+          this.confirmResolver = null;
+          resolve(this.confirmRequireInput ? null : false);
+        }
+      });
+    }
+
+    bindTimerInteractions() {
+      const bindClick = (id, fn) => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener("click", fn);
+      };
+
+      // Focus panel controls (PiP is opt-in only via #timer_pip_toggle_btn)
+      bindClick("timer_play_btn", () => this.store.startTimer());
+      bindClick("timer_pause_btn", () => this.store.pauseTimer());
+      bindClick("timer_stop_btn", () => {
+        this.store.resetTimer();
+        this.closeDocumentPiP();
+      });
+      bindClick("timer_restart_btn", () => this.store.restartTimer());
+      bindClick("timer_skip_btn", () => this.store.skipTimerInterval(true));
+      bindClick("timer_pomo_btn", () => this.store.changeTimerType("pomodoro"));
+      bindClick("timer_short_btn", () => this.store.changeTimerType("shortBreak"));
+      bindClick("timer_long_btn", () => this.store.changeTimerType("longBreak"));
+      bindClick("timer_stopwatch_btn", () => this.store.changeTimerType("stopwatch"));
+      bindClick("timer_dismiss_alarm_btn", () => this.dismissTimerAlarm());
+      bindClick("timer_start_next_btn", () => {
+        this.dismissTimerAlarm();
+        this.store.startTimer();
+      });
+
+      if (this.timerPipToggleBtn) {
+        this.timerPipToggleBtn.addEventListener("click", () => {
+          if (this.pipWindow) this.closeDocumentPiP();
+          else this.openDocumentPiP();
+        });
+      }
+
+      bindClick("btn_timer_dec", () => {
+        if (this.store.timer.isRunning) {
+          this.showToast("Pause timer before adjusting duration", "info");
+          return;
+        }
+        const next = Math.max(300, this.store.timer.duration - 300);
+        this.store.timer.duration = next;
+        this.store.timer.totalDuration = next;
+        this.updateTimerCountdown(this.store.timer);
+      });
+
+      bindClick("btn_timer_inc", () => {
+        if (this.store.timer.isRunning) {
+          this.showToast("Pause timer before adjusting duration", "info");
+          return;
+        }
+        const next = Math.min(7200, this.store.timer.duration + 300);
+        this.store.timer.duration = next;
+        this.store.timer.totalDuration = next;
+        this.updateTimerCountdown(this.store.timer);
+      });
+
+      const openCustomDuration = async () => {
+        if (this.store.timer.isRunning) {
+          this.showToast("Pause timer before setting custom minutes", "info");
+          return;
+        }
+        const currentMins = Math.max(1, Math.round(this.store.timer.duration / 60));
+        const raw = await this.showConfirmDialog({
+          title: "Custom Timer Duration",
+          message: "Enter focus duration in minutes (1 to 180).",
+          requireInput: true,
+          inputLabel: "Minutes",
+          inputType: "number",
+          defaultValue: currentMins,
+          okLabel: "Apply"
+        });
+        if (raw === null) return;
+        const mins = parseInt(raw, 10);
+        if (Number.isNaN(mins) || mins < 1 || mins > 180) {
+          this.showToast("Enter a number between 1 and 180", "error");
+          return;
+        }
+        this.store.timer.duration = mins * 60;
+        this.store.timer.totalDuration = mins * 60;
+        this.updateTimerCountdown(this.store.timer);
+        this.showToast(`Timer set to ${mins} minutes`, "success");
+      };
+      bindClick("timer_custom_duration_btn", openCustomDuration);
+      bindClick("timer_countdown_text", openCustomDuration);
+
+      // Docked Mini-Timer Bar
+      if (this.miniTimerToggleBtn) {
+        this.miniTimerToggleBtn.addEventListener("click", () => {
+          if (this.store.timer.isRunning) this.store.pauseTimer();
+          else this.store.startTimer();
+        });
+      }
+      if (this.miniTimerOpenBtn) {
+        this.miniTimerOpenBtn.addEventListener("click", () => this.store.setView("focus"));
+      }
+      if (this.miniTimerStopBtn) {
+        this.miniTimerStopBtn.addEventListener("click", () => {
+          this.store.resetTimer();
+          this.closeDocumentPiP();
+        });
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // Theme, Circadian Phase, Offline & Chrome Updates
+    // -----------------------------------------------------------------------
+    updateThemeClasses() {
+      const theme = this.store.theme || "dark";
+      const accent = this.store.accent || "aurora";
+      const legacyAccent = LEGACY_ACCENT_CLASS[accent] || "indigo";
+      const resolvedTheme =
+        theme === "system"
+          ? (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
+          : theme;
+
+      document.body.classList.remove("theme-dark", "theme-light", "accent-indigo", "accent-emerald", "accent-rose", "accent-amber");
+      document.body.classList.add(`theme-${resolvedTheme}`, `accent-${legacyAccent}`);
+      document.body.dataset.theme = theme;
+      document.body.dataset.accent = accent;
+      document.body.dataset.style = this.store.uiStyle || "atelier";
+
+      const meta = document.querySelector('meta[name="color-scheme"]');
+      if (meta) {
+        meta.setAttribute("content", theme === "system" ? "light dark" : theme);
+      }
+    }
+
+    updateCircadianPhase() {
+      const phase = getCircadianPhase();
+      document.body.dataset.phase = phase.id;
+      if (this.phaseDot) this.phaseDot.title = phase.label;
+      if (this.phaseLabel) this.phaseLabel.textContent = phase.label;
+    }
+
+    updateSidebarClass() {
+      if (this.appContainer) {
+        this.appContainer.classList.toggle("collapsed", this.store.sidebarCollapsed);
+      }
+    }
+
+    updateOfflineBadge() {
+      if (!this.offlineBadge) return;
+      const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+      this.offlineBadge.hidden = !offline;
+    }
+
+    updateActiveTabUI() {
+      const active = this.store.currentView;
+      this.navButtons.forEach((btn) => {
+        const v = btn.getAttribute("data-view");
+        const isCurrent = v === active;
+        btn.classList.toggle("active", isCurrent);
+        if (isCurrent) btn.setAttribute("aria-current", "page");
+        else btn.removeAttribute("aria-current");
+      });
+    }
+
+    updateGlobalStreakBadge() {
+      if (!this.streakCountEl) return;
+      let maxStreak = 0;
+      for (let i = 0; i < this.store.habits.length; i++) {
+        const s = this.store.habits[i].streak || 0;
+        if (s > maxStreak) maxStreak = s;
+      }
+      this.streakCountEl.textContent = String(maxStreak);
+    }
+
+    populateCategoryDropdowns() {
+      const cats = this.store.getCategories();
+      const filterHTML = `<option value="All">All Tags</option>` + cats.map((c) => `<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`).join("");
+      const current = this.store.filters.category || "All";
+
+      [this.filterCategory, this.planFilterCategory].forEach((sel) => {
+        if (!sel) return;
+        sel.innerHTML = filterHTML;
+        sel.value = cats.includes(current) ? current : "All";
+      });
+
+      const taskCatSelect = document.getElementById("task_category");
+      if (taskCatSelect) {
+        const prev = taskCatSelect.value || "Inbox";
+        taskCatSelect.innerHTML =
+          cats.map((c) => `<option value="${escapeHTML(c)}">${escapeHTML(c)}</option>`).join("") +
+          `<option value="custom">+ Create Tag...</option>`;
+        taskCatSelect.value = cats.includes(prev) ? prev : "Inbox";
+      }
+    }
+
+    populateCreationFormsFromConfigs() {
+      const fill = (id, list, extra = "") => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.innerHTML = list.map((item) => {
+          const v = typeof item === "string" ? item : item.value;
+          const l = typeof item === "string" ? item : item.label;
+          return `<option value="${escapeHTML(v)}">${escapeHTML(l)}</option>`;
+        }).join("") + extra;
+      };
+
+      fill("task_priority", CONFIG_CAPTURE_NEW_GOAL.priorities);
+      fill("task_duration", CONFIG_CAPTURE_NEW_GOAL.durations);
+      fill("task_recurring", CONFIG_CAPTURE_NEW_GOAL.recurrences);
+      fill("routine_category", CONFIG_SCHEDULE_ROUTINE.categories);
+      fill("routine_color", CONFIG_SCHEDULE_ROUTINE.colors);
+      fill("habit_category", CONFIG_CREATE_HABIT.categories);
+      fill("habit_color", CONFIG_CREATE_HABIT.colors);
+
+      const templatesBox = document.getElementById("habit_templates");
+      if (templatesBox) {
+        templatesBox.innerHTML = CONFIG_CREATE_HABIT.templates
+          .map((tpl) => `<button type="button" class="template_chip" data-title="${escapeHTML(tpl.title)}" data-cat="${escapeHTML(tpl.cat)}" data-color="${escapeHTML(tpl.color)}">${escapeHTML(tpl.label)}</button>`)
+          .join("");
+        templatesBox.addEventListener("click", (e) => {
+          const chip = e.target.closest(".template_chip");
+          if (!chip) return;
+          const titleEl = document.getElementById("habit_title");
+          const catEl = document.getElementById("habit_category");
+          const colEl = document.getElementById("habit_color");
+          if (titleEl) titleEl.value = chip.getAttribute("data-title") || "";
+          if (catEl) catEl.value = chip.getAttribute("data-cat") || "Routine";
+          if (colEl) colEl.value = chip.getAttribute("data-color") || "indigo";
+          templatesBox.querySelectorAll(".template_chip").forEach((c) => c.classList.toggle("active", c === chip));
+        });
+      }
+    }
+
+    syncFilterInputsUI() {
+      if (this.searchInput && this.searchInput.value !== this.store.filters.search) {
+        this.searchInput.value = this.store.filters.search;
+      }
+      if (this.planSearchInput && this.planSearchInput.value !== this.store.filters.search) {
+        this.planSearchInput.value = this.store.filters.search;
+      }
+      if (this.filterPriority) this.filterPriority.value = this.store.filters.priority;
+      if (this.planFilterPriority) this.planFilterPriority.value = this.store.filters.priority;
+      if (this.filterCategory) this.filterCategory.value = this.store.filters.category;
+      if (this.planFilterCategory) this.planFilterCategory.value = this.store.filters.category;
+    }
+
+    // -----------------------------------------------------------------------
+    // Main View Router
+    // -----------------------------------------------------------------------
+    render() {
+      const active = this.store.currentView;
+
+      Object.keys(this.panels).forEach((key) => {
+        const panel = this.panels[key];
+        if (!panel) return;
+        const isActive = key === active;
+        panel.hidden = !isActive;
+        panel.style.display = isActive ? (key === "focus" ? "flex" : "block") : "none";
+      });
+
+      document.body.classList.toggle("view-timer-active", active === "focus");
+      this.updateGlobalStreakBadge();
+      this.renderMiniTimerBar(this.store.timer);
+
+      const titles = {
+        today: "Today",
+        plan: this.store.planMode === "routine" ? "Daily Rhythm" : "Plan & Pipeline",
+        habits: this.store.habitsMode === "history" ? "Habit Trajectory" : "Atomic Habits",
+        focus: "Flow Timer",
+        insights: "Insights",
+        journal: "Reflection",
+        settings: "Settings"
+      };
+      if (this.viewTitle) {
+        this.viewTitle.textContent = titles[active] || "Aurora";
+      }
+      if (this.viewCount) {
+        const showCount = active === "today" || (active === "plan" && this.store.planMode === "pipeline");
+        this.viewCount.hidden = !showCount;
+        this.viewCount.style.display = showCount ? "inline-flex" : "none";
+      }
+
+      if (active === "today") this.renderTodayView();
+      else if (active === "plan") this.renderPlanView();
+      else if (active === "habits") this.renderHabitsView();
+      else if (active === "focus") this.renderTimerUI(this.store.timer);
+      else if (active === "insights") this.renderInsightsUI();
+      else if (active === "journal") this.renderJournalUI();
+      else if (active === "settings") this.renderSettingsUI();
+    }
+
+    // -----------------------------------------------------------------------
+    // 1. TODAY COMMAND FEED (Unified Home)
+    // -----------------------------------------------------------------------
+    renderTodayView() {
+      this.updateTodayFilterPillsUI();
+      this.syncFilterInputsUI();
+      this.renderTodayHeroCard();
+      this.renderTodayCircadianBlocks();
+      this.updateTodayMomentumMetrics();
+      this.renderTodayHabitStrip();
+      this.renderTodayTaskList();
+      this.renderEveningClosureCard();
+      this.loadInspirationalQuote();
+    }
+
+    updateTodayFilterPillsUI() {
+      const container = document.getElementById("today_filter_pills");
+      if (!container) return;
+      container.querySelectorAll("button[data-today-filter]").forEach((btn) => {
+        const active = btn.getAttribute("data-today-filter") === this.store.todayFilter;
+        btn.classList.toggle("active", active);
+        btn.setAttribute("aria-pressed", String(active));
+      });
+    }
+
+    renderTodayHeroCard() {
+      const nudgeBox = document.getElementById("dash_focus_nudge_area");
+      const bridgeSlot = document.getElementById("morning_bridge_slot");
+
+      if (bridgeSlot) {
+        const morningPlan = this.getMorningMomentumPlan();
+        if (morningPlan) {
+          bridgeSlot.innerHTML = this.renderMorningMomentumCardHTML(morningPlan);
+          this.bindMorningCardEvents(morningPlan);
+        } else {
+          bridgeSlot.innerHTML = "";
+        }
+      }
+
+      if (!nudgeBox) return;
+
+      if (this.store.timer.isRunning) {
+        const activeTask = this.store.timer.activeTaskId ? this.store.getTaskById(this.store.timer.activeTaskId) : null;
+        const mins = Math.floor(Math.abs(this.store.timer.duration) / 60);
+        const secs = Math.abs(this.store.timer.duration) % 60;
+        const formatted = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+
+        nudgeBox.innerHTML = `
+          <div class="dash_nudge_prompt_card active_focus">
+            <div class="nudge_text">
+              <span class="nudge_kicker">FLOW SESSION LIVE</span>
+              <h3>${escapeHTML(activeTask ? activeTask.title : (this.store.timer.activeTaskTitle || "Deep Focus"))}</h3>
+              <p>${formatted} remaining</p>
+            </div>
+            <div class="nudge_actions">
+              <button type="button" class="nudge_focus_btn" data-nudge="goto-timer">Open Timer</button>
+              <button type="button" class="nudge_focus_btn secondary" data-nudge="stop-timer">Stop</button>
+            </div>
+          </div>
+        `;
+      } else {
+        const todayStr = getLocalDateString();
+        let keystone = null;
+        for (let i = 0; i < this.store.tasks.length; i++) {
+          const t = this.store.tasks[i];
+          if (t.id === "general_focus" || t.completed || t.isLater) continue;
+          if (!keystone) {
+            keystone = t;
+          } else if (t.dueDate <= todayStr && keystone.dueDate > todayStr) {
+            keystone = t;
+          } else if (t.priority === "High" && keystone.priority !== "High" && t.dueDate <= todayStr) {
+            keystone = t;
+          }
+        }
+
+        if (keystone) {
+          nudgeBox.innerHTML = `
+            <div class="dash_nudge_prompt_card">
+              <div class="nudge_text">
+                <span class="nudge_kicker">NEXT UP · KEYSTONE FOCUS</span>
+                <h3>${escapeHTML(keystone.title)}</h3>
+                <p>${keystone.description ? escapeHTML(keystone.description) : `${keystone.estimatedDuration || 25}m · ${escapeHTML(keystone.category)}`}</p>
+              </div>
+              <button type="button" class="nudge_focus_btn" data-nudge="start-keystone" data-task-id="${escapeHTML(String(keystone.id))}">
+                Start ${keystone.estimatedDuration || 25}m Focus
+              </button>
+            </div>
+          `;
+        } else {
+          nudgeBox.innerHTML = `
+            <div class="dash_nudge_prompt_card clean_slate">
+              <div class="nudge_text">
+                <span class="nudge_kicker">CLEAR HORIZON</span>
+                <h3>All active priorities cleared</h3>
+                <p>Capture your next intention above or take a restorative break.</p>
+              </div>
+            </div>
+          `;
+        }
+      }
+
+      if (!nudgeBox.dataset.bound) {
+        nudgeBox.dataset.bound = "true";
+        nudgeBox.addEventListener("click", (e) => {
+          const btn = e.target.closest("button[data-nudge]");
+          if (!btn) return;
+          const act = btn.getAttribute("data-nudge");
+          if (act === "goto-timer") {
+            this.store.setView("focus");
+          } else if (act === "stop-timer") {
+            this.store.resetTimer();
+          } else if (act === "start-keystone") {
+            const id = btn.getAttribute("data-task-id");
+            const task = this.store.getTaskById(id);
+            this.store.setView("focus");
+            if (task) this.store.startTimer(task.id);
+          }
+        });
+      }
+    }
+
+    renderTodayCircadianBlocks() {
+      const nowNode = document.getElementById("dash_now_block");
+      const nextNode = document.getElementById("dash_next_block");
+      if (!nowNode && !nextNode) return;
+
+      const map = this.getNowNextRoutine();
+      if (nowNode) {
+        nowNode.innerHTML = map.now
+          ? `<div class="dash_rout_card border-${escapeHTML(map.now.color || "indigo")}"><div class="dash_rout_text"><h4>${escapeHTML(map.now.icon ? `${map.now.icon} ` : "")}${escapeHTML(map.now.title)}</h4><p>${escapeHTML(map.now.startTime)} – ${escapeHTML(map.now.endTime)}</p></div></div>`
+          : `<div class="dash_rout_empty">Open breathing space</div>`;
+      }
+      if (nextNode) {
+        nextNode.innerHTML = map.next
+          ? `<div class="dash_rout_card next border-${escapeHTML(map.next.color || "indigo")}"><div class="dash_rout_text"><h4>${escapeHTML(map.next.icon ? `${map.next.icon} ` : "")}${escapeHTML(map.next.title)}</h4><p>Next at ${escapeHTML(map.next.startTime)}</p></div></div>`
+          : `<div class="dash_rout_empty">No more blocks today</div>`;
+      }
+    }
+
+    getNowNextRoutine() {
+      const now = new Date();
+      const currentMin = now.getHours() * 60 + now.getMinutes();
+      const dayLabel = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][now.getDay()];
+      const todayRoutines = this.store.routines.filter((r) => Array.isArray(r.days) && r.days.includes(dayLabel));
+
+      let activeBlock = null;
+      let upcomingBlock = null;
+      let minDiff = Infinity;
+
+      for (let i = 0; i < todayRoutines.length; i++) {
+        const rout = todayRoutines[i];
+        const [sH, sM] = (rout.startTime || "00:00").split(":").map(Number);
+        const [eH, eM] = (rout.endTime || "00:00").split(":").map(Number);
+        const sMin = sH * 60 + sM;
+        const eMin = eH * 60 + eM;
+        if (currentMin >= sMin && currentMin <= eMin) {
+          activeBlock = rout;
+        } else if (sMin > currentMin && sMin - currentMin < minDiff) {
+          minDiff = sMin - currentMin;
+          upcomingBlock = rout;
+        }
+      }
+
+      if (!upcomingBlock && todayRoutines.length > 0) {
+        const sorted = [...todayRoutines].sort((a, b) => a.startTime.localeCompare(b.startTime));
+        upcomingBlock = sorted[0];
+      }
+      return { now: activeBlock, next: upcomingBlock };
+    }
+
+    updateTodayMomentumMetrics() {
+      const todayStr = getLocalDateString();
+
+      let pendingToday = 0;
+      let todayFocusMin = 0;
+      for (let i = 0; i < this.store.tasks.length; i++) {
+        const t = this.store.tasks[i];
+        if (t.id !== "general_focus" && !t.completed && !t.isLater && t.dueDate <= todayStr) {
+          pendingToday += 1;
+        }
+        if (Array.isArray(t.focusSessions)) {
+          for (let j = 0; j < t.focusSessions.length; j++) {
+            const fs = t.focusSessions[j];
+            if (fs && fs.startTime && getLocalDateString(fs.startTime) === todayStr) {
+              todayFocusMin += fs.duration || 0;
+            }
+          }
+        }
+      }
+
+      // Count tasks completed today from loaded caches or estimate cleanly
+      let completedToday = 0;
+      for (const t of this.store.taskMap.values()) {
+        if (t.id !== "general_focus" && t.completed && t.completedDate && getLocalDateString(t.completedDate) === todayStr) {
+          completedToday += 1;
+        }
+      }
+
+      const totalTodayTasks = pendingToday + completedToday;
+      const taskPct = totalTodayTasks > 0 ? Math.min(1, completedToday / totalTodayTasks) : (this.store.completedCount > 0 ? 1 : 0);
+
+      let habitsDone = 0;
+      for (let i = 0; i < this.store.habits.length; i++) {
+        const h = this.store.habits[i];
+        if (h.history && h.history[todayStr] === true) habitsDone += 1;
+      }
+      const habitPct = this.store.habits.length > 0 ? Math.min(1, habitsDone / this.store.habits.length) : 0;
+
+      // Focus target: 50 mins/day contributes 20% to Daily Momentum Score
+      const focusPct = Math.min(1, todayFocusMin / 50);
+      const momentumScore = Math.round(Math.min(100, (taskPct * 50) + (habitPct * 30) + (focusPct * 20)));
+
+      this.updateCircularProgressRing("ring_tasks_today", taskPct);
+      this.updateCircularProgressRing("ring_habits_today", habitPct);
+      this.updateCircularProgressRing("header_momentum_ring", momentumScore / 100);
+
+      const tasksLabel = document.getElementById("dash_tasks_pct_label");
+      const habitsLabel = document.getElementById("dash_habits_pct_label");
+      const momentumEl = document.getElementById("dash_momentum_score");
+
+      if (tasksLabel) tasksLabel.textContent = `${Math.round(taskPct * 100)}%`;
+      if (habitsLabel) habitsLabel.textContent = `${Math.round(habitPct * 100)}%`;
+      if (this.headerMomentumPct) this.headerMomentumPct.textContent = `${momentumScore}%`;
+      if (momentumEl) momentumEl.textContent = `${momentumScore} · ${this.store.xpTotal} XP`;
+    }
+
+    updateCircularProgressRing(elementId, percentage) {
+      const ring = document.getElementById(elementId);
+      if (!ring || !ring.r) return;
+      const radius = ring.r.baseVal.value || 40;
+      const circ = 2 * Math.PI * radius;
+      const clamped = Math.min(Math.max(Number(percentage) || 0, 0), 1);
+      ring.style.strokeDasharray = `${circ} ${circ}`;
+      ring.style.strokeDashoffset = String(circ * (1 - clamped));
+    }
+
+    renderTodayHabitStrip() {
+      const list = document.getElementById("today_habit_strip_list");
+      const countEl = document.getElementById("today_habit_strip_count");
+      if (!list) return;
+
+      const todayStr = getLocalDateString();
+      const habits = this.store.habits;
+      let done = 0;
+
+      if (habits.length === 0) {
+        if (countEl) countEl.textContent = "0/0";
+        list.innerHTML = `<span class="habit_strip_empty">No daily habits yet</span>`;
         return;
       }
-      this.quickAddContainer.style.display = "block";
 
-      if (view === "today") {
-        this.quickAddState.dateMode = "today";
-        if (this.qaDateText) this.qaDateText.textContent = "Today";
-        if (this.quickAddInput) this.quickAddInput.placeholder = "＋ Capture today's core intention... (Press Enter)";
-      } else if (view === "tomorrow") {
-        this.quickAddState.dateMode = "tomorrow";
-        if (this.qaDateText) this.qaDateText.textContent = "Tomorrow";
-        if (this.quickAddInput) this.quickAddInput.placeholder = "＋ Anchor tomorrow's milestone in advance... (Press Enter)";
-      } else if (view === "later") {
-        this.quickAddState.dateMode = "later";
-        if (this.qaDateText) this.qaDateText.textContent = "Backlog";
-        if (this.quickAddInput) this.quickAddInput.placeholder = "＋ Park an intention for mindful incubation... (Press Enter)";
-      } else if (view === "upcoming") {
-        this.quickAddState.dateMode = "tomorrow";
-        if (this.qaDateText) this.qaDateText.textContent = "Upcoming";
-        if (this.quickAddInput) this.quickAddInput.placeholder = "＋ Architect an upcoming milestone... (Press Enter)";
-      } else {
-        this.quickAddState.dateMode = "today";
-        if (this.qaDateText) this.qaDateText.textContent = "Today";
-        if (this.quickAddInput) this.quickAddInput.placeholder = "＋ Capture your next breakthrough intention... (Type and press Enter)";
+      let html = "";
+      for (let i = 0; i < habits.length; i++) {
+        const h = habits[i];
+        const isDone = Boolean(h.history && h.history[todayStr] === true);
+        if (isDone) done += 1;
+        html += `
+          <button type="button"
+            class="habit_strip_pill color-${escapeHTML(h.color || "indigo")} ${isDone ? "done" : ""}"
+            id="habit_checkbox_${escapeHTML(h.id)}_${todayStr}"
+            data-habit-id="${escapeHTML(h.id)}"
+            aria-pressed="${isDone}">
+            <span class="habit_strip_check">${isDone ? "✓" : ""}</span>
+            <span class="habit_strip_label">${escapeHTML(h.title)}</span>
+            <span class="habit_strip_streak">${h.streak || 0}d</span>
+          </button>
+        `;
       }
+      if (countEl) countEl.textContent = `${done}/${habits.length}`;
+      list.innerHTML = html;
     }
 
-    bindPriorityPills() {
-      const pillGroup = document.getElementById("priority_pill_group");
-      const prioritySelect = document.getElementById("task_priority");
-      if (!pillGroup || !prioritySelect) return;
-
-      pillGroup.addEventListener("click", (e) => {
-        const pill = e.target.closest(".priority_pill_option");
-        if (!pill) return;
-        const val = pill.getAttribute("data-priority");
-        if (!val) return;
-        prioritySelect.value = val;
-        this.updatePriorityPillsUI(val);
-      });
-    }
-
-    updatePriorityPillsUI(selectedVal) {
-      const pills = document.querySelectorAll("#priority_pill_group .priority_pill_option");
-      pills.forEach(p => {
-        p.classList.toggle("active", p.getAttribute("data-priority") === selectedVal);
-      });
-    }
-
-    bindSheetAdvancedToggle() {
-      const btn = document.getElementById("btn_toggle_sheet_adv");
-      const content = document.getElementById("sheet_adv_content");
-      const chevron = document.getElementById("sheet_adv_chevron");
-      if (!btn || !content) return;
-
-      btn.addEventListener("click", () => {
-        const isHidden = content.style.display === "none";
-        content.style.display = isHidden ? "block" : "none";
-        if (chevron) chevron.textContent = isHidden ? "▴" : "▾";
-      });
-    }
-
-    handleFormSubmission() {
-      if (this.isSubmitting) return;
-
-      const title = document.getElementById("task_title").value.trim();
-      const description = document.getElementById("task_desc").value.trim();
-      let dueDate = document.getElementById("task_due_date").value;
-      const priority = document.getElementById("task_priority").value;
-      const category = document.getElementById("task_category").value;
-      const estimatedDuration = parseInt(document.getElementById("task_duration").value) || 25;
-      const recurring = document.getElementById("task_recurring").value;
-
-      if (!title) return;
-
-      this.isSubmitting = true;
-      if (this.sheetSubmitBtn) this.sheetSubmitBtn.disabled = true;
-
-      const doLaterChip = this.sheetForm.querySelector("#chip_do_later");
-      const isLater = (doLaterChip && doLaterChip.classList.contains("active")) || !dueDate;
-
-      if (isLater && !dueDate) {
-        dueDate = getLocalDateString(); // default safe date fallback
+    renderEveningClosureCard() {
+      const card = document.getElementById("evening_closure_card");
+      if (!card) return;
+      const todayStr = getLocalDateString();
+      const entry = this.store.journal[todayStr];
+      if ((entry && entry.shutdownComplete) || this.eveningClosureDismissedDate === todayStr) {
+        card.hidden = true;
+        return;
       }
 
-      const formData = { title, description, dueDate, priority, category, estimatedDuration, recurring, isLater };
+      const hour = new Date().getHours();
+      let pendingToday = 0;
+      let completedToday = 0;
+      for (const t of this.store.taskMap.values()) {
+        if (t.id === "general_focus") continue;
+        if (!t.completed && !t.isLater && t.dueDate <= todayStr) pendingToday += 1;
+        if (t.completed && t.completedDate && getLocalDateString(t.completedDate) === todayStr) completedToday += 1;
+      }
+      const total = pendingToday + completedToday;
+      const ratio = total > 0 ? completedToday / total : 0;
 
-      if (this.activeEditingTaskId !== null) {
-        this.store.updateTask(this.activeEditingTaskId, formData);
-        this.closeBottomSheet();
+      card.hidden = !(hour >= 18 || (total > 0 && ratio >= 0.8));
+    }
+
+    async loadInspirationalQuote() {
+      const quoteEl = document.getElementById("dash_wisdom_prompt_quote");
+      if (!quoteEl) return;
+
+      const offlineQuotes = [
+        { quote: "Simplify. Focus on the single next action.", author: "Don Norman" },
+        { quote: "Motivation gets you started. Habit keeps you going.", author: "Jim Ryun" },
+        { quote: "Make good habits obvious, easy, and immediately rewarding.", author: "James Clear" },
+        { quote: "Protect your peak hours for deep, unhurried work.", author: "Cal Newport" },
+        { quote: "A clear evening shutdown restores tomorrow's focus.", author: "Cal Newport" },
+        { quote: "Small daily disciplines compound into lasting momentum.", author: "James Clear" }
+      ];
+
+      const now = Date.now();
+      if (this.cachedQuote && now - this.lastQuoteFetchTime < 3600000) {
+        quoteEl.textContent = this.cachedQuote;
+        return;
+      }
+
+      const fallback = offlineQuotes[new Date().getDate() % offlineQuotes.length];
+      this.cachedQuote = `"${fallback.quote}" — ${fallback.author}`;
+      this.lastQuoteFetchTime = now;
+      quoteEl.textContent = this.cachedQuote;
+    }
+
+    // -----------------------------------------------------------------------
+    // Virtualized Task List Filtering, Grouping & Row Rendering
+    // -----------------------------------------------------------------------
+    getFilteredActiveTasks(filterMode) {
+      const todayStr = getLocalDateString();
+      const tomorrowStr = getNDaysFromNow(1);
+      const upcomingEndStr = getNDaysFromNow(7);
+      const search = (this.store.filters.search || "").trim().toLowerCase();
+      const priority = this.store.filters.priority || "All";
+      const category = this.store.filters.category || "All";
+
+      const result = [];
+      const tasks = this.store.tasks;
+
+      for (let i = 0; i < tasks.length; i++) {
+        const t = tasks[i];
+        if (!t || t.id === "general_focus" || t.completed) continue;
+
+        // Scope filter
+        if (filterMode === "later") {
+          if (!t.isLater) continue;
+        } else if (filterMode === "high") {
+          if (t.isLater || t.priority !== "High") continue;
+        } else if (filterMode === "today") {
+          if (t.isLater || t.dueDate > todayStr) continue;
+        } else if (filterMode === "tomorrow") {
+          if (t.isLater || t.dueDate !== tomorrowStr) continue;
+        } else if (filterMode === "upcoming") {
+          if (t.isLater || !(t.dueDate > todayStr && t.dueDate <= upcomingEndStr)) continue;
+        } else if (filterMode === "overdue") {
+          if (t.isLater || t.dueDate >= todayStr) continue;
+        } else if (filterMode === "all") {
+          if (t.isLater) continue;
+        }
+
+        // Attribute filters
+        if (priority !== "All" && t.priority !== priority) continue;
+        if (category !== "All" && t.category !== category) continue;
+        if (search && !t._searchText.includes(search)) continue;
+
+        result.push(t);
+      }
+
+      // Fast O(N log N) numeric sort (O(1) AI rank lookup via Map)
+      if ((filterMode === "today" || filterMode === "all") && Array.isArray(this.todayAITaskOrder) && this.todayAITaskOrder.length > 0) {
+        const rankMap = new Map();
+        for (let i = 0; i < this.todayAITaskOrder.length; i++) {
+          rankMap.set(String(this.todayAITaskOrder[i]), i);
+        }
+        result.sort((a, b) => {
+          const rA = rankMap.has(String(a.id)) ? rankMap.get(String(a.id)) : 1e9;
+          const rB = rankMap.has(String(b.id)) ? rankMap.get(String(b.id)) : 1e9;
+          if (rA !== rB) return rA - rB;
+          return (b._createdAtMs || 0) - (a._createdAtMs || 0);
+        });
       } else {
-        const newTask = this.store.addTask(formData);
-        this.closeBottomSheet();
+        result.sort((a, b) => (b._createdAtMs || 0) - (a._createdAtMs || 0));
+      }
 
-        if (newTask) {
-          // If we are not currently in a task list view, redirect to "all" (Inbox Archive) so we can see the task
-          if (!["all", "today", "tomorrow", "upcoming", "overdue", "later"].includes(this.store.currentView)) {
-            this.store.setView("all");
+      return result;
+    }
+
+    buildPriorityVirtualItems(tasks) {
+      const buckets = { High: [], Medium: [], Low: [] };
+      for (let i = 0; i < tasks.length; i++) {
+        const p = buckets[tasks[i].priority] ? tasks[i].priority : "Medium";
+        buckets[p].push(tasks[i]);
+      }
+
+      const labels = {
+        High: "Keystone Priorities",
+        Medium: "Steady Momentum",
+        Low: "Gentle Focus"
+      };
+
+      const flat = [];
+      ["High", "Medium", "Low"].forEach((pKey) => {
+        const list = buckets[pKey];
+        if (list.length === 0) return;
+        const groupId = `grp_pri_${pKey}`;
+        const collapsed = this.collapsedPriorityGroups.has(groupId);
+        flat.push({
+          __type: "groupHeader",
+          groupKind: "priority",
+          id: groupId,
+          title: labels[pKey],
+          count: list.length,
+          unit: list.length === 1 ? "intention" : "intentions",
+          priorityClass: `priority-${pKey.toLowerCase()}`,
+          collapsed
+        });
+        if (!collapsed) {
+          for (let i = 0; i < list.length; i++) flat.push(list[i]);
+        }
+      });
+      return flat;
+    }
+
+    buildCompletedVirtualItems(completedTasks) {
+      const groups = new Map();
+      for (let i = 0; i < completedTasks.length; i++) {
+        const t = completedTasks[i];
+        const dateKey = t.completedDate ? getLocalDateString(t.completedDate) : (t.dueDate || "No Date");
+        if (!groups.has(dateKey)) groups.set(dateKey, []);
+        groups.get(dateKey).push(t);
+      }
+
+      const sortedDates = Array.from(groups.keys()).sort((a, b) => (a < b ? 1 : a > b ? -1 : 0));
+      const todayStr = getLocalDateString();
+      const yesterdayStr = getNDaysFromNow(-1);
+
+      if (!this.completedDatesInitialized && sortedDates.length > 1) {
+        for (let i = 1; i < sortedDates.length; i++) {
+          this.collapsedCompletedDates.add(`grp_date_${sortedDates[i]}`);
+        }
+        this.completedDatesInitialized = true;
+      }
+
+      const flat = [];
+      for (let i = 0; i < sortedDates.length; i++) {
+        const dKey = sortedDates[i];
+        const list = groups.get(dKey);
+        let label = "Completed";
+        if (dKey === todayStr) label = "Today";
+        else if (dKey === yesterdayStr) label = "Yesterday";
+        else if (dKey !== "No Date") {
+          label = parseLocalDate(dKey).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" });
+        }
+
+        const groupId = `grp_date_${dKey}`;
+        const collapsed = this.collapsedCompletedDates.has(groupId);
+        flat.push({
+          __type: "groupHeader",
+          groupKind: "completed",
+          id: groupId,
+          title: label,
+          count: list.length,
+          unit: list.length === 1 ? "win" : "wins",
+          priorityClass: "completed-group",
+          collapsed
+        });
+        if (!collapsed) {
+          for (let j = 0; j < list.length; j++) flat.push(list[j]);
+        }
+      }
+      return flat;
+    }
+
+    async renderTodayTaskList() {
+      const mode = this.store.todayFilter;
+      const bannerContainer = document.getElementById("today_ai_banner_container");
+
+      if (mode === "completed") {
+        if (bannerContainer) {
+          bannerContainer.hidden = true;
+          bannerContainer.innerHTML = "";
+        }
+        const page = await this.store.loadCompletedPage({ reset: true, limit: 50 });
+        if (this.viewCount) this.viewCount.textContent = `(${page.total})`;
+        this._mountVirtualListData(
+          this.todayVirtualList,
+          this.todayEmptyState,
+          this.buildCompletedVirtualItems(page.items),
+          page.items.length === 0 ? this.getEmptyStateHTML("completed") : ""
+        );
+        return;
+      }
+
+      const scope = mode === "all" ? "today" : mode;
+      const filtered = this.getFilteredActiveTasks(scope);
+      if (this.viewCount) this.viewCount.textContent = `(${filtered.length})`;
+
+      if (bannerContainer) {
+        if (mode === "all") {
+          bannerContainer.hidden = false;
+          this.renderTodayAIBanner(filtered);
+        } else {
+          bannerContainer.hidden = true;
+          bannerContainer.innerHTML = "";
+        }
+      }
+
+      const virtualItems = this.buildPriorityVirtualItems(filtered);
+      this._mountVirtualListData(
+        this.todayVirtualList,
+        this.todayEmptyState,
+        virtualItems,
+        filtered.length === 0 ? this.getEmptyStateHTML(scope) : ""
+      );
+    }
+
+    _mountVirtualListData(vlist, emptyEl, items, emptyHTML) {
+      if (!vlist) return;
+      if (items.length === 0) {
+        vlist.setItems([]);
+        if (emptyEl) {
+          emptyEl.hidden = false;
+          emptyEl.innerHTML = emptyHTML;
+          if (!emptyEl.dataset.bound) {
+            emptyEl.dataset.bound = "true";
+            emptyEl.addEventListener("click", (e) => {
+              const btn = e.target.closest("[data-empty-action]");
+              if (!btn) return;
+              const act = btn.getAttribute("data-empty-action");
+              if (act === "add-task") this.openBottomSheet();
+              else if (act === "goto-today") this.store.setView("today");
+              else if (act === "clear-filters") this.store.setFilters("", "All", "All");
+            });
           }
-          // Highlight the newly created task card with celebration particles
-          setTimeout(() => {
-            this.triggerCelebration(newTask.id);
-          }, 300);
+        }
+      } else {
+        if (emptyEl) {
+          emptyEl.hidden = true;
+          emptyEl.innerHTML = "";
+        }
+        vlist.setItems(items);
+      }
+    }
+
+    getEmptyStateHTML(mode) {
+      const hasSearch = Boolean(this.store.filters.search || this.store.filters.priority !== "All" || this.store.filters.category !== "All");
+      if (hasSearch) {
+        return `
+          <div class="empty_state">
+            <h3>No matching tasks</h3>
+            <p>Adjust your search term or clear active filters.</p>
+            <button type="button" class="sheet_primary_commit" data-empty-action="clear-filters">Clear Filters</button>
+          </div>
+        `;
+      }
+      if (mode === "completed") {
+        return `
+          <div class="empty_state">
+            <h3>No completed wins yet</h3>
+            <p>Finish your first intention to start building your win log.</p>
+            <button type="button" class="sheet_primary_commit" data-empty-action="goto-today">Go to Today</button>
+          </div>
+        `;
+      }
+      return `
+        <div class="empty_state">
+          <h3>Clear canvas</h3>
+          <p>Nothing pending here. Capture your next priority when ready.</p>
+          <button type="button" class="sheet_primary_commit" data-empty-action="add-task">+ Add Task</button>
+        </div>
+      `;
+    }
+
+    renderVirtualListRow(item, state) {
+      if (item.__type === "groupHeader") {
+        const header = document.createElement("button");
+        header.type = "button";
+        header.className = `virtual_group_header ${item.priorityClass || ""} ${item.collapsed ? "collapsed" : ""}`;
+        header.setAttribute("data-action", "toggle-group");
+        header.setAttribute("data-group-id", item.id);
+        header.setAttribute("aria-expanded", String(!item.collapsed));
+        header.innerHTML = `
+          <span class="group_header_left">
+            <svg class="chevron_icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            <span class="group_header_title">${escapeHTML(item.title)}</span>
+          </span>
+          <span class="count_badge">${item.count} ${escapeHTML(item.unit || "")}</span>
+        `;
+        return header;
+      }
+
+      return this.createLeanTaskCardDOM(item, state.isExpanded);
+    }
+
+    patchVirtualListRow(el, item, state) {
+      if (item.__type === "groupHeader") {
+        el.classList.toggle("collapsed", Boolean(item.collapsed));
+        el.setAttribute("aria-expanded", String(!item.collapsed));
+        const badge = el.querySelector(".count_badge");
+        if (badge) badge.textContent = `${item.count} ${item.unit || ""}`;
+        return true;
+      }
+      // Re-render card content cleanly on state/data change (single mounted slot only)
+      return false;
+    }
+
+    createLeanTaskCardDOM(task, isExpanded) {
+      const priority = (task.priority || "Medium").toLowerCase();
+      const card = document.createElement("article");
+      card.className = `task_card priority-${priority} ${task.completed ? "completed" : ""} ${isExpanded ? "expanded" : ""}`;
+      card.setAttribute("data-id", String(task.id));
+
+      // Due status badge (pure local string comparison — zero per-card Date objects for common cases!)
+      let statusBadge = "";
+      if (!task.completed) {
+        if (task.isLater) {
+          statusBadge = `<span class="badge later">Backlog</span>`;
+        } else {
+          const todayStr = getLocalDateString();
+          const tomorrowStr = getNDaysFromNow(1);
+          if (task.dueDate < todayStr) {
+            const diffDays = Math.max(1, Math.round((parseLocalDate(todayStr) - parseLocalDate(task.dueDate)) / 86400000));
+            statusBadge = `<span class="badge overdue">Overdue ${diffDays}d</span>`;
+          } else if (task.dueDate === todayStr) {
+            statusBadge = `<span class="badge today">Today</span>`;
+          } else if (task.dueDate === tomorrowStr) {
+            statusBadge = `<span class="badge tomorrow">Tomorrow</span>`;
+          } else if (task.dueDate) {
+            statusBadge = `<span class="badge upcoming">${escapeHTML(task.dueDate)}</span>`;
+          }
+        }
+      }
+
+      const subtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
+      const hasSub = subtasks.length > 0;
+      const doneSub = hasSub ? subtasks.filter((s) => s.completed).length : 0;
+      const priLabel = { High: "Keystone", Medium: "Steady", Low: "Gentle" }[task.priority] || "Steady";
+
+      let urlBadge = "";
+      if (task.url) {
+        let host = "Link";
+        try { host = new URL(task.url).hostname.replace(/^www\./, ""); } catch (_) {}
+        urlBadge = `<a class="meta_item url_badge" href="${escapeHTML(task.url)}" target="_blank" rel="noopener noreferrer" data-action="open-url">${escapeHTML(host)}</a>`;
+      }
+
+      const expandedHTML = isExpanded
+        ? `
+          <div class="card_actions_expanded">
+            ${task.description ? `<p class="card_desc_full">${escapeHTML(task.description)}</p>` : ""}
+            <div class="subtasks_wrapper">
+              <div class="subtask_list">
+                ${subtasks.map((sub) => `
+                  <div class="subtask_item" data-sub-id="${escapeHTML(sub.id)}">
+                    <button type="button" class="sub_check_btn ${sub.completed ? "checked" : ""}" data-action="sub-toggle" data-sub-id="${escapeHTML(sub.id)}" aria-label="Toggle subtask">
+                      ${sub.completed ? "✓" : ""}
+                    </button>
+                    <span class="subtask_title ${sub.completed ? "done" : ""}">${escapeHTML(sub.title)}</span>
+                    <button type="button" class="sub_delete_btn" data-action="sub-delete" data-sub-id="${escapeHTML(sub.id)}" aria-label="Delete subtask">✕</button>
+                  </div>
+                `).join("")}
+              </div>
+              <div class="add_subtask_row">
+                <input type="text" class="subtask_input" data-key-action="sub-add" data-task-id="${escapeHTML(String(task.id))}" placeholder="+ Add step, press Enter..." aria-label="Add subtask">
+              </div>
+            </div>
+            <div class="task_ai_drawer_slot"></div>
+            <div class="card_control_buttons">
+              <button type="button" class="action_btn edit_btn" data-action="edit">Edit</button>
+              ${!task.completed ? `
+                <button type="button" class="action_btn ai_breakdown_btn" data-action="ai-breakdown">Breakdown</button>
+                <button type="button" class="action_btn play_btn" data-action="focus">Focus</button>
+                <button type="button" class="action_btn later_btn" data-action="toggle-later">${task.isLater ? "Move to Today" : "Backlog"}</button>
+              ` : ""}
+              <button type="button" class="action_btn delete_btn_manual" data-action="delete">Delete</button>
+            </div>
+          </div>
+        `
+        : "";
+
+      card.innerHTML = `
+        <div class="card_swipe_bg left_bg" aria-hidden="true"><span>${task.completed ? "Restore" : "Complete"}</span></div>
+        <div class="card_swipe_bg right_bg" aria-hidden="true"><span>Delete</span></div>
+        <div class="card_content">
+          <div class="card_main_row">
+            <button type="button" class="checkbox_btn" data-action="toggle" aria-label="Toggle complete for ${escapeHTML(task.title)}" aria-pressed="${Boolean(task.completed)}">
+              <svg class="check_icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true"><polyline points="20 6 9 17 4 12"></polyline></svg>
+            </button>
+            <div class="card_text">
+              <div class="card_title_row">
+                <h3 class="card_title">${escapeHTML(task.title)}</h3>
+                ${task.recurring && task.recurring !== "none" ? `<span class="recurring_icon" title="Repeats ${escapeHTML(task.recurring)}">↻</span>` : ""}
+              </div>
+              <div class="card_meta_row">
+                <span class="meta_item priority_badge priority-${priority}">${priLabel}</span>
+                <span class="meta_item category_badge">${escapeHTML(task.category || "Inbox")}</span>
+                ${statusBadge}
+                ${urlBadge}
+                <span class="meta_item duration_badge">${task.estimatedDuration || 25}m</span>
+                ${hasSub ? `<span class="meta_item subtask_ratio">${doneSub}/${subtasks.length}</span>` : ""}
+              </div>
+            </div>
+            <button type="button" class="quick_delete_task_btn" data-action="delete" title="Delete task" aria-label="Delete ${escapeHTML(task.title)}">✕</button>
+          </div>
+          ${expandedHTML}
+        </div>
+      `;
+
+      return card;
+    }
+
+    handleVirtualAction(e, key, action, actionEl, item) {
+      if (!item) return;
+
+      if (action === "toggle-group" && item.__type === "groupHeader") {
+        const targetSet = item.groupKind === "completed" ? this.collapsedCompletedDates : this.collapsedPriorityGroups;
+        if (targetSet.has(item.id)) targetSet.delete(item.id);
+        else targetSet.add(item.id);
+        if (this.store.currentView === "today") this.renderTodayTaskList();
+        else this.renderPlanPipelineUI({ skipCompletedFetch: true });
+        return;
+      }
+
+      if (item.__type === "groupHeader") return;
+      const task = this.store.getTaskById(item.id) || item;
+
+      if (action === "toggle") {
+        e.stopPropagation();
+        this.store.toggleTaskComplete(task.id);
+      } else if (action === "delete") {
+        e.stopPropagation();
+        this.store.deleteTask(task.id);
+      } else if (action === "edit") {
+        e.stopPropagation();
+        this.openBottomSheet(task);
+      } else if (action === "focus") {
+        e.stopPropagation();
+        this.store.setView("focus");
+        this.store.startTimer(task.id);
+      } else if (action === "toggle-later") {
+        e.stopPropagation();
+        if (task.isLater) {
+          this.store.updateTask(task.id, { isLater: false, dueDate: getLocalDateString() });
+        } else {
+          this.store.updateTask(task.id, { isLater: true });
+        }
+      } else if (action === "ai-breakdown") {
+        e.stopPropagation();
+        const card = actionEl.closest(".task_card");
+        if (card) this.openAIBreakdownDrawer(task, card);
+      } else if (action === "sub-toggle") {
+        e.stopPropagation();
+        const subId = actionEl.getAttribute("data-sub-id");
+        if (subId) this.store.toggleSubtask(task.id, subId);
+      } else if (action === "sub-delete") {
+        e.stopPropagation();
+        const subId = actionEl.getAttribute("data-sub-id");
+        if (subId) this.store.deleteSubtask(task.id, subId);
+      } else if (action === "sub-add") {
+        if (isIMEComposing(e)) return;
+        e.preventDefault();
+        const val = (actionEl.value || "").trim();
+        if (val) {
+          this.store.addSubtask(task.id, val);
+          actionEl.value = "";
+        }
+      } else if (action === "card-click") {
+        const vlist = this.getActiveVirtualList();
+        if (vlist) {
+          vlist.setExpanded(key, !vlist.isExpanded(key));
         }
       }
     }
 
-    // -------------------------------------------------------------------------
-    // POMODORO FOCUS PANEL
-    // -------------------------------------------------------------------------
+    handleVirtualSwipe(key, direction, item) {
+      if (!item || item.__type === "groupHeader") return;
+      if (direction === "right") {
+        this.store.toggleTaskComplete(item.id);
+      } else if (direction === "left") {
+        this.store.deleteTask(item.id);
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // 2. PLAN VIEW (Pipeline + Circadian Routine)
+    // -----------------------------------------------------------------------
+    renderPlanView() {
+      this.updatePlanSubNavUI();
+      this.syncFilterInputsUI();
+
+      if (this.planPipelineView) {
+        this.planPipelineView.hidden = this.store.planMode !== "pipeline";
+      }
+      if (this.planRoutineView) {
+        this.planRoutineView.hidden = this.store.planMode !== "routine";
+      }
+
+      if (this.store.planMode === "routine") {
+        this.renderRoutineUI();
+      } else {
+        this.renderPlanPipelineUI();
+      }
+    }
+
+    updatePlanSubNavUI() {
+      const modeTabs = document.getElementById("plan_mode_tabs");
+      if (modeTabs) {
+        modeTabs.querySelectorAll("button[data-plan-mode]").forEach((btn) => {
+          const active = btn.getAttribute("data-plan-mode") === this.store.planMode;
+          btn.classList.toggle("active", active);
+          btn.setAttribute("aria-selected", String(active));
+        });
+      }
+
+      const filterBar = document.getElementById("plan_filter_bar");
+      if (filterBar) {
+        filterBar.querySelectorAll("button[data-plan-filter]").forEach((btn) => {
+          const active = btn.getAttribute("data-plan-filter") === this.store.planFilter;
+          btn.classList.toggle("active", active);
+          btn.setAttribute("aria-pressed", String(active));
+        });
+      }
+    }
+
+    async renderPlanPipelineUI(opts = {}) {
+      const filter = this.store.planFilter || "all";
+
+      if (filter === "completed") {
+        const page = opts.skipCompletedFetch && this.store.completedPageCache.loaded
+          ? this.store.completedPageCache
+          : await this.store.loadCompletedPage({ reset: true, limit: 50 });
+
+        if (this.viewCount) this.viewCount.textContent = `(${page.total})`;
+        if (this.planLoadMoreBtn) {
+          this.planLoadMoreBtn.hidden = !page.hasMore;
+          this.planLoadMoreBtn.disabled = false;
+          this.planLoadMoreBtn.textContent = `Load more (${page.items.length} of ${page.total})`;
+        }
+
+        const virtualItems = this.buildCompletedVirtualItems(page.items);
+        this._mountVirtualListData(
+          this.planVirtualList,
+          this.planEmptyState,
+          virtualItems,
+          page.items.length === 0 ? this.getEmptyStateHTML("completed") : ""
+        );
+        return;
+      }
+
+      if (this.planLoadMoreBtn) this.planLoadMoreBtn.hidden = true;
+      const filtered = this.getFilteredActiveTasks(filter);
+      if (this.viewCount) this.viewCount.textContent = `(${filtered.length})`;
+
+      const virtualItems = this.buildPriorityVirtualItems(filtered);
+      this._mountVirtualListData(
+        this.planVirtualList,
+        this.planEmptyState,
+        virtualItems,
+        filtered.length === 0 ? this.getEmptyStateHTML(filter) : ""
+      );
+    }
+
+    // -----------------------------------------------------------------------
+    // 2B. CIRCADIAN ROUTINE PLANNER (Delegated, #routine_icon Fixed)
+    // -----------------------------------------------------------------------
+    renderRoutineUI() {
+      const wrapper = document.getElementById("routine_timetable_scroller");
+      if (!wrapper) return;
+
+      document.querySelectorAll("#routine_day_tabs_bar .routine_day_tab").forEach((t) => {
+        t.classList.toggle("active", t.getAttribute("data-day") === this.selectedRoutineDay);
+      });
+      document.querySelectorAll("#routine_layout_pills .pill_btn").forEach((p) => {
+        p.classList.toggle("active", p.getAttribute("data-layout") === this.routineLayoutMode);
+      });
+
+      const [wakeH] = (this.store.routinePrefs.wakeUpTime || "06:00").split(":").map(Number);
+      const [sleepH] = (this.store.routinePrefs.sleepTime || "23:00").split(":").map(Number);
+      const now = new Date();
+      const currentHour = now.getHours();
+      const currentMin = currentHour * 60 + now.getMinutes();
+      const currentDayLabel = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][now.getDay()];
+
+      const dayRoutines = this.store.routines
+        .filter((r) => Array.isArray(r.days) && r.days.includes(this.selectedRoutineDay))
+        .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+      if (this.routineLayoutMode === "timeline") {
+        if (dayRoutines.length === 0) {
+          wrapper.innerHTML = `<div class="agenda_empty_card"><p>No blocks scheduled for ${escapeHTML(this.selectedRoutineDay)}.</p></div>`;
+          return;
+        }
+        const isToday = this.selectedRoutineDay === currentDayLabel;
+        wrapper.innerHTML = `<div class="timeline_agenda_wrapper">${dayRoutines.map((rout) => {
+          const [sH, sM] = rout.startTime.split(":").map(Number);
+          const [eH, eM] = rout.endTime.split(":").map(Number);
+          const sMin = sH * 60 + sM;
+          const eMin = eH * 60 + eM;
+          const durationMin = Math.max(0, eMin - sMin);
+          let activeHtml = "";
+          let activeClass = "";
+          if (isToday && currentMin >= sMin && currentMin <= eMin && durationMin > 0) {
+            activeClass = "active_now_item";
+            const pct = Math.min(100, Math.round(((currentMin - sMin) / durationMin) * 100));
+            activeHtml = `
+              <div class="agenda_progress_wrapper">
+                <div class="agenda_progress_labels"><span>Active Now · ${pct}%</span><span>${eMin - currentMin}m left</span></div>
+                <div class="agenda_progress_track"><div class="agenda_progress_bar bg-${escapeHTML(rout.color)}" style="width:${pct}%"></div></div>
+              </div>
+            `;
+          }
+          return `
+            <div class="agenda_timeline_item ${activeClass}" data-id="${escapeHTML(rout.id)}">
+              <div class="agenda_timeline_header">
+                <div class="agenda_block_title_area">
+                  <span class="agenda_block_indicator bg-${escapeHTML(rout.color || "indigo")}"></span>
+                  <h4>${rout.icon ? `${escapeHTML(rout.icon)} ` : ""}${escapeHTML(rout.title)}</h4>
+                </div>
+                <div class="agenda_block_actions">
+                  <button type="button" class="agenda_block_btn edit" data-action="edit-routine" data-id="${escapeHTML(rout.id)}">Edit</button>
+                  <button type="button" class="agenda_block_btn delete" data-action="delete-routine" data-id="${escapeHTML(rout.id)}" aria-label="Delete block">✕</button>
+                </div>
+              </div>
+              <div class="agenda_timeline_meta">
+                <span class="agenda_time_badge">${escapeHTML(rout.startTime)} – ${escapeHTML(rout.endTime)}</span>
+                <span class="agenda_category_badge">${escapeHTML(rout.category || "Routine")}</span>
+                <span class="agenda_duration_badge">${durationMin}m</span>
+              </div>
+              ${activeHtml}
+            </div>
+          `;
+        }).join("")}</div>`;
+      } else {
+        const hours = [];
+        if (wakeH <= sleepH) {
+          for (let h = wakeH; h <= sleepH; h++) hours.push(h);
+        } else {
+          for (let h = wakeH; h < 24; h++) hours.push(h);
+          for (let h = 0; h <= sleepH; h++) hours.push(h);
+        }
+
+        const rows = hours.map((h) => {
+          const formatted = `${String(h).padStart(2, "0")}:00`;
+          const isCurrent = h === currentHour && this.selectedRoutineDay === currentDayLabel;
+          const matches = dayRoutines.filter((r) => parseInt(r.startTime.split(":")[0], 10) === h);
+          if (matches.length === 0) {
+            return `<tr class="routine_table_row ${isCurrent ? "active_hour" : ""}"><td class="routine_time_col">${formatted}</td><td class="routine_block_col empty_block" colspan="4">Free</td></tr>`;
+          }
+          return matches.map((rout, idx) => {
+            const [sH, sM] = rout.startTime.split(":").map(Number);
+            const [eH, eM] = rout.endTime.split(":").map(Number);
+            const durationMin = Math.max(0, (eH * 60 + eM) - (sH * 60 + sM));
+            return `
+              <tr class="routine_table_row ${isCurrent ? "active_hour" : ""}" data-id="${escapeHTML(rout.id)}">
+                ${idx === 0 ? `<td class="routine_time_col" rowspan="${matches.length}">${formatted}</td>` : ""}
+                <td class="routine_block_col">
+                  <span class="routine_block_indicator bg-${escapeHTML(rout.color || "indigo")}"></span>
+                  <div class="routine_block_details">
+                    <span class="routine_block_title">${rout.icon ? `${escapeHTML(rout.icon)} ` : ""}${escapeHTML(rout.title)}</span>
+                    <span class="routine_block_time_span">${escapeHTML(rout.startTime)} – ${escapeHTML(rout.endTime)}</span>
+                  </div>
+                </td>
+                <td class="routine_category_col"><span class="category_badge">${escapeHTML(rout.category || "Routine")}</span></td>
+                <td class="routine_duration_col">${durationMin}m</td>
+                <td class="routine_action_col"><button type="button" class="routine_block_delete_btn" data-action="delete-routine" data-id="${escapeHTML(rout.id)}" aria-label="Delete block">✕</button></td>
+              </tr>
+            `;
+          }).join("");
+        }).join("");
+
+        wrapper.innerHTML = `
+          <div class="routine_table_responsive_wrapper">
+            <table class="routine_table">
+              <thead><tr><th>Hour</th><th>Block</th><th>Tag</th><th>Dur</th><th></th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+        `;
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // 3. HABITS & CONSISTENCY (Responsive Cards + Delegated Matrix + History)
+    // -----------------------------------------------------------------------
+    renderHabitsView() {
+      const modeTabs = document.getElementById("habits_mode_tabs");
+      if (modeTabs) {
+        modeTabs.querySelectorAll("button[data-habits-mode]").forEach((btn) => {
+          const active = btn.getAttribute("data-habits-mode") === this.store.habitsMode;
+          btn.classList.toggle("active", active);
+          btn.setAttribute("aria-selected", String(active));
+        });
+      }
+      if (this.habitsTrackerView) this.habitsTrackerView.hidden = this.store.habitsMode !== "tracker";
+      if (this.habitsHistoryView) this.habitsHistoryView.hidden = this.store.habitsMode !== "history";
+
+      if (this.store.habitsMode === "history") {
+        this.renderConsistencyHistoryUI();
+      } else {
+        this.renderConsistencyUI();
+      }
+    }
+
+    bindConsistencyInteractions() {
+      const bindOnce = (id, fn) => {
+        const el = document.getElementById(id);
+        if (el && !el.dataset.bound) {
+          el.dataset.bound = "true";
+          el.addEventListener("click", fn);
+        }
+      };
+
+      bindOnce("btn_habit_prev_week", () => { this.habitWeekOffset -= 1; this.renderConsistencyUI(); });
+      bindOnce("btn_habit_this_week", () => { this.habitWeekOffset = 0; this.renderConsistencyUI(); });
+      bindOnce("btn_habit_next_week", () => { this.habitWeekOffset += 1; this.renderConsistencyUI(); });
+      bindOnce("btn_heatmap_prev_month", () => { this.habitHeatmapMonthOffset -= 1; this.renderMonthlyHeatmapSVG(); });
+      bindOnce("btn_heatmap_this_month", () => { this.habitHeatmapMonthOffset = 0; this.renderMonthlyHeatmapSVG(); });
+      bindOnce("btn_heatmap_next_month", () => { this.habitHeatmapMonthOffset += 1; this.renderMonthlyHeatmapSVG(); });
+      bindOnce("btn_consistency_add_habit", () => this.openHabitSheet());
+      bindOnce("btn_ai_analyze_habits", () => this.analyzeHabitsWithAI());
+
+      const advisoryCard = document.getElementById("habit_ai_advisory_card");
+      bindOnce("btn_dismiss_ai_advisory", () => {
+        if (advisoryCard) advisoryCard.hidden = true;
+        this.pendingUnhealthyHabit = null;
+      });
+      bindOnce("btn_ai_keep_habit", () => {
+        if (advisoryCard) advisoryCard.hidden = true;
+        this.pendingUnhealthyHabit = null;
+      });
+      bindOnce("btn_ai_adopt_alternative", () => {
+        if (!this.pendingUnhealthyHabit) return;
+        const { id, alternativeTitle, category } = this.pendingUnhealthyHabit;
+        this.store.updateHabit(id, { title: alternativeTitle, category: category || "Health", color: "emerald" });
+        if (advisoryCard) advisoryCard.hidden = true;
+        this.pendingUnhealthyHabit = null;
+      });
+
+      const quickForm = document.getElementById("habit_quick_add_form");
+      if (quickForm && !quickForm.dataset.bound) {
+        quickForm.dataset.bound = "true";
+        quickForm.addEventListener("submit", (e) => {
+          e.preventDefault();
+          const input = document.getElementById("habit_quick_input");
+          const catSel = document.getElementById("habit_quick_cat");
+          const title = input ? input.value.trim() : "";
+          if (!title) return;
+          const created = this.store.addHabit(title, catSel ? catSel.value : "Routine", "indigo");
+          if (input) input.value = "";
+          if (created) this.evaluateHabitWithAI(title, created.id);
+        });
+      }
+
+      document.querySelectorAll(".habit_preset_chip").forEach((chip) => {
+        if (chip.dataset.bound) return;
+        chip.dataset.bound = "true";
+        chip.addEventListener("click", () => {
+          const title = chip.dataset.title;
+          if (!title) return;
+          const created = this.store.addHabit(title, chip.dataset.cat || "Routine", chip.dataset.color || "indigo");
+          if (created) this.evaluateHabitWithAI(title, created.id);
+        });
+      });
+
+      document.querySelectorAll(".ai_prompt_chip").forEach((chip) => {
+        if (chip.dataset.bound) return;
+        chip.dataset.bound = "true";
+        chip.addEventListener("click", () => this.analyzeHabitsWithAI(chip.dataset.prompt));
+      });
+
+      // Single delegated listener for BOTH #habit_matrix_tbody and #habit_cards_list
+      const handleHabitContainerClick = async (e) => {
+        const toggleBtn = e.target.closest("[data-action='habit-toggle']");
+        if (toggleBtn && !toggleBtn.disabled) {
+          this.store.toggleHabitCompletion(toggleBtn.getAttribute("data-id"), toggleBtn.getAttribute("data-date"));
+          return;
+        }
+        const editBtn = e.target.closest("[data-action='habit-edit']");
+        if (editBtn) {
+          const h = this.store.habitMap.get(String(editBtn.getAttribute("data-id")));
+          if (h) this.openHabitSheet(h);
+          return;
+        }
+        const delBtn = e.target.closest("[data-action='habit-delete']");
+        if (delBtn) {
+          const id = delBtn.getAttribute("data-id");
+          const h = this.store.habitMap.get(String(id));
+          const ok = await this.showConfirmDialog({
+            title: "Delete Habit",
+            message: `Permanently delete "${h ? h.title : "this habit"}" and its streak history?`,
+            okLabel: "Delete",
+            danger: true
+          });
+          if (ok) this.store.deleteHabit(id);
+        }
+      };
+
+      const matrixBody = document.getElementById("habit_matrix_tbody");
+      if (matrixBody && !matrixBody.dataset.bound) {
+        matrixBody.dataset.bound = "true";
+        matrixBody.addEventListener("click", handleHabitContainerClick);
+      }
+      const cardsList = document.getElementById("habit_cards_list");
+      if (cardsList && !cardsList.dataset.bound) {
+        cardsList.dataset.bound = "true";
+        cardsList.addEventListener("click", handleHabitContainerClick);
+      }
+    }
+
+    renderConsistencyUI() {
+      const matrixBox = document.getElementById("habit_matrix_tbody");
+      const cardsBox = document.getElementById("habit_cards_list");
+      if (!matrixBox && !cardsBox) return;
+
+      const today = new Date();
+      const todayISO = getLocalDateString(today);
+      const dow = today.getDay();
+      const diffToMon = dow === 0 ? -6 : 1 - dow;
+      const startOfWeek = new Date(today.getFullYear(), today.getMonth(), today.getDate() + diffToMon + this.habitWeekOffset * 7);
+
+      const weekdaysShort = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+      const monthsShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const weekdays = [];
+
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(startOfWeek.getFullYear(), startOfWeek.getMonth(), startOfWeek.getDate() + i);
+        const iso = getLocalDateString(d);
+        weekdays.push({
+          iso,
+          dayName: weekdaysShort[i],
+          dateNum: d.getDate(),
+          monthShort: monthsShort[d.getMonth()],
+          year: d.getFullYear(),
+          isToday: iso === todayISO,
+          isFuture: iso > todayISO
+        });
+      }
+
+      const weekBadge = document.getElementById("habit_week_range_badge");
+      if (weekBadge) {
+        const s = weekdays[0];
+        const e = weekdays[6];
+        weekBadge.textContent = `${s.monthShort} ${s.dateNum} – ${e.monthShort} ${e.dateNum}, ${e.year}`;
+      }
+
+      const theadRow = document.getElementById("habit_matrix_thead_row");
+      if (theadRow) {
+        theadRow.innerHTML = `<th>Habit</th>` + weekdays.map((w) => `
+          <th class="${w.isToday ? "active_today" : ""}">
+            <div class="matrix_th_content">
+              <span class="matrix_th_day">${w.dayName}</span>
+              <span class="matrix_th_date">${w.dateNum}</span>
+            </div>
+          </th>
+        `).join("");
+      }
+
+      // Motivation metrics (single pass)
+      const habits = this.store.habits;
+      const past7 = [];
+      for (let j = 0; j < 7; j++) past7.push(getNDaysFromNow(-j));
+
+      let completedToday = 0;
+      let weeklyCompletions = 0;
+      let maxStreak = 0;
+
+      for (let i = 0; i < habits.length; i++) {
+        const h = habits[i];
+        const hist = h.history || {};
+        if (hist[todayISO] === true) completedToday += 1;
+        if ((h.streak || 0) > maxStreak) maxStreak = h.streak || 0;
+        for (let j = 0; j < 7; j++) {
+          if (hist[past7[j]] === true) weeklyCompletions += 1;
+        }
+      }
+
+      const todayPct = habits.length > 0 ? Math.round((completedToday / habits.length) * 100) : 0;
+      const weeklyPct = habits.length > 0 ? Math.round((weeklyCompletions / (habits.length * 7)) * 100) : 0;
+
+      const setTxt = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+      setTxt("habit_today_score", `${completedToday} / ${habits.length}`);
+      setTxt("habit_today_pct", `${todayPct}%`);
+      setTxt("habit_weekly_rate", `${weeklyPct}%`);
+      setTxt("habit_top_streak", `${maxStreak}d`);
+      const bar = document.getElementById("habit_today_progress_bar");
+      if (bar) bar.style.width = `${todayPct}%`;
+
+      const quoteEl = document.getElementById("habit_motivation_quote");
+      if (quoteEl) {
+        if (habits.length === 0) quoteEl.textContent = "Add your first habit below to start compounding daily consistency.";
+        else if (todayPct === 100) quoteEl.textContent = "100% alignment today. Your consistency flywheel is locked in.";
+        else if (completedToday > 0) quoteEl.textContent = `${completedToday} checked, ${habits.length - completedToday} left today.`;
+        else quoteEl.textContent = "Check off 1 small ritual to ignite today's streak.";
+      }
+
+      if (habits.length === 0) {
+        if (matrixBox) matrixBox.innerHTML = `<tr><td colspan="8" class="empty_table_cell">No habits tracked yet.</td></tr>`;
+        if (cardsBox) cardsBox.innerHTML = `<div class="empty_state_text">No habits tracked yet. Add one above or pick a preset.</div>`;
+      } else {
+        if (matrixBox) {
+          matrixBox.innerHTML = habits.map((habit) => {
+            const cells = weekdays.map((w) => {
+              const done = Boolean(habit.history && habit.history[w.iso] === true);
+              return `
+                <td class="${w.isToday ? "active_today" : ""}">
+                  <button type="button"
+                    class="habit_matrix_check_pill bg-${escapeHTML(habit.color || "indigo")} ${done ? "completed" : ""} ${w.isFuture ? "future_pill" : ""}"
+                    id="habit_checkbox_${escapeHTML(habit.id)}_${w.iso}"
+                    data-action="habit-toggle" data-id="${escapeHTML(habit.id)}" data-date="${w.iso}"
+                    ${w.isFuture ? "disabled" : ""}
+                    aria-label="Toggle ${escapeHTML(habit.title)} on ${w.dayName} ${w.dateNum}">
+                    ${done ? "✓" : (w.isFuture ? "–" : "•")}
+                  </button>
+                </td>
+              `;
+            }).join("");
+
+            return `
+              <tr>
+                <td class="habit_row_title_cell">
+                  <div class="habit_row_title">
+                    <span class="habit_tag_indicator bg-${escapeHTML(habit.color || "indigo")}"></span>
+                    <div class="habit_row_meta_col">
+                      <div class="habit_row_top">
+                        <h4>${escapeHTML(habit.title)}</h4>
+                        <div class="habit_row_actions">
+                          <button type="button" class="habit_edit_btn" data-action="habit-edit" data-id="${escapeHTML(habit.id)}">Edit</button>
+                          <button type="button" class="habit_delete_btn" data-action="habit-delete" data-id="${escapeHTML(habit.id)}" aria-label="Delete habit">✕</button>
+                        </div>
+                      </div>
+                      <p>${habit.streak || 0}d streak (best ${habit.maxStreak || 0}d) · ${escapeHTML(habit.category || "Routine")}</p>
+                    </div>
+                  </div>
+                </td>
+                ${cells}
+              </tr>
+            `;
+          }).join("");
+        }
+
+        if (cardsBox) {
+          cardsBox.innerHTML = habits.map((habit) => {
+            const dayPills = weekdays.map((w) => {
+              const done = Boolean(habit.history && habit.history[w.iso] === true);
+              return `
+                <button type="button"
+                  class="habit_day_dot ${done ? "completed" : ""} ${w.isToday ? "today" : ""}"
+                  data-action="habit-toggle" data-id="${escapeHTML(habit.id)}" data-date="${w.iso}"
+                  ${w.isFuture ? "disabled" : ""}
+                  aria-label="${escapeHTML(habit.title)} ${w.dayName} ${w.dateNum}"
+                  aria-pressed="${done}">
+                  <span>${w.dayName[0]}</span>
+                </button>
+              `;
+            }).join("");
+
+            return `
+              <div class="habit_mobile_card border-${escapeHTML(habit.color || "indigo")}">
+                <div class="habit_mobile_header">
+                  <div>
+                    <h4>${escapeHTML(habit.title)}</h4>
+                    <span class="habit_mobile_meta">${habit.streak || 0}d streak · Best ${habit.maxStreak || 0}d · ${escapeHTML(habit.category || "Routine")}</span>
+                  </div>
+                  <div class="habit_row_actions">
+                    <button type="button" class="habit_edit_btn" data-action="habit-edit" data-id="${escapeHTML(habit.id)}">Edit</button>
+                    <button type="button" class="habit_delete_btn" data-action="habit-delete" data-id="${escapeHTML(habit.id)}" aria-label="Delete">✕</button>
+                  </div>
+                </div>
+                <div class="habit_mobile_days">${dayPills}</div>
+              </div>
+            `;
+          }).join("");
+        }
+      }
+
+      this.renderMonthlyHeatmapSVG();
+    }
+
+    renderMonthlyHeatmapSVG() {
+      const container = document.getElementById("chart_heatmap_grid");
+      if (!container) return;
+
+      const today = new Date();
+      const todayISO = getLocalDateString(today);
+      const target = new Date(today.getFullYear(), today.getMonth() + this.habitHeatmapMonthOffset, 1);
+      const year = target.getFullYear();
+      const month = target.getMonth();
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const monthNames = ["January", "February", "March", "April", "May", "Jun", "July", "August", "September", "October", "November", "December"];
+      const badge = document.getElementById("heatmap_month_badge");
+      if (badge) badge.textContent = `${monthNames[month]} ${year}`;
+
+      const habitCount = this.store.habits.length;
+      const firstDow = new Date(year, month, 1).getDay();
+      const leading = firstDow === 0 ? 6 : firstDow - 1;
+
+      const headerHtml = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"].map((d) => `<div class="cal_th">${d}</div>`).join("");
+      const emptyHtml = `<div class="cal_cell empty"></div>`.repeat(leading);
+
+      let cellsHtml = "";
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        let done = 0;
+        for (let i = 0; i < habitCount; i++) {
+          if (this.store.habits[i].history && this.store.habits[i].history[dateStr] === true) done += 1;
+        }
+        let density = 0;
+        if (habitCount > 0 && done > 0) {
+          const pct = done / habitCount;
+          density = pct >= 0.75 ? 3 : pct >= 0.4 ? 2 : 1;
+        }
+        const isToday = dateStr === todayISO;
+        cellsHtml += `<div class="cal_cell density-${density} ${isToday ? "active_today" : ""}" title="${dateStr}: ${done}/${habitCount}"><span class="cal_day_num">${day}</span></div>`;
+      }
+
+      container.innerHTML = `<div class="cal_heatmap_grid">${headerHtml}${emptyHtml}${cellsHtml}</div>`;
+    }
+
+    renderConsistencyHistoryUI() {
+      const habits = this.store.habits;
+      const past30 = [];
+      for (let i = 0; i < 30; i++) past30.push(getNDaysFromNow(-i));
+
+      let totalStreak = 0;
+      let totalCompletions = 0;
+      let actual30 = 0;
+      const perHabit30 = new Map();
+
+      for (let i = 0; i < habits.length; i++) {
+        const h = habits[i];
+        totalStreak += h.streak || 0;
+        const hist = h.history || {};
+        const keys = Object.keys(hist);
+        for (let k = 0; k < keys.length; k++) {
+          if (hist[keys[k]] === true) totalCompletions += 1;
+        }
+        let c30 = 0;
+        for (let j = 0; j < 30; j++) {
+          if (hist[past30[j]] === true) c30 += 1;
+        }
+        perHabit30.set(h.id, c30);
+        actual30 += c30;
+      }
+
+      const avgStreak = habits.length > 0 ? Math.round(totalStreak / habits.length) : 0;
+      const overallRate = habits.length > 0 ? Math.round((actual30 / (habits.length * 30)) * 100) : 0;
+
+      const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+      setTxt("history_active_habits_count", String(habits.length));
+      setTxt("history_avg_streak", `${avgStreak}d`);
+      setTxt("history_total_completions", String(totalCompletions));
+      setTxt("history_overall_rate", `${overallRate}%`);
+
+      const streaksBox = document.getElementById("history_streaks_container");
+      if (streaksBox) {
+        if (habits.length === 0) {
+          streaksBox.innerHTML = `<div class="empty_state_text">No habits tracked yet.</div>`;
+        } else {
+          streaksBox.innerHTML = habits.map((h) => {
+            const pct = Math.round(((perHabit30.get(h.id) || 0) / 30) * 100);
+            return `
+              <div class="history_streak_item">
+                <div class="habit_info_row">
+                  <span class="habit_dot bg-${escapeHTML(h.color || "indigo")}"></span>
+                  <div class="habit_title_meta">
+                    <h4>${escapeHTML(h.title)}</h4>
+                    <span class="category_label">${escapeHTML(h.category || "Routine")}</span>
+                  </div>
+                </div>
+                <div class="streak_pills_progress">
+                  <div class="streak_stat"><span class="label">Current</span><span class="val">${h.streak || 0}d</span></div>
+                  <div class="streak_stat"><span class="label">Best</span><span class="val">${h.maxStreak || 0}d</span></div>
+                  <div class="streak_stat"><span class="label">30d</span><span class="val">${pct}%</span></div>
+                </div>
+              </div>
+            `;
+          }).join("");
+        }
+      }
+
+      this.renderWeeklyConsistencyTrendChart();
+      this.renderCategoryConsistencyChart();
+      this.renderChronologicalLogTimeline();
+    }
+
+    renderWeeklyConsistencyTrendChart() {
+      const wrapper = document.getElementById("chart_weekly_consistency_trend");
+      if (!wrapper) return;
+      const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const days = [];
+      const counts = [];
+      for (let i = 6; i >= 0; i--) {
+        const ds = getNDaysFromNow(-i);
+        days.push(ds);
+        let c = 0;
+        for (let h = 0; h < this.store.habits.length; h++) {
+          if (this.store.habits[h].history && this.store.habits[h].history[ds] === true) c += 1;
+        }
+        counts.push(c);
+      }
+      const maxCount = Math.max(...counts, 4);
+      const labels = days.map((ds) => weekdayLabels[parseLocalDate(ds).getDay()]);
+      const chartWidth = 160;
+      const chartHeight = 90;
+      const xStart = 35;
+      const yStart = 20;
+      const stepX = chartWidth / 6;
+
+      const pts = counts.map((c, idx) => ({
+        x: xStart + idx * stepX,
+        y: yStart + chartHeight - (c / maxCount) * chartHeight,
+        value: c
+      }));
+
+      wrapper.innerHTML = `
+        <svg viewBox="0 0 210 130" width="100%" height="100%">
+          ${[0, 0.5, 1].map((pct) => {
+            const y = yStart + chartHeight - pct * chartHeight;
+            return `<line x1="${xStart}" y1="${y}" x2="${xStart + chartWidth}" y2="${y}" stroke="var(--border-color)" stroke-dasharray="2,2" stroke-width="0.5"/><text x="${xStart - 6}" y="${y + 3}" fill="var(--text-muted)" font-size="8" text-anchor="end">${Math.round(pct * maxCount)}</text>`;
+          }).join("")}
+          <polyline fill="none" stroke="var(--accent-primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="${pts.map((p) => `${p.x},${p.y}`).join(" ")}"/>
+          ${pts.map((p) => `<circle cx="${p.x}" cy="${p.y}" r="3" fill="var(--accent-primary)"/><text x="${p.x}" y="${p.y - 6}" fill="var(--text-primary)" font-size="8" text-anchor="middle">${p.value}</text>`).join("")}
+          ${labels.map((lbl, idx) => `<text x="${xStart + idx * stepX}" y="${yStart + chartHeight + 14}" fill="var(--text-secondary)" font-size="8" text-anchor="middle">${lbl}</text>`).join("")}
+        </svg>
+      `;
+    }
+
+    renderCategoryConsistencyChart() {
+      const wrapper = document.getElementById("chart_category_consistency");
+      if (!wrapper) return;
+      const categories = ["Routine", "Mind", "Health", "Skill", "Work"];
+      const countsMap = { Routine: 0, Mind: 0, Health: 0, Skill: 0, Work: 0 };
+      this.store.habits.forEach((h) => {
+        if (countsMap[h.category] !== undefined && h.history) {
+          Object.values(h.history).forEach((v) => { if (v === true) countsMap[h.category] += 1; });
+        }
+      });
+      const counts = categories.map((c) => countsMap[c]);
+      const maxVal = Math.max(...counts, 4);
+      const colors = { Routine: "#f59e0b", Mind: "#10b981", Health: "#f43f5e", Skill: "#a855f7", Work: "#6366f1" };
+
+      wrapper.innerHTML = `
+        <svg viewBox="0 0 210 130" width="100%" height="100%">
+          ${categories.map((cat, idx) => {
+            const y = 15 + idx * 18;
+            const w = Math.max((counts[idx] / maxVal) * 120, 2);
+            return `<text x="42" y="${y + 8}" fill="var(--text-secondary)" font-size="8" text-anchor="end">${cat}</text><rect x="50" y="${y}" width="${w}" height="10" rx="2" fill="${colors[cat]}"/><text x="${56 + w}" y="${y + 8}" fill="var(--text-primary)" font-size="8">${counts[idx]}</text>`;
+          }).join("")}
+        </svg>
+      `;
+    }
+
+    renderChronologicalLogTimeline() {
+      const container = document.getElementById("history_chronological_log");
+      if (!container) return;
+      let html = "";
+      for (let i = 0; i < 7; i++) {
+        const dateStr = getNDaysFromNow(-i);
+        const done = this.store.habits.filter((h) => h.history && h.history[dateStr] === true);
+        const formatted = parseLocalDate(dateStr).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+        html += `
+          <div class="history_log_day_row">
+            <div class="history_log_date">${escapeHTML(formatted)}</div>
+            <div class="history_log_completions_list">
+              ${done.length === 0 ? `<span class="empty_log_item">None logged</span>` : done.map((h) => `<span class="history_log_badge border-${escapeHTML(h.color || "indigo")}">${escapeHTML(h.title)}</span>`).join(" ")}
+            </div>
+          </div>
+        `;
+      }
+      container.innerHTML = html;
+    }
+
+    // -----------------------------------------------------------------------
+    // 4. FOCUS TIMER & DOCKED MINI-TIMER BAR
+    // -----------------------------------------------------------------------
+    renderMiniTimerBar(t) {
+      if (!this.miniTimerBar) return;
+      const shouldShow =
+        this.store.currentView !== "focus" &&
+        (t.isRunning || t.alarmActive || (t.duration > 0 && t.duration < t.totalDuration));
+
+      this.miniTimerBar.hidden = !shouldShow;
+      if (!shouldShow) return;
+
+      const mins = Math.floor(Math.abs(t.duration) / 60);
+      const secs = Math.abs(t.duration) % 60;
+      const formatted = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+
+      if (this.miniTimerCountdown) this.miniTimerCountdown.textContent = formatted;
+      if (this.miniTimerTaskTitle) {
+        const linked = t.activeTaskId ? this.store.getTaskById(t.activeTaskId) : null;
+        this.miniTimerTaskTitle.textContent = linked ? linked.title : (t.activeTaskTitle || (t.type === "pomodoro" ? "Deep Focus" : "Break"));
+      }
+      if (this.miniTimerToggleBtn) {
+        this.miniTimerToggleBtn.textContent = t.isRunning ? "Pause" : "Resume";
+        this.miniTimerToggleBtn.setAttribute("aria-label", t.isRunning ? "Pause focus timer" : "Resume focus timer");
+      }
+      if (this.miniTimerDot) {
+        this.miniTimerDot.classList.toggle("running", Boolean(t.isRunning));
+      }
+    }
+
     renderTimerUI(t) {
       const detailsBox = document.getElementById("timer_task_details");
       if (detailsBox) {
-        if (t.activeTaskId) {
-          const task = this.store.tasks.find(tk => tk.id === t.activeTaskId);
-          if (task) {
-            detailsBox.style.display = "block";
-            detailsBox.innerHTML = `
-              <div class="active_focus_task">
-                <span class="focus_tag">${task.category}</span>
-                <h3>${this.escapeHTML(task.title)}</h3>
-                <p>${task.description ? this.escapeHTML(task.description) : 'Deep working session...'}</p>
-              </div>
-            `;
-          } else {
-            detailsBox.style.display = "none";
-            detailsBox.innerHTML = "";
-          }
+        const task = t.activeTaskId ? this.store.getTaskById(t.activeTaskId) : null;
+        if (task) {
+          detailsBox.hidden = false;
+          detailsBox.style.display = "block";
+          detailsBox.innerHTML = `
+            <div class="active_focus_task">
+              <span class="focus_tag">${escapeHTML(task.category || "Inbox")}</span>
+              <h3>${escapeHTML(task.title)}</h3>
+              <p>${task.description ? escapeHTML(task.description) : "Focused session in progress"}</p>
+            </div>
+          `;
         } else {
-          detailsBox.style.display = "none";
+          detailsBox.hidden = true;
           detailsBox.innerHTML = "";
         }
       }
 
       this.updateTimerCountdown(t);
 
-      // Update timer state label
       const subMsg = document.getElementById("timer_sub_msg");
       if (subMsg) {
-        const labels = {
-          pomodoro: "Deep Focus",
-          shortBreak: "Micro Break",
-          longBreak: "Restoration",
-          stopwatch: "Free Flow"
-        };
+        const labels = { pomodoro: "Deep Flow", shortBreak: "Short Break", longBreak: "Long Renewal", stopwatch: "Open Flow" };
         subMsg.textContent = labels[t.type] || "Ready";
       }
 
-      document.getElementById("timer_panel").classList.toggle("ticking", t.isRunning);
+      const focusPanel = this.panels.focus;
+      if (focusPanel) focusPanel.classList.toggle("ticking", Boolean(t.isRunning));
 
-      // Update mode pills
-      document.getElementById("timer_pomo_btn").className = `timer_mode_pill ${t.type === "pomodoro" ? "active" : ""}`;
-      document.getElementById("timer_short_btn").className = `timer_mode_pill ${t.type === "shortBreak" ? "active" : ""}`;
-      document.getElementById("timer_long_btn").className = `timer_mode_pill ${t.type === "longBreak" ? "active" : ""}`;
-      document.getElementById("timer_stopwatch_btn").className = `timer_mode_pill ${t.type === "stopwatch" ? "active" : ""}`;
+      const map = {
+        timer_pomo_btn: "pomodoro",
+        timer_short_btn: "shortBreak",
+        timer_long_btn: "longBreak",
+        timer_stopwatch_btn: "stopwatch"
+      };
+      Object.keys(map).forEach((id) => {
+        const btn = document.getElementById(id);
+        if (btn) btn.classList.toggle("active", t.type === map[id]);
+      });
 
-      // Update session cycle dots
       this.updateSessionCycle(t);
 
-      // Toggle play/pause button visibility
       const playBtn = document.getElementById("timer_play_btn");
       const pauseBtn = document.getElementById("timer_pause_btn");
-
       if (playBtn && pauseBtn) {
-        if (t.isRunning) {
-          playBtn.style.display = "none";
-          pauseBtn.style.display = "flex";
-        } else {
-          playBtn.style.display = "flex";
-          pauseBtn.style.display = "none";
-        }
+        playBtn.style.display = t.isRunning ? "none" : "flex";
+        pauseBtn.style.display = t.isRunning ? "flex" : "none";
       }
 
-      // Show/hide alarm dismiss card
       this.renderAlarmUI();
     }
 
     updateSessionCycle(t) {
-      const sessionCount = t.completedSessions || 0;
-      const dots = document.querySelectorAll("#timer_mini_cycle .mini_dot");
-      const counter = document.getElementById("cycle_counter_text");
-
-      dots.forEach((dot, idx) => {
-        dot.classList.remove("active", "completed");
-        if (idx < sessionCount) dot.classList.add("completed");
-        if (idx === sessionCount && (t.type === "pomodoro" || t.type === "shortBreak")) dot.classList.add("active");
+      const count = t.completedSessions || 0;
+      document.querySelectorAll("#timer_mini_cycle .mini_dot").forEach((dot, idx) => {
+        dot.classList.toggle("completed", idx < count);
+        dot.classList.toggle("active", idx === count && (t.type === "pomodoro" || t.type === "shortBreak"));
       });
-
+      const counter = document.getElementById("cycle_counter_text");
       if (counter) {
-        if (!t.isRunning && sessionCount === 0 && t.type !== "pomodoro") {
-          counter.textContent = "Ready to focus";
-        } else if (t.type === "pomodoro") {
-          counter.textContent = `Focus ${sessionCount + 1}/4 · ${sessionCount >= 4 ? 'Long break earned!' : 'Keep pushing'}`;
-        } else if (t.type === "shortBreak") {
-          counter.textContent = `Break · Session ${sessionCount} done`;
-        } else if (t.type === "longBreak") {
-          counter.textContent = "Full restoration break";
-        } else {
-          counter.textContent = "Free timing mode";
+        if (t.type === "pomodoro") counter.textContent = `Focus ${count + 1}/4`;
+        else if (t.type === "shortBreak") counter.textContent = `Short Break · ${count} done`;
+        else if (t.type === "longBreak") counter.textContent = "Long Break";
+        else counter.textContent = "Open Flow";
+      }
+    }
+
+    updateTimerCountdown(t) {
+      const display = document.getElementById("timer_countdown_text");
+      const mins = Math.floor(Math.abs(t.duration) / 60);
+      const secs = Math.abs(t.duration) % 60;
+      const formatted = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+      if (display) display.textContent = formatted;
+      document.title = t.isRunning ? `(${formatted}) Aurora` : "Aurora Companion";
+
+      const focusPanel = this.panels.focus;
+      if (focusPanel) {
+        focusPanel.classList.toggle("urgent", Boolean(t.isRunning && t.type !== "stopwatch" && t.duration <= 60 && t.duration > 0));
+      }
+
+      const ring = document.getElementById("timer_ring_progress");
+      if (ring) {
+        if (!this._timerRingCirc) {
+          const r = ring.r ? ring.r.baseVal.value : 125;
+          this._timerRingCirc = 2 * Math.PI * (r || 125);
         }
+        const circ = this._timerRingCirc;
+        const pct = t.type === "stopwatch" ? 0 : (t.totalDuration > 0 ? Math.min(1, Math.max(0, t.duration / t.totalDuration)) : 1);
+        ring.style.strokeDasharray = `${circ} ${circ}`;
+        ring.style.strokeDashoffset = String(circ * (1 - pct));
       }
     }
 
     renderAlarmUI() {
-      const alarmCard = document.getElementById("timer_alarm_dismiss");
-      const alarmTitle = document.getElementById("alarm_dismiss_title");
-      const alarmDesc = document.getElementById("alarm_dismiss_desc");
-      const startNextBtn = document.getElementById("timer_start_next_btn");
-
-      if (!alarmCard) return;
-
+      const card = document.getElementById("timer_alarm_dismiss");
+      if (!card) return;
       if (this.store.isAlarmActive) {
-        const t = this.store.timer;
-        const nextType = t.type;
-        const nextLabels = {
-          pomodoro: "Ready for another focus session?",
-          shortBreak: "Break time! Rest your mind.",
-          longBreak: "Long break! You've earned it."
-        };
-
-        alarmCard.style.display = "flex";
-        if (alarmTitle) alarmTitle.textContent = "Session Complete!";
-        if (alarmDesc) alarmDesc.textContent = nextLabels[nextType] || "Take a moment to recharge.";
-        if (startNextBtn) {
-          startNextBtn.style.display = "inline-block";
-          startNextBtn.textContent = "Start " + (nextType === "pomodoro" ? "Focus" : "Break");
+        card.hidden = false;
+        card.style.display = "flex";
+        const desc = document.getElementById("alarm_dismiss_desc");
+        const nextBtn = document.getElementById("timer_start_next_btn");
+        const nextType = this.store.timer.type;
+        if (desc) desc.textContent = nextType === "pomodoro" ? "Ready for the next focus block?" : "Great focus! Time for a break.";
+        if (nextBtn) {
+          nextBtn.style.display = "inline-flex";
+          nextBtn.textContent = nextType === "pomodoro" ? "Start Focus" : "Start Break";
         }
       } else {
-        alarmCard.style.display = "none";
+        card.hidden = true;
+        card.style.display = "none";
       }
     }
 
     dismissTimerAlarm() {
       this.store.stopAlarm();
-      const alarmCard = document.getElementById("timer_alarm_dismiss");
-      if (alarmCard) alarmCard.style.display = "none";
+      this.renderAlarmUI();
     }
 
-    updateTimerCountdown(t) {
-      const display = document.getElementById("timer_countdown_text");
-      if (!display) return;
-
-      const mins = Math.floor(Math.abs(t.duration) / 60);
-      const secs = Math.abs(t.duration) % 60;
-      const formatted = `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-      display.textContent = formatted;
-
-      document.title = t.isRunning ? `(${formatted}) Focused Work` : "Aurora Companion";
-
-      // Urgent pulse in last 60 seconds for pomodoro/breaks
-      const timerPanel = document.getElementById("timer_panel");
-      if (timerPanel) {
-        const isUrgent = t.isRunning && t.type !== "stopwatch" && t.duration <= 60 && t.duration > 0;
-        timerPanel.classList.toggle("urgent", isUrgent);
-      }
-
-      // Update SVG ring progress
-      const ring = document.getElementById("timer_ring_progress");
-      if (ring) {
-        if (!this._newRingCirc) {
-          const radius = ring.r.baseVal.value || 125;
-          this._newRingCirc = 2 * Math.PI * radius;
-        }
-        const circ = this._newRingCirc;
-
-        let percentage = 1;
-        if (t.type !== "stopwatch" && t.totalDuration > 0) {
-          percentage = t.duration / t.totalDuration;
-        } else if (t.type === "stopwatch") {
-          percentage = 0;
-        }
-
-        const offset = circ * (1 - percentage);
-        ring.style.strokeDasharray = `${circ} ${circ}`;
-        ring.style.strokeDashoffset = offset;
-
-        // Switch to red gradient when urgent
-        if (t.isRunning && t.type !== "stopwatch" && t.duration <= 60 && t.duration > 0) {
-          ring.setAttribute("stroke", "url(#ringGradientUrgent)");
-        } else {
-          ring.setAttribute("stroke", "url(#ringGradient)");
-        }
+    toggleAlarmUI(active) {
+      this.renderAlarmUI();
+      if (this.store.currentView !== "focus" && active) {
+        this.showToast("Focus session complete!", "success", {
+          undoLabel: "Dismiss",
+          onUndo: () => this.dismissTimerAlarm()
+        });
       }
     }
 
-    // -------------------------------------------------------------------------
-    // ADVANCED SVG ANALYTICS VIEW
-    // -------------------------------------------------------------------------
-    renderInsightsUI() {
-      const completed = this.store.tasks.filter(t => t.id !== "general_focus" && t.completed);
-      const pending = this.store.tasks.filter(t => t.id !== "general_focus" && !t.completed);
-      const total = this.store.tasks.filter(t => t.id !== "general_focus").length;
-      const completionRate = total > 0 ? Math.round((completed.length / total) * 100) : 0;
+    // -----------------------------------------------------------------------
+    // 5. INSIGHTS VIEW (Distinct Containers, Lazy Completed Load, Local Dates)
+    // -----------------------------------------------------------------------
+    async renderInsightsUI() {
+      const completed = await this.store.ensureAllCompletedLoaded();
+      const pending = this.store.tasks.filter((t) => t.id !== "general_focus" && !t.completed);
+      const total = completed.length + pending.length;
+      const rate = total > 0 ? Math.round((completed.length / total) * 100) : 0;
 
       const todayStr = getLocalDateString();
-      let totalFocusMin = 0;
-      let todayFocusMin = 0;
-      let totalSessions = 0;
-      let todaySessions = 0;
-
-      this.store.tasks.forEach(t => {
-        if (t.focusSessions) {
-          t.focusSessions.forEach(fs => {
-            totalFocusMin += fs.duration || 0;
-            totalSessions++;
-            const fsDate = fs.startTime ? fs.startTime.split("T")[0] : null;
-            if (fsDate === todayStr) {
-              todayFocusMin += fs.duration || 0;
-              todaySessions++;
-            }
-          });
+      let completedToday = 0;
+      for (let i = 0; i < completed.length; i++) {
+        if (completed[i].completedDate && getLocalDateString(completed[i].completedDate) === todayStr) {
+          completedToday += 1;
         }
-      });
+      }
 
-      document.getElementById("stat_completed_today").textContent = this.getCompletedTodayCount();
-      document.getElementById("stat_total_focus_hours").textContent = `${(todayFocusMin / 60).toFixed(1)}h`;
-      document.getElementById("stat_weekly_completion_pct").textContent = `${completionRate}%`;
-      const maxStreak = this.store.habits.reduce((max, h) => Math.max(max, h.streak || 0), 0);
-      document.getElementById("stat_total_active_streak").textContent = `${maxStreak}d`;
+      const allForFocus = [...this.store.tasks, ...completed];
+      let todayFocusMin = 0;
+      let todaySessions = 0;
+      const dailyFocusMap = {};
+      const todayTaskFocus = [];
 
-      // Update stat labels to be more descriptive
-      const focusLabel = document.querySelector("#stat_total_focus_hours").previousElementSibling;
-      if (focusLabel) focusLabel.textContent = `Focus Hrs Today (${todaySessions} sessions)`;
+      for (let i = 0; i < allForFocus.length; i++) {
+        const t = allForFocus[i];
+        if (!Array.isArray(t.focusSessions) || t.focusSessions.length === 0) continue;
+        let taskTodayMin = 0;
+        let taskTodayCount = 0;
+        for (let j = 0; j < t.focusSessions.length; j++) {
+          const fs = t.focusSessions[j];
+          if (!fs || !fs.startTime) continue;
+          const ds = getLocalDateString(fs.startTime);
+          const dur = Number(fs.duration) || 0;
+          dailyFocusMap[ds] = (dailyFocusMap[ds] || 0) + dur;
+          if (ds === todayStr) {
+            todayFocusMin += dur;
+            todaySessions += 1;
+            taskTodayMin += dur;
+            taskTodayCount += 1;
+          }
+        }
+        if (taskTodayCount > 0) {
+          todayTaskFocus.push({ title: t.title, sessions: taskTodayCount, minutes: taskTodayMin });
+        }
+      }
+
+      const maxStreak = this.store.habits.reduce((m, h) => Math.max(m, h.streak || 0), 0);
+      const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+      setTxt("stat_completed_today", String(completedToday));
+      setTxt("stat_weekly_completion_pct", `${rate}%`);
+      setTxt("stat_total_focus_hours", `${(todayFocusMin / 60).toFixed(1)}h`);
+      setTxt("stat_total_active_streak", `${maxStreak}d`);
 
       this.renderCompletionLineChart(completed);
-      this.renderFocusTimeBarChart();
       this.renderCategoryDonutChart(completed, pending);
-
-      // Render focus sessions table
-      this.renderFocusSessionsTable();
-    }
-
-    renderFocusSessionsTable() {
-      const wrapper = document.getElementById("chart_focus_distribution");
-      if (!wrapper) return;
-
-      const todayStr = getLocalDateString();
-      const tasksWithFocusToday = this.store.tasks
-        .filter(t => t.focusSessions && t.focusSessions.some(fs => fs.startTime && fs.startTime.startsWith(todayStr)))
-        .sort((a, b) => {
-          const aMin = a.focusSessions.reduce((s, fs) => s + (fs.duration || 0), 0);
-          const bMin = b.focusSessions.reduce((s, fs) => s + (fs.duration || 0), 0);
-          return bMin - aMin;
-        });
-
-      if (tasksWithFocusToday.length === 0) {
-        wrapper.innerHTML = `<div class="empty_state_text" style="text-align: center; padding: 30px 10px; color: var(--text-muted);">Zero flow sessions logged today. Launch the Flow State Timer to enter deep work!</div>`;
-        return;
-      }
-
-      wrapper.innerHTML = `
-        <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 8px;">
-          <thead>
-            <tr style="border-bottom: 1px solid var(--border-color);">
-              <th style="text-align: left; padding: 8px 4px; color: var(--text-muted); font-size: 11px; font-weight: 800;">Task</th>
-              <th style="text-align: right; padding: 8px 4px; color: var(--text-muted); font-size: 11px; font-weight: 800;">Sessions</th>
-              <th style="text-align: right; padding: 8px 4px; color: var(--text-muted); font-size: 11px; font-weight: 800;">Time</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${tasksWithFocusToday.map(t => {
-              const todaySessions = t.focusSessions.filter(fs => fs.startTime && fs.startTime.startsWith(todayStr));
-              const sessions = todaySessions.length;
-              const totalMin = todaySessions.reduce((s, fs) => s + (fs.duration || 0), 0);
-              return `
-                <tr style="border-bottom: 1px solid var(--border-color);">
-                  <td style="padding: 10px 4px; color: var(--text-primary); font-weight: 600;">${this.escapeHTML(t.title)}</td>
-                  <td style="padding: 10px 4px; text-align: right; color: var(--accent-primary); font-weight: 700;">${sessions}</td>
-                  <td style="padding: 10px 4px; text-align: right; color: var(--text-secondary); font-weight: 600;">${totalMin}m</td>
-                </tr>
-              `;
-            }).join("")}
-          </tbody>
-        </table>
-      `;
-    }
-
-    getCompletedTodayCount() {
-      const todayStr = getLocalDateString();
-      return this.store.tasks.filter(t => t.id !== "general_focus" && t.completed && t.completedDate && t.completedDate.startsWith(todayStr)).length;
+      this.renderFocusTimeBarChart(dailyFocusMap);
+      this.renderFocusSessionsTable(todayTaskFocus);
     }
 
     renderCompletionLineChart(completed) {
       const wrapper = document.getElementById("chart_weekly_productivity");
       if (!wrapper) return;
-
+      const countsMap = {};
+      for (let i = 0; i < completed.length; i++) {
+        if (completed[i].completedDate) {
+          const ds = getLocalDateString(completed[i].completedDate);
+          countsMap[ds] = (countsMap[ds] || 0) + 1;
+        }
+      }
+      const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       const days = [];
       const counts = [];
-      const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-      const completedCountMap = {};
-      completed.forEach(t => {
-        if (t.completedDate) {
-          const dateStr = t.completedDate.split("T")[0];
-          completedCountMap[dateStr] = (completedCountMap[dateStr] || 0) + 1;
-        }
-      });
-
       for (let i = 6; i >= 0; i--) {
-        const d = new Date(); d.setDate(d.getDate() - i);
-        const dateStr = getLocalDateString(d);
-        days.push(dateStr);
-        counts.push(completedCountMap[dateStr] || 0);
+        const ds = getNDaysFromNow(-i);
+        days.push(ds);
+        counts.push(countsMap[ds] || 0);
       }
-
       const maxCount = Math.max(...counts, 4);
-      const labels = days.map(ds => weekdayLabels[new Date(ds).getDay()]);
-
+      const labels = days.map((ds) => weekdayLabels[parseLocalDate(ds).getDay()]);
       const chartWidth = 440;
       const chartHeight = 130;
       const xStart = 40;
       const yStart = 20;
       const stepX = chartWidth / 6;
 
-      const points = counts.map((c, idx) => {
-        const x = xStart + (idx * stepX);
-        const y = yStart + chartHeight - (c / maxCount * chartHeight);
-        return { x, y, value: c };
-      });
-
-      const polylinePoints = points.map(p => `${p.x},${p.y}`).join(" ");
-      const gridLines = [0, 0.25, 0.5, 0.75, 1].map(pct => {
-        const val = Math.round(pct * maxCount);
-        const y = yStart + chartHeight - (pct * chartHeight);
-        return `
-          <line x1="${xStart}" y1="${y}" x2="${xStart + chartWidth}" y2="${y}" stroke="var(--border-color)" stroke-dasharray="3,3" stroke-width="0.5" />
-          <text x="${xStart - 10}" y="${y + 4}" fill="var(--text-muted)" font-size="10" text-anchor="end">${val}</text>
-        `;
-      }).join("");
-
-      const dotsHtml = points.map(p => `
-        <circle cx="${p.x}" cy="${p.y}" r="4" fill="var(--accent-primary)" stroke="var(--card-bg)" stroke-width="1.5" />
-        <text x="${p.x}" y="${p.y - 8}" fill="var(--text-primary)" font-size="10" font-weight="600" text-anchor="middle">${p.value}</text>
-      `).join("");
-
-      const labelsHtml = labels.map((lbl, idx) => {
-        const x = xStart + (idx * stepX);
-        return `<text x="${x}" y="${yStart + chartHeight + 18}" fill="var(--text-secondary)" font-size="11" text-anchor="middle">${lbl}</text>`;
-      }).join("");
+      const pts = counts.map((c, idx) => ({
+        x: xStart + idx * stepX,
+        y: yStart + chartHeight - (c / maxCount) * chartHeight,
+        value: c
+      }));
 
       wrapper.innerHTML = `
         <svg viewBox="0 0 500 200" width="100%" height="100%">
-          ${gridLines}
-          <polyline fill="none" stroke="var(--accent-primary)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="${polylinePoints}" />
-          ${dotsHtml}
-          ${labelsHtml}
+          ${[0, 0.5, 1].map((pct) => {
+            const y = yStart + chartHeight - pct * chartHeight;
+            return `<line x1="${xStart}" y1="${y}" x2="${xStart + chartWidth}" y2="${y}" stroke="var(--border-color)" stroke-dasharray="3,3" stroke-width="0.6"/><text x="${xStart - 10}" y="${y + 4}" fill="var(--text-muted)" font-size="10" text-anchor="end">${Math.round(pct * maxCount)}</text>`;
+          }).join("")}
+          <polyline fill="none" stroke="var(--accent-primary)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" points="${pts.map((p) => `${p.x},${p.y}`).join(" ")}"/>
+          ${pts.map((p) => `<circle cx="${p.x}" cy="${p.y}" r="4" fill="var(--accent-primary)"/><text x="${p.x}" y="${p.y - 8}" fill="var(--text-primary)" font-size="10" text-anchor="middle">${p.value}</text>`).join("")}
+          ${labels.map((lbl, idx) => `<text x="${xStart + idx * stepX}" y="${yStart + chartHeight + 18}" fill="var(--text-secondary)" font-size="11" text-anchor="middle">${lbl}</text>`).join("")}
         </svg>
       `;
     }
 
-    renderFocusTimeBarChart() {
+    renderFocusTimeBarChart(dailyFocusMap) {
       const wrapper = document.getElementById("chart_focus_distribution");
       if (!wrapper) return;
-
+      const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
       const days = [];
       const mins = [];
-      const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-      const dailyFocusMap = {};
-      this.store.tasks.forEach(t => {
-        if (t.focusSessions) {
-          t.focusSessions.forEach(fs => {
-            if (fs.startTime) {
-              const dateStr = fs.startTime.split("T")[0];
-              dailyFocusMap[dateStr] = (dailyFocusMap[dateStr] || 0) + (fs.duration || 0);
-            }
-          });
-        }
-      });
-
       for (let i = 6; i >= 0; i--) {
-        const d = new Date(); d.setDate(d.getDate() - i);
-        const dateStr = getLocalDateString(d);
-        days.push(dateStr);
-        mins.push(dailyFocusMap[dateStr] || 0);
+        const ds = getNDaysFromNow(-i);
+        days.push(ds);
+        mins.push(dailyFocusMap[ds] || 0);
       }
-
       const maxMins = Math.max(...mins, 50);
-      const labels = days.map(ds => weekdayLabels[new Date(ds).getDay()]);
-
+      const labels = days.map((ds) => weekdayLabels[parseLocalDate(ds).getDay()]);
       const chartWidth = 440;
       const chartHeight = 130;
       const xStart = 40;
@@ -7271,1046 +5183,1651 @@ Return ONLY a valid JSON object matching this schema:
       const stepX = chartWidth / 7;
       const barWidth = 24;
 
-      const barsHtml = mins.map((m, idx) => {
-        const x = xStart + (idx * stepX) + (stepX - barWidth) / 2;
-        const barHeight = (m / maxMins) * chartHeight;
-        const y = yStart + chartHeight - barHeight;
-        return `
-          <rect x="${x}" y="${y}" width="${barWidth}" height="${Math.max(barHeight, 2)}" rx="4" fill="url(#indigoGradient)" />
-          <text x="${x + barWidth/2}" y="${y - 6}" fill="var(--text-primary)" font-size="10" font-weight="600" text-anchor="middle">${m > 0 ? m + 'm' : ''}</text>
-        `;
-      }).join("");
-
-      const labelsHtml = labels.map((lbl, idx) => {
-        const x = xStart + (idx * stepX) + stepX/2;
-        return `<text x="${x}" y="${yStart + chartHeight + 18}" fill="var(--text-secondary)" font-size="11" text-anchor="middle">${lbl}</text>`;
-      }).join("");
-
       wrapper.innerHTML = `
         <svg viewBox="0 0 500 200" width="100%" height="100%">
-          <defs>
-            <linearGradient id="indigoGradient" x1="0%" y1="0%" x2="0%" y2="100%">
-              <stop offset="0%" stop-color="var(--accent-primary)" />
-              <stop offset="100%" stop-color="rgba(99, 102, 241, 0.4)" />
-            </linearGradient>
-          </defs>
-          <line x1="${xStart}" y1="${yStart + chartHeight}" x2="${xStart + chartWidth}" y2="${yStart + chartHeight}" stroke="var(--border-color)" stroke-width="1" />
-          ${barsHtml}
-          ${labelsHtml}
+          <line x1="${xStart}" y1="${yStart + chartHeight}" x2="${xStart + chartWidth}" y2="${yStart + chartHeight}" stroke="var(--border-color)" stroke-width="1"/>
+          ${mins.map((m, idx) => {
+            const x = xStart + idx * stepX + (stepX - barWidth) / 2;
+            const h = (m / maxMins) * chartHeight;
+            const y = yStart + chartHeight - h;
+            return `<rect x="${x}" y="${y}" width="${barWidth}" height="${Math.max(h, 2)}" rx="4" fill="var(--accent-primary)"/><text x="${x + barWidth / 2}" y="${y - 6}" fill="var(--text-primary)" font-size="10" text-anchor="middle">${m > 0 ? `${m}m` : ""}</text>`;
+          }).join("")}
+          ${labels.map((lbl, idx) => `<text x="${xStart + idx * stepX + stepX / 2}" y="${yStart + chartHeight + 18}" fill="var(--text-secondary)" font-size="11" text-anchor="middle">${lbl}</text>`).join("")}
         </svg>
+      `;
+    }
+
+    renderFocusSessionsTable(todayTaskFocus) {
+      const wrapper = document.getElementById("focus_sessions_table");
+      if (!wrapper) return;
+      if (!todayTaskFocus || todayTaskFocus.length === 0) {
+        wrapper.innerHTML = `<div class="empty_state_text">No focus sessions logged today yet.</div>`;
+        return;
+      }
+      const sorted = [...todayTaskFocus].sort((a, b) => b.minutes - a.minutes);
+      wrapper.innerHTML = `
+        <table class="insights_sessions_table">
+          <thead><tr><th>Task</th><th>Sessions</th><th>Time</th></tr></thead>
+          <tbody>
+            ${sorted.map((row) => `
+              <tr>
+                <td>${escapeHTML(row.title)}</td>
+                <td>${row.sessions}</td>
+                <td>${row.minutes}m</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
       `;
     }
 
     renderCategoryDonutChart(completed, pending) {
       const wrapper = document.getElementById("chart_category_breakdown");
       if (!wrapper) return;
-
-      const all = [...completed, ...pending];
-      const categoriesMap = {};
-      all.forEach(t => {
-        const cat = t.category || "Inbox";
-        categoriesMap[cat] = (categoriesMap[cat] || 0) + 1;
-      });
-
-      const categories = Object.keys(categoriesMap);
-      const data = categories.map(cat => ({ label: cat, value: categoriesMap[cat] }));
-      const total = all.length;
-
+      const map = {};
+      const total = completed.length + pending.length;
       if (total === 0) {
-        wrapper.innerHTML = `<div style="text-align:center; padding: 40px; color:var(--text-muted)">Empty distributions</div>`;
+        wrapper.innerHTML = `<div class="empty_state_text">No task data yet.</div>`;
         return;
       }
+      completed.forEach((t) => { const c = t.category || "Inbox"; map[c] = (map[c] || 0) + 1; });
+      pending.forEach((t) => { const c = t.category || "Inbox"; map[c] = (map[c] || 0) + 1; });
 
-      let accumulatedPercent = 0;
+      const data = Object.keys(map).map((label) => ({ label, value: map[label] }));
       const radius = 60;
-      const cx = 100;
-      const cy = 100;
-      const strokeWidth = 16;
-      const circumference = 2 * Math.PI * radius;
-
+      const circ = 2 * Math.PI * radius;
       const colors = ["var(--accent-primary)", "var(--accent-secondary)", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4"];
+      let acc = 0;
 
-      const slicesHtml = data.map((item, idx) => {
-        const percentage = item.value / total;
-        const strokeDash = percentage * circumference;
-        const strokeOffset = circumference - (accumulatedPercent * circumference);
-        accumulatedPercent += percentage;
-        const color = colors[idx % colors.length];
-
-        return `
-          <circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="${color}" stroke-width="${strokeWidth}"
-            stroke-dasharray="${strokeDash} ${circumference}" stroke-dashoffset="${strokeOffset}" transform="rotate(-90 ${cx} ${cy})" />
-        `;
+      const slices = data.map((item, idx) => {
+        const pct = item.value / total;
+        const dash = pct * circ;
+        const offset = circ - acc * circ;
+        acc += pct;
+        return `<circle cx="100" cy="100" r="${radius}" fill="none" stroke="${colors[idx % colors.length]}" stroke-width="16" stroke-dasharray="${dash} ${circ}" stroke-dashoffset="${offset}" transform="rotate(-90 100 100)"/>`;
       }).join("");
 
-      const legendHtml = data.map((item, idx) => {
-        const color = colors[idx % colors.length];
-        const pct = Math.round((item.value / total) * 100);
-        return `
-          <div class="legend_item">
-            <span class="legend_dot" style="background-color: ${color}"></span>
-            <span class="legend_label">${item.label}</span>
-            <span class="legend_value">${item.value} (${pct}%)</span>
-          </div>
-        `;
-      }).join("");
+      const legend = data.map((item, idx) => `
+        <div class="legend_item">
+          <span class="legend_dot" style="background:${colors[idx % colors.length]}"></span>
+          <span class="legend_label">${escapeHTML(item.label)}</span>
+          <span class="legend_value">${item.value} (${Math.round((item.value / total) * 100)}%)</span>
+        </div>
+      `).join("");
 
       wrapper.innerHTML = `
         <div class="donut_layout_wrapper">
           <div class="donut_canvas">
             <svg viewBox="0 0 200 200" width="100%" height="100%">
-              <circle cx="${cx}" cy="${cy}" r="${radius}" fill="none" stroke="var(--border-color)" stroke-width="${strokeWidth + 2}" />
-              ${slicesHtml}
-              <circle cx="${cx}" cy="${cy}" r="${radius - strokeWidth/2 - 2}" fill="var(--card-bg)" />
-              <text x="${cx}" y="${cy - 2}" fill="var(--text-primary)" font-size="20" font-weight="700" text-anchor="middle">${total}</text>
-              <text x="${cx}" y="${cy + 16}" fill="var(--text-secondary)" font-size="11" text-anchor="middle">Total Tasks</text>
+              <circle cx="100" cy="100" r="${radius}" fill="none" stroke="var(--border-color)" stroke-width="18"/>
+              ${slices}
+              <text x="100" y="98" fill="var(--text-primary)" font-size="20" font-weight="700" text-anchor="middle">${total}</text>
+              <text x="100" y="116" fill="var(--text-secondary)" font-size="11" text-anchor="middle">Tasks</text>
             </svg>
           </div>
-          <div class="donut_legend">
-            ${legendHtml}
-          </div>
+          <div class="donut_legend">${legend}</div>
         </div>
       `;
     }
 
-    previewAlarmSound(sound) {
-      if (this.previewAudio) {
-        try { this.previewAudio.pause(); } catch(e){}
-        this.previewAudio = null;
-      }
-      if (this.previewOscillators) {
-        this.previewOscillators.forEach(o => { try{ o.stop(); }catch(e){} });
-        this.previewOscillators = [];
-      }
-      if (this.previewCtx) {
-        try { this.previewCtx.close(); } catch(e){}
-        this.previewCtx = null;
-      }
-      if (this.previewTimeout) {
-        clearTimeout(this.previewTimeout);
-        this.previewTimeout = null;
-      }
-
-      if (sound === "steady_ascent") {
-        try {
-          this.previewAudio = new Audio("A_Steady_Ascent.mp3");
-          this.previewAudio.play().catch(e => console.warn(e));
-          this.previewTimeout = setTimeout(() => {
-            if (this.previewAudio) this.previewAudio.pause();
-          }, 2500);
-        } catch(e) {
-          console.warn(e);
-        }
-      } else {
-        try {
-          const ctx = new (window.AudioContext || window.webkitAudioContext)();
-          this.previewCtx = ctx;
-          this.previewOscillators = [];
-          const now = ctx.currentTime;
-          
-          const playTone = (freq, startTime, duration) => {
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.connect(gain);
-            gain.connect(ctx.destination);
-            osc.type = "sine";
-            osc.frequency.setValueAtTime(freq, startTime);
-            gain.gain.setValueAtTime(0, startTime);
-            gain.gain.linearRampToValueAtTime(0.15, startTime + 0.05);
-            gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
-            osc.start(startTime);
-            osc.stop(startTime + duration);
-            this.previewOscillators.push(osc);
-          };
-          
-          playTone(880, now, 0.15);
-          playTone(880, now + 0.25, 0.15);
-          
-          this.previewTimeout = setTimeout(() => {
-            ctx.close();
-            this.previewCtx = null;
-          }, 2000);
-        } catch(e) {
-          console.warn(e);
-        }
+    // -----------------------------------------------------------------------
+    // 6. REFLECTIVE JOURNAL (Persistent Editor DOM — Zero Focus Loss on Autosave!)
+    // -----------------------------------------------------------------------
+    clearJournalAutosaveTimer() {
+      if (this.journalAutosaveTimeout) {
+        clearTimeout(this.journalAutosaveTimeout);
+        this.journalAutosaveTimeout = null;
       }
     }
 
-    // -------------------------------------------------------------------------
-    // PERSONALIZATION SETTINGS VIEW (WAKING TIMES INPUTS)
-    // -------------------------------------------------------------------------
+    updateJournalDFButton() {
+      const dfBtn = document.getElementById("btn_journal_df_toggle");
+      if (dfBtn) {
+        dfBtn.textContent = document.body.classList.contains("journal-distraction-free") ? "Exit Focus" : "Focus Mode";
+      }
+    }
+
+    syncJournalInputsWithoutRebuild() {
+      const entry = this.store.journal[this.selectedJournalDate] || {};
+      const intentInput = document.getElementById("j_intent");
+      const reflectionArea = document.getElementById("j_gratitude");
+      const shutdownCb = document.getElementById("btn_j_shutdown_trigger");
+      const reflectionVal = entry.eveningReflection || entry.reflection || "";
+      if (intentInput && document.activeElement !== intentInput) intentInput.value = entry.morningIntention || "";
+      if (reflectionArea && document.activeElement !== reflectionArea) reflectionArea.value = reflectionVal;
+      if (shutdownCb) shutdownCb.checked = Boolean(entry.shutdownComplete);
+    }
+
+    renderJournalUI() {
+      const wrapper = document.getElementById("journal_entries_container");
+      if (!wrapper) return;
+      this.clearJournalAutosaveTimer();
+
+      const activeDate = this.selectedJournalDate;
+      this.renderedJournalDate = activeDate;
+      const entry = this.store.journal[activeDate] || {};
+      const reflectionText = entry.eveningReflection || entry.reflection || "";
+      const activeMood = entry.morningMood || entry.mood || "";
+
+      const dates = [];
+      for (let i = 0; i < 7; i++) dates.push(getNDaysFromNow(-i));
+      if (!dates.includes(activeDate)) {
+        dates.push(activeDate);
+        dates.sort((a, b) => (a < b ? 1 : -1));
+      }
+
+      const todayStr = getLocalDateString();
+      const yesterdayStr = getNDaysFromNow(-1);
+      const formattedActive = parseLocalDate(activeDate).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" });
+
+      const navHtml = dates.map((dStr) => {
+        const d = parseLocalDate(dStr);
+        let label = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+        if (dStr === todayStr) label = "Today";
+        else if (dStr === yesterdayStr) label = "Yesterday";
+        const hasEntry = Boolean(this.store.journal[dStr] && (this.store.journal[dStr].morningIntention || this.store.journal[dStr].eveningReflection || this.store.journal[dStr].reflection));
+        return `<button type="button" class="journal_nav_item ${dStr === activeDate ? "active" : ""} ${hasEntry ? "has_entry" : ""}" data-date="${dStr}"><span>${escapeHTML(label)}</span>${hasEntry ? `<span class="nav_entry_dot" aria-hidden="true">•</span>` : ""}</button>`;
+      }).join("");
+
+      wrapper.innerHTML = `
+        <div class="journal_layout_split">
+          <aside class="journal_sidebar_nav">
+            <div class="journal_nav_list">${navHtml}</div>
+            <div class="journal_date_picker_block">
+              <label for="journal_date_picker" class="journal_nav_section_title">Jump to Date</label>
+              <input type="date" id="journal_date_picker" class="journal_date_picker_input" value="${activeDate}">
+            </div>
+          </aside>
+          <div class="journal_editor_view">
+            <div class="journal_workspace_header">
+              <div class="journal_date_details">
+                <h3>${escapeHTML(formattedActive)}</h3>
+                <span class="journal_autosave_status" id="journal_autosave_status">✓ Saved</span>
+              </div>
+              <button type="button" class="journal_action_btn" id="btn_journal_df_toggle">${document.body.classList.contains("journal-distraction-free") ? "Exit Focus" : "Focus Mode"}</button>
+            </div>
+            <div class="journal_workspace_content">
+              <div class="journal_editor_section">
+                <label for="j_intent" class="control_label">Morning Intention</label>
+                <input type="text" id="j_intent" class="journal_text_input" placeholder="Primary focus for today..." value="${escapeHTML(entry.morningIntention || "")}">
+              </div>
+              <div class="journal_editor_section">
+                <span class="control_label">Mood</span>
+                <div class="journal_mood_pills" id="j_mood_row">
+                  ${[["calm", "Calm"], ["energized", "Charged"], ["peaceful", "Peaceful"], ["tired", "Tired"]].map(([val, lbl]) => `
+                    <button type="button" class="mood_pill ${activeMood === val ? "active" : ""}" data-mood="${val}">${lbl}</button>
+                  `).join("")}
+                </div>
+              </div>
+              <div class="journal_editor_section">
+                <div class="journal_tabs_bar">
+                  <button type="button" class="journal_tab_btn active" id="tab_journal_write">Write</button>
+                  <button type="button" class="journal_tab_btn" id="tab_journal_preview">Preview</button>
+                </div>
+                <textarea id="j_gratitude" class="journal_textarea" rows="7" placeholder="Reflect on wins, blockers, and clarity (Markdown supported)...">${escapeHTML(reflectionText)}</textarea>
+                <div id="j_gratitude_preview" class="journal_preview_pane" hidden></div>
+              </div>
+              <label class="shutdown_check_label">
+                <input type="checkbox" id="btn_j_shutdown_trigger" class="shutdown_native_checkbox" ${entry.shutdownComplete ? "checked" : ""}>
+                <span>Mindful shutdown complete for the evening</span>
+              </label>
+              <div class="journal_footer_actions">
+                <button type="button" class="journal_submit_btn" id="btn_journal_commit_save">Save Reflection</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const intentInput = document.getElementById("j_intent");
+      const gratitudeArea = document.getElementById("j_gratitude");
+      const shutdownCb = document.getElementById("btn_j_shutdown_trigger");
+      const statusEl = document.getElementById("journal_autosave_status");
+      const writeBtn = document.getElementById("tab_journal_write");
+      const previewBtn = document.getElementById("tab_journal_preview");
+      const previewPane = document.getElementById("j_gratitude_preview");
+      let selectedMood = activeMood;
+
+      const commitSave = (isAutosave) => {
+        if (this.renderedJournalDate !== activeDate) return;
+        this.store.saveJournalEntry(activeDate, {
+          morningIntention: intentInput ? intentInput.value.trim() : "",
+          morningMood: selectedMood,
+          eveningReflection: gratitudeArea ? gratitudeArea.value.trim() : "",
+          shutdownComplete: Boolean(shutdownCb && shutdownCb.checked)
+        }, { silentAutosave: isAutosave });
+
+        if (statusEl) {
+          statusEl.textContent = "✓ Saved";
+          statusEl.classList.remove("saving");
+        }
+        if (!isAutosave) this.showToast("Reflection saved", "success");
+      };
+
+      const scheduleAutosave = () => {
+        if (statusEl) {
+          statusEl.textContent = "Saving...";
+          statusEl.classList.add("saving");
+        }
+        this.clearJournalAutosaveTimer();
+        this.journalAutosaveTimeout = setTimeout(() => {
+          this.journalAutosaveTimeout = null;
+          commitSave(true);
+        }, 800);
+      };
+
+      const moodRow = document.getElementById("j_mood_row");
+      if (moodRow) {
+        moodRow.addEventListener("click", (e) => {
+          const btn = e.target.closest("button[data-mood]");
+          if (!btn) return;
+          selectedMood = btn.getAttribute("data-mood");
+          moodRow.querySelectorAll("button[data-mood]").forEach((b) => b.classList.toggle("active", b === btn));
+          scheduleAutosave();
+        });
+      }
+
+      if (writeBtn && previewBtn && previewPane && gratitudeArea) {
+        writeBtn.addEventListener("click", () => {
+          writeBtn.classList.add("active");
+          previewBtn.classList.remove("active");
+          gratitudeArea.hidden = false;
+          previewPane.hidden = true;
+        });
+        previewBtn.addEventListener("click", () => {
+          previewBtn.classList.add("active");
+          writeBtn.classList.remove("active");
+          gratitudeArea.hidden = true;
+          previewPane.hidden = false;
+          previewPane.innerHTML = renderMarkdownLite(gratitudeArea.value);
+        });
+      }
+
+      wrapper.querySelector(".journal_nav_list")?.addEventListener("click", (e) => {
+        const item = e.target.closest(".journal_nav_item");
+        if (!item) return;
+        const nextDate = item.getAttribute("data-date");
+        if (nextDate && nextDate !== this.selectedJournalDate) {
+          this.clearJournalAutosaveTimer();
+          this.selectedJournalDate = nextDate;
+          this.renderJournalUI();
+        }
+      });
+
+      document.getElementById("journal_date_picker")?.addEventListener("change", (e) => {
+        if (e.target.value && e.target.value !== this.selectedJournalDate) {
+          this.clearJournalAutosaveTimer();
+          this.selectedJournalDate = e.target.value;
+          this.renderJournalUI();
+        }
+      });
+
+      document.getElementById("btn_journal_df_toggle")?.addEventListener("click", () => {
+        document.body.classList.toggle("journal-distraction-free");
+        this.updateJournalDFButton();
+      });
+
+      if (intentInput) intentInput.addEventListener("input", scheduleAutosave);
+      if (gratitudeArea) gratitudeArea.addEventListener("input", scheduleAutosave);
+      if (shutdownCb) {
+        shutdownCb.addEventListener("change", () => {
+          scheduleAutosave();
+          if (shutdownCb.checked) this.store.emit("celebrate", { elementId: "btn_j_shutdown_trigger" });
+        });
+      }
+      document.getElementById("btn_journal_commit_save")?.addEventListener("click", () => commitSave(false));
+    }
+
+    // -----------------------------------------------------------------------
+    // 7. SETTINGS VIEW (Unified API Key, 3-State Theme, Safe Wipe via Dialog)
+    // -----------------------------------------------------------------------
     renderSettingsUI() {
-      const currentTheme = this.store.theme;
-      const currentAccent = this.store.accent;
-      const notifEnabled = localStorage.getItem("aurora_notifications_enabled") !== "false";
+      const panel = this.panels.settings;
+      if (!panel) return;
+      const curTheme = this.store.theme;
+      const curStyle = this.store.uiStyle;
+      const curAccent = this.store.accent;
 
-      this.settingsSection.innerHTML = `
+      panel.innerHTML = `
         <div class="settings_group">
-          <h2>Personal Vibe Style</h2>
-          <p class="group_desc">Customize themes and color schemes to match your work space style.</p>
-          
+          <h2>Appearance & Circadian Atelier</h2>
           <div class="setting_row">
-            <span class="setting_label">Visual Vibe Theme</span>
+            <span class="setting_label">Theme</span>
             <div class="theme_toggle_pills" id="settings_theme_toggle">
-              <button class="pill_btn ${currentTheme === "dark" ? "active" : ""}" data-theme="dark">Dark Aura</button>
-              <button class="pill_btn ${currentTheme === "light" ? "active" : ""}" data-theme="light">Light Aurora</button>
+              <button type="button" class="pill_btn ${curTheme === "system" ? "active" : ""}" data-theme="system">System</button>
+              <button type="button" class="pill_btn ${curTheme === "light" ? "active" : ""}" data-theme="light">Light</button>
+              <button type="button" class="pill_btn ${curTheme === "dark" ? "active" : ""}" data-theme="dark">Dark</button>
             </div>
           </div>
-
           <div class="setting_row">
-            <span class="setting_label">UI Visual Style</span>
+            <span class="setting_label">Visual Style</span>
             <div class="theme_toggle_pills" id="settings_style_toggle">
-              <button class="pill_btn ${this.store.uiStyle === "minimalism" ? "active" : ""}" data-style="minimalism">Minimalism</button>
-              <button class="pill_btn ${this.store.uiStyle === "neo-brutalism" ? "active" : ""}" data-style="neo-brutalism">Neo-Brutalism</button>
+              <button type="button" class="pill_btn ${curStyle === "atelier" ? "active" : ""}" data-style="atelier">Atelier</button>
+              <button type="button" class="pill_btn ${curStyle === "neo-brutalism" ? "active" : ""}" data-style="neo-brutalism">Neo-Brutalism</button>
             </div>
           </div>
-
           <div class="setting_row">
-            <span class="setting_label">Accent Signature Color</span>
-            <div class="accent_pills_grid">
-              <button class="accent_pill ${currentAccent === "indigo" ? "active" : ""}" style="background-color:#6366f1" data-accent="indigo" title="Indigo"></button>
-              <button class="accent_pill ${currentAccent === "emerald" ? "active" : ""}" style="background-color:#10b981" data-accent="emerald" title="Emerald"></button>
-              <button class="accent_pill ${currentAccent === "rose" ? "active" : ""}" style="background-color:#f43f5e" data-accent="rose" title="Rose"></button>
-              <button class="accent_pill ${currentAccent === "amber" ? "active" : ""}" style="background-color:#f59e0b" data-accent="amber" title="Amber"></button>
+            <span class="setting_label">Accent</span>
+            <div class="accent_pills_grid" id="settings_accent_toggle">
+              <button type="button" class="accent_pill ${curAccent === "aurora" ? "active" : ""}" data-accent="aurora" aria-label="Aurora Indigo"></button>
+              <button type="button" class="accent_pill ${curAccent === "pine" ? "active" : ""}" data-accent="pine" aria-label="Pine Emerald"></button>
+              <button type="button" class="accent_pill ${curAccent === "terracotta" ? "active" : ""}" data-accent="terracotta" aria-label="Terracotta Rose"></button>
+              <button type="button" class="accent_pill ${curAccent === "solar" ? "active" : ""}" data-accent="solar" aria-label="Solar Amber"></button>
             </div>
           </div>
         </div>
 
         <div class="settings_group">
-          <h2>Routine Configurations</h2>
-          <p class="group_desc">Set up waking hour boundaries to hide sleeping hours from planners.</p>
+          <h2>Circadian Schedule</h2>
           <div class="setting_row">
-            <span class="setting_label">Wake-up Hour</span>
-            <input type="time" id="set_wake_time" class="settings_dropdown" value="${this.store.routinePrefs.wakeUpTime}">
+            <label for="set_wake_time" class="setting_label">Wake-up Time</label>
+            <input type="time" id="set_wake_time" class="settings_dropdown" value="${escapeHTML(this.store.routinePrefs.wakeUpTime || "06:00")}">
           </div>
           <div class="setting_row">
-            <span class="setting_label">Bedtime Sleep Hour</span>
-            <input type="time" id="set_sleep_time" class="settings_dropdown" value="${this.store.routinePrefs.sleepTime}">
+            <label for="set_sleep_time" class="setting_label">Sleep Time</label>
+            <input type="time" id="set_sleep_time" class="settings_dropdown" value="${escapeHTML(this.store.routinePrefs.sleepTime || "23:00")}">
           </div>
         </div>
 
         <div class="settings_group">
-          <div class="settings_header_with_badge">
-            <div>
-              <h2>Productivity Personality Profile</h2>
-              <p class="group_desc">Cognitive traits, energy rhythm, and companion coaching tone.</p>
+          <h2>Productivity DNA</h2>
+          <div class="personality_settings_card">
+            <div class="personality_settings_info">
+              <h4>${this.personalityProfile ? `${this.personalityProfile.heroIcon || "🧠"} ${escapeHTML(this.personalityProfile.archetype)}` : "Discover Your Productivity DNA"}</h4>
+              <p>${this.personalityProfile ? `${escapeHTML(this.personalityProfile.chronotypeLabel || "")} · Cap ${this.personalityProfile.capacityLimit || 3}/day` : "60-second behavioral profile to personalize coaching and pacing."}</p>
             </div>
-            <span class="badge_key_status ${this.personalityProfile ? "active" : "inactive"}">
-              ${this.personalityProfile ? this.escapeHTML(this.personalityProfile.archetype) : "No Profile Configured"}
-            </span>
+            <button type="button" id="btn_retake_personality_quiz" class="setting_primary_btn">${this.personalityProfile ? "Retake Quiz" : "Take Quiz"}</button>
           </div>
-
-          ${this.personalityProfile ? `
-            <div class="personality_settings_card">
-              <div class="personality_settings_info">
-                <h4>${this.personalityProfile.heroIcon || "🧠"} ${this.escapeHTML(this.personalityProfile.archetype)}</h4>
-                <p><strong>Peak Energy:</strong> ${this.escapeHTML(this.personalityProfile.chronotypeLabel || "Morning")} · <strong>Pacing:</strong> ${this.escapeHTML(this.personalityProfile.pacingLabel || "Sprints")} · <strong>Coach Voice:</strong> ${this.escapeHTML(this.personalityProfile.coachVoiceLabel || "Stoic")} · <strong>Capacity Cap:</strong> ${this.personalityProfile.capacityLimit || 3} Goals</p>
-              </div>
-              <button type="button" id="btn_retake_personality_quiz" class="setting_primary_btn">Retake Quiz</button>
-            </div>
-          ` : `
-            <div class="personality_settings_card">
-              <div class="personality_settings_info">
-                <h4>Discover Your Productivity DNA</h4>
-                <p>Take the 60-second behavioral science quiz to unlock personalized daily to-do lists, anti-procrastination cues, and flow state matching.</p>
-              </div>
-              <button type="button" id="btn_retake_personality_quiz" class="setting_primary_btn">Take 60s Quiz</button>
-            </div>
-          `}
         </div>
 
         <div class="settings_group">
           <div class="settings_header_with_badge">
-            <div>
-              <h2>Gemini AI & Local Security</h2>
-              <p class="group_desc">Power your personalized Habit Coach and health checks with your own Google Gemini API key.</p>
-            </div>
-            <span class="badge_key_status ${this.geminiApiKey ? "active" : "inactive"}">
-              ${this.geminiApiKey ? "● Stored Locally on Device" : "○ No Key Configured"}
-            </span>
+            <h2>Gemini AI Key (Device-Local)</h2>
+            <span class="badge_key_status ${this.geminiApiKey ? "active" : "inactive"}">${this.geminiApiKey ? "Configured" : "Not Set"}</span>
           </div>
-
-          <!-- Strict Privacy & Trust Assurance Box -->
-          <div class="ai_security_guarantee_box">
-            <div class="security_badge_row">
-              <div class="security_icon_shield">
-                <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-                  <polyline points="9 12 11 14 15 10"/>
-                </svg>
-              </div>
-              <div class="security_text_col">
-                <strong>100% Private, Device-Local Storage Guarantee</strong>
-                <p>Your API key is saved solely inside this browser's private local storage (<code>localStorage</code>). It never leaves your device and is never sent to our servers, analytics, or any third-party databases. Every request connects directly and securely from your browser to Google's official Gemini API via HTTPS.</p>
-              </div>
+          <div class="key_input_container">
+            <div class="key_input_wrapper">
+              <input type="password" id="input_gemini_api_key" class="settings_key_input" placeholder="Paste your Gemini API key..." value="${escapeHTML(this.geminiApiKey)}" autocomplete="off" spellcheck="false">
+              <button type="button" id="btn_toggle_key_visibility" class="key_toggle_vis_btn" aria-label="Toggle API key visibility">👁</button>
             </div>
-            <div class="security_guarantee_checklist">
-              <div class="sec_check_item">
-                <span class="check_icon">✓</span>
-                <span>Zero intermediate servers or loggers</span>
-              </div>
-              <div class="sec_check_item">
-                <span class="check_icon">✓</span>
-                <span>Encrypted direct-to-Google HTTPS connection</span>
-              </div>
-              <div class="sec_check_item">
-                <span class="check_icon">✓</span>
-                <span>Wipe from your device anytime in 1 click</span>
-              </div>
+            <div class="key_action_buttons">
+              <button type="button" id="btn_save_gemini_key" class="setting_primary_btn">Save & Verify</button>
+              ${this.geminiApiKey ? `<button type="button" id="btn_clear_gemini_key" class="setting_secondary_btn danger">Remove Key</button>` : ""}
             </div>
-          </div>
-
-          <!-- Key Input Row -->
-          <div class="setting_row key_setting_row">
-            <div class="key_label_col">
-              <span class="setting_label">Google Gemini API Key</span>
-              <p class="key_sublabel">Free from Google AI Studio. Stored strictly in your browser.</p>
-            </div>
-            <div class="key_input_container">
-              <div class="key_input_wrapper">
-                <input type="password" id="input_gemini_api_key" class="settings_key_input" placeholder="Paste your API key (AQ... or AIza...)" value="${this.geminiApiKey ? this.escapeHTML(this.geminiApiKey) : ""}" autocomplete="off" spellcheck="false" />
-                <button type="button" id="btn_toggle_key_visibility" class="key_toggle_vis_btn" title="Toggle visibility">👁</button>
-              </div>
-              <div class="key_action_buttons">
-                <button type="button" id="btn_save_gemini_key" class="setting_primary_btn">Save & Verify Key</button>
-                ${this.geminiApiKey ? '<button type="button" id="btn_clear_gemini_key" class="setting_secondary_btn danger">Remove Key</button>' : ""}
-              </div>
-              <div id="gemini_key_feedback" class="key_feedback_msg"></div>
-              <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" class="get_api_key_link">
-                <span>Get a free Gemini API Key from Google AI Studio</span>
-                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-              </a>
-            </div>
+            <div id="gemini_key_feedback" class="key_feedback_msg"></div>
           </div>
         </div>
 
         <div class="settings_group">
-          <h2>Productivity Reminders</h2>
-          <p class="group_desc">Tweak focus rules and alert configurations.</p>
+          <h2>Alerts & Storage</h2>
           <div class="setting_row">
-            <span class="setting_label">System Notifications</span>
+            <span class="setting_label">Browser Notifications</span>
             <div class="theme_toggle_pills" id="settings_notif_toggle">
-              <button class="pill_btn ${notifEnabled ? "active" : ""}" data-notif="true">Enabled</button>
-              <button class="pill_btn ${!notifEnabled ? "active" : ""}" data-notif="false">Disabled</button>
+              <button type="button" class="pill_btn ${this.store.notificationsEnabled ? "active" : ""}" data-notif="true">On</button>
+              <button type="button" class="pill_btn ${!this.store.notificationsEnabled ? "active" : ""}" data-notif="false">Off</button>
             </div>
           </div>
           <div class="setting_row">
-            <span class="setting_label">Alarm Sound</span>
+            <span class="setting_label">Timer Alarm</span>
             <div class="theme_toggle_pills" id="settings_alarm_sound_toggle">
-              <button class="pill_btn ${this.store.alarmSound === "default_beeps" ? "active" : ""}" data-sound="default_beeps">Default Beeps</button>
-              <button class="pill_btn ${this.store.alarmSound === "steady_ascent" ? "active" : ""}" data-sound="steady_ascent">A Steady Ascent</button>
+              <button type="button" class="pill_btn ${this.store.alarmSound === "default_beeps" ? "active" : ""}" data-sound="default_beeps">Beeps</button>
+              <button type="button" class="pill_btn ${this.store.alarmSound === "steady_ascent" ? "active" : ""}" data-sound="steady_ascent">Steady Ascent</button>
             </div>
           </div>
           <div class="setting_row">
-            <span class="setting_label">Backup Archive</span>
-            <button class="setting_secondary_btn danger" id="btn_clear_data">Wipe Local Storage</button>
+            <span class="setting_label">Local Database</span>
+            <button type="button" class="setting_secondary_btn danger" id="btn_clear_data">Wipe All Local Data</button>
           </div>
-        </div>
-
-        <div class="credits_footer">
-          <p>Aurora Companion • Psychology-Driven SPA System</p>
-          <p class="credits_sub">Mindfully built offline productivity engine</p>
         </div>
       `;
 
-      // Bind settings click listeners for theme
-      this.settingsSection.querySelectorAll("#settings_theme_toggle button").forEach(btn => {
-        btn.addEventListener("click", () => {
-          this.store.setTheme(btn.getAttribute("data-theme"));
-          this.renderSettingsUI();
-        });
+      panel.querySelector("#settings_theme_toggle")?.addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-theme]");
+        if (!btn) return;
+        this.store.setTheme(btn.getAttribute("data-theme"));
+        this.renderSettingsUI();
       });
 
-      // Bind settings click listeners for UI Style
-      this.settingsSection.querySelectorAll("#settings_style_toggle button").forEach(btn => {
-        btn.addEventListener("click", () => {
-          this.store.setUiStyle(btn.getAttribute("data-style"));
-          this.renderSettingsUI();
-        });
+      panel.querySelector("#settings_style_toggle")?.addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-style]");
+        if (!btn) return;
+        this.store.setUiStyle(btn.getAttribute("data-style"));
+        this.renderSettingsUI();
       });
 
-      this.settingsSection.querySelectorAll(".accent_pill").forEach(btn => {
-        btn.addEventListener("click", () => {
-          this.store.setAccent(btn.getAttribute("data-accent"));
-          this.renderSettingsUI();
-        });
+      panel.querySelector("#settings_accent_toggle")?.addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-accent]");
+        if (!btn) return;
+        this.store.setAccent(btn.getAttribute("data-accent"));
+        this.renderSettingsUI();
       });
 
       const wakeInput = document.getElementById("set_wake_time");
       const sleepInput = document.getElementById("set_sleep_time");
-
-      const saveRoutinePrefs = () => {
-        const prefs = { wakeUpTime: wakeInput.value, sleepTime: sleepInput.value };
-        this.store.routinePrefs = prefs;
-        StorageService.savePreference("routine_prefs", prefs);
+      const saveRoutineTimes = () => {
+        this.store.setRoutinePrefs({
+          wakeUpTime: wakeInput ? wakeInput.value : "06:00",
+          sleepTime: sleepInput ? sleepInput.value : "23:00"
+        });
       };
-      wakeInput.addEventListener("change", saveRoutinePrefs);
-      sleepInput.addEventListener("change", saveRoutinePrefs);
+      wakeInput?.addEventListener("change", saveRoutineTimes);
+      sleepInput?.addEventListener("change", saveRoutineTimes);
 
-      this.settingsSection.querySelectorAll("#settings_notif_toggle button").forEach(btn => {
-        btn.addEventListener("click", async () => {
-          const val = btn.getAttribute("data-notif") === "true";
-          localStorage.setItem("aurora_banner_dismissed", "true");
-          localStorage.setItem("aurora_notifications_enabled", val ? "true" : "false");
-          StorageService.savePreference("notifications_enabled", val);
-          StorageService.savePreference("banner_dismissed", true);
-          if (val) await NotificationService.requestPermission();
-          this.renderSettingsUI();
-        });
+      panel.querySelector("#settings_notif_toggle")?.addEventListener("click", async (e) => {
+        const btn = e.target.closest("button[data-notif]");
+        if (!btn) return;
+        const val = btn.getAttribute("data-notif") === "true";
+        if (val) await NotificationService.requestPermission();
+        this.store.setNotificationsEnabled(val);
+        this.renderSettingsUI();
       });
 
-      this.settingsSection.querySelectorAll("#settings_alarm_sound_toggle button").forEach(btn => {
-        btn.addEventListener("click", () => {
-          const sound = btn.getAttribute("data-sound");
-          this.store.setAlarmSound(sound);
-          this.renderSettingsUI();
-          this.previewAlarmSound(sound);
-        });
+      panel.querySelector("#settings_alarm_sound_toggle")?.addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-sound]");
+        if (!btn) return;
+        const sound = btn.getAttribute("data-sound");
+        this.store.setAlarmSound(sound);
+        this.previewAlarmSound(sound);
+        this.renderSettingsUI();
       });
 
-      // Gemini API Key Management
+      document.getElementById("btn_retake_personality_quiz")?.addEventListener("click", () => this.openPersonalityQuiz());
+
       const keyInput = document.getElementById("input_gemini_api_key");
       const toggleVisBtn = document.getElementById("btn_toggle_key_visibility");
       const saveKeyBtn = document.getElementById("btn_save_gemini_key");
       const clearKeyBtn = document.getElementById("btn_clear_gemini_key");
       const feedbackEl = document.getElementById("gemini_key_feedback");
 
-      if (toggleVisBtn && keyInput) {
-        toggleVisBtn.addEventListener("click", () => {
-          if (keyInput.type === "password") {
-            keyInput.type = "text";
-            toggleVisBtn.textContent = "🔒";
-            toggleVisBtn.setAttribute("title", "Hide key");
-          } else {
-            keyInput.type = "password";
-            toggleVisBtn.textContent = "👁";
-            toggleVisBtn.setAttribute("title", "Show key");
-          }
-        });
-      }
+      toggleVisBtn?.addEventListener("click", () => {
+        if (!keyInput) return;
+        keyInput.type = keyInput.type === "password" ? "text" : "password";
+      });
 
-      if (saveKeyBtn && keyInput) {
-        const handleSaveKey = async () => {
-          const val = keyInput.value.trim();
-          if (!val) {
-            if (feedbackEl) {
-              feedbackEl.className = "key_feedback_msg error";
-              feedbackEl.textContent = "Please enter an API key before saving.";
-            }
-            return;
-          }
-
-          saveKeyBtn.disabled = true;
-          saveKeyBtn.textContent = "Verifying with Google...";
-          if (feedbackEl) {
-            feedbackEl.className = "key_feedback_msg info";
-            feedbackEl.textContent = "Directly verifying key with Google Gemini API...";
-          }
-
-          try {
-            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(val)}`);
-            if (res.ok) {
-              const modelData = await res.json().catch(() => ({}));
-              if (Array.isArray(modelData.models)) {
-                const supported = modelData.models
-                  .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
-                  .map(m => m.name.replace(/^models\//, ""))
-                  .filter(name => !name.includes("1.5") && !name.includes("1.0") && !name.includes("2.5-flash-lite"));
-                const liteModels = supported.filter(name => name.includes("flash-lite"));
-                const flashModels = supported.filter(name => name.includes("flash") && !name.includes("flash-lite"));
-                const otherModels = supported.filter(name => !name.includes("flash"));
-                const resolved = [...liteModels, ...flashModels, ...otherModels];
-                if (resolved.length > 0) {
-                  localStorage.setItem("aurora_gemini_models", JSON.stringify(resolved));
-                  this.cachedGeminiModels = resolved;
-                }
-              }
-              localStorage.setItem("aurora_gemini_api_key", val);
-              this.geminiApiKey = val;
-              this.showToast("Gemini API key saved securely on device!", "success");
-              this.renderSettingsUI();
-            } else {
-              const errData = await res.json().catch(() => ({}));
-              const msg = errData.error?.message || "Invalid API key or forbidden access.";
-              saveKeyBtn.disabled = false;
-              saveKeyBtn.textContent = "Save & Verify Key";
-              if (feedbackEl) {
-                feedbackEl.className = "key_feedback_msg error";
-                feedbackEl.textContent = `Verification failed: ${msg}`;
+      const saveKey = async () => {
+        const val = keyInput ? keyInput.value.trim() : "";
+        if (!val) {
+          if (feedbackEl) feedbackEl.textContent = "Enter an API key first.";
+          return;
+        }
+        if (saveKeyBtn) { saveKeyBtn.disabled = true; saveKeyBtn.textContent = "Verifying..."; }
+        try {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(val)}`);
+          if (res.ok) {
+            const data = await res.json().catch(() => ({}));
+            if (Array.isArray(data.models)) {
+              const supported = data.models
+                .filter((m) => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
+                .map((m) => m.name.replace(/^models\//, ""));
+              const flash = supported.filter((n) => n.includes("flash"));
+              const resolved = [...flash, ...supported.filter((n) => !n.includes("flash"))];
+              if (resolved.length > 0) {
+                this.cachedGeminiModels = resolved;
+                await Storage.setExtensionLocal("aurora_gemini_models", resolved);
               }
             }
-          } catch (err) {
-            saveKeyBtn.disabled = false;
-            saveKeyBtn.textContent = "Save & Verify Key";
-            if (feedbackEl) {
-              feedbackEl.className = "key_feedback_msg error";
-              feedbackEl.textContent = "Network error. Unable to reach Google API to verify key.";
-            }
-          }
-        };
-
-        saveKeyBtn.addEventListener("click", handleSaveKey);
-        keyInput.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            handleSaveKey();
-          }
-        });
-      }
-
-      if (clearKeyBtn) {
-        clearKeyBtn.addEventListener("click", () => {
-          if (confirm("Remove your stored Gemini API key from this device? AI coaching and health checks will require a key to function.")) {
-            localStorage.removeItem("aurora_gemini_api_key");
-            localStorage.removeItem("aurora_gemini_models");
-            this.geminiApiKey = "";
-            this.cachedGeminiModels = null;
-            this.showToast("Gemini API key removed from device.", "info");
+            this.geminiApiKey = await Storage.setApiKey(val);
+            this.showToast("Gemini API key verified and saved", "success");
             this.renderSettingsUI();
+          } else {
+            const err = await res.json().catch(() => ({}));
+            if (feedbackEl) feedbackEl.textContent = err.error?.message || "Invalid API key.";
+            if (saveKeyBtn) { saveKeyBtn.disabled = false; saveKeyBtn.textContent = "Save & Verify"; }
           }
+        } catch (_) {
+          if (feedbackEl) feedbackEl.textContent = "Network error verifying key.";
+          if (saveKeyBtn) { saveKeyBtn.disabled = false; saveKeyBtn.textContent = "Save & Verify"; }
+        }
+      };
+
+      saveKeyBtn?.addEventListener("click", saveKey);
+      keyInput?.addEventListener("keydown", (e) => {
+        if (!isIMEComposing(e) && e.key === "Enter") { e.preventDefault(); saveKey(); }
+      });
+
+      clearKeyBtn?.addEventListener("click", async () => {
+        const ok = await this.showConfirmDialog({
+          title: "Remove Gemini API Key",
+          message: "Remove your stored key from this device?",
+          okLabel: "Remove",
+          danger: true
         });
-      }
+        if (!ok) return;
+        await Storage.clearApiKey();
+        this.geminiApiKey = "";
+        this.cachedGeminiModels = null;
+        this.showToast("Gemini API key removed", "info");
+        this.renderSettingsUI();
+      });
 
-      const retakeQuizBtn = document.getElementById("btn_retake_personality_quiz");
-      if (retakeQuizBtn) {
-        retakeQuizBtn.addEventListener("click", () => this.openPersonalityQuiz());
-      }
-
-      document.getElementById("btn_clear_data").addEventListener("click", () => {
-        const message = "Permanently clear all task sheets, routines, streaks, and focus metrics? This action is irreversible!\n\nTo confirm, please type \"clear storage\" below:";
-        const input = prompt(message);
-        
-        if (input === null) return; // User cancelled
-        
-        if (input.trim() === "clear storage") {
-          // Clear IndexedDB completely
-          indexedDB.deleteDatabase(StorageService.DB_NAME);
-          localStorage.clear();
-          location.reload();
-        } else {
-          this.showToast("Verification failed. Storage was not cleared.", "error");
+      document.getElementById("btn_clear_data")?.addEventListener("click", async () => {
+        const typed = await this.showConfirmDialog({
+          title: "Wipe All Local Data",
+          message: 'This permanently deletes all tasks, habits, routines, and journal entries. Type "clear storage" to confirm.',
+          requireInput: true,
+          inputLabel: "Confirmation",
+          inputPlaceholder: "clear storage",
+          matchText: "clear storage",
+          okLabel: "Wipe Everything",
+          danger: true
+        });
+        if (typed === "clear storage") {
+          await Storage.closeAndDeleteDatabase();
+          try { localStorage.clear(); } catch (_) {}
+          window.location.reload();
         }
       });
     }
 
-    // =========================================================================
-    // PREMIUM ATOMIC CELEBRATIONS & TOAST NOTIFICATION SLIDERS
-    // =========================================================================
-    triggerCelebration(taskId) {
-      const card = document.querySelector(`.task_card[data-id="${taskId}"]`);
-      if (!card) return;
-      card.classList.add("celebrating");
-      setTimeout(() => card.classList.remove("celebrating"), 600);
+    previewAlarmSound(sound) {
+      if (this.previewAudio) { try { this.previewAudio.pause(); } catch (_) {} this.previewAudio = null; }
+      if (this.previewCtx) { try { this.previewCtx.close(); } catch (_) {} this.previewCtx = null; }
+      if (this.previewTimeout) { clearTimeout(this.previewTimeout); this.previewTimeout = null; }
 
-      const chk = card.querySelector(".checkbox_btn");
-      if (chk) this.triggerElementCelebration(chk.id || chk);
-
-      if (this.personalityProfile && this.personalityProfile.coachVoice) {
-        const voice = this.personalityProfile.coachVoice;
-        const voiceMessages = {
-          stoic: [
-            "Discipline verified. Reset for the next objective.",
-            "Standard maintained. Onward.",
-            "Action beats anxiety."
-          ],
-          hype: [
-            "BOOM! Task crushed! You are on absolute fire! 🔥",
-            "Unstoppable momentum! Keep rolling! ⚡",
-            "Another win in the books! Let's go!"
-          ],
-          scientist: [
-            "Dopamine circuit engaged. Neural resistance cleared.",
-            "High self-efficacy event recorded.",
-            "Execution velocity on target."
-          ],
-          empathetic: [
-            "Wonderful progress. Take a conscious breath.",
-            "Honoring your focus. Be proud of this step.",
-            "Gentle consistency wins the day."
-          ]
-        };
-        const list = voiceMessages[voice] || voiceMessages.stoic;
-        const msg = list[Math.floor(Math.random() * list.length)];
-        this.showToast(msg, "success");
-      }
-    }
-
-    triggerElementCelebration(elementOrId) {
-      const node = typeof elementOrId === "string" ? document.getElementById(elementOrId) : elementOrId;
-      if (!node) return;
-
-      const rect = node.getBoundingClientRect();
-      const numParticles = 16;
-      const colors = ["#6366f1", "#10b981", "#f43f5e", "#f59e0b", "#a855f7"];
-
-      for (let i = 0; i < numParticles; i++) {
-        const p = document.createElement("div");
-        p.className = "celebration_particle";
-        const size = Math.random() * 8 + 4;
-        p.style.width = `${size}px`;
-        p.style.height = `${size}px`;
-        p.style.background = colors[Math.floor(Math.random() * colors.length)];
-        p.style.borderRadius = "50%";
-        p.style.position = "fixed";
-        p.style.zIndex = "9999";
-        p.style.pointerEvents = "none";
-
-        const x = rect.left + rect.width / 2;
-        const y = rect.top + rect.height / 2;
-        p.style.left = `${x}px`;
-        p.style.top = `${y}px`;
-
-        const angle = Math.random() * Math.PI * 2;
-        const vel = Math.random() * 80 + 40;
-        const dx = Math.cos(angle) * vel;
-        const dy = Math.sin(angle) * vel;
-
-        document.body.appendChild(p);
-
-        p.animate([
-          { transform: "translate(0, 0) scale(1)", opacity: 1 },
-          { transform: `translate(${dx}px, ${dy}px) scale(0.2)`, opacity: 0 }
-        ], {
-          duration: 600 + Math.random() * 400,
-          easing: "cubic-bezier(0.1, 0.8, 0.25, 1)"
-        }).onfinish = () => p.remove();
-      }
-    }
-
-    showToast(msg, type = "success") {
-      const toast = document.createElement("div");
-      toast.className = `toast_notification ${type}`;
-      toast.innerHTML = `<span class="toast_msg">${msg}</span>`;
-      document.body.appendChild(toast);
-
-      setTimeout(() => toast.classList.add("visible"), 10);
-      setTimeout(() => {
-        toast.classList.remove("visible");
-        setTimeout(() => toast.remove(), 400);
-      }, 3000);
-    }
-
-    checkOverdueDeadlines() {
-      const today = getLocalDateString();
-      const overdue = this.store.tasks.filter(t => !t.completed && t.dueDate < today);
-      if (overdue.length > 0) {
-        setTimeout(() => {
-          NotificationService.send("Urgent Task Alert!", {
-            body: `You have ${overdue.length} scheduled goals currently overdue. Let's tackle them first!`
-          });
-        }, 1500);
-      }
-    }
-
-    toggleAlarmUI(active) {
-      // Only show floating alarm banner when NOT on the timer page
-      // The timer page has its own in-panel alarm card (renderAlarmUI)
-      if (this.store.currentView === "timer") {
-        // Defer to renderAlarmUI for timer page
-        this.renderAlarmUI();
-        return;
-      }
-
-      let banner = document.getElementById("floating_alarm_banner");
-      if (active) {
-        if (!banner) {
-          const type = this.store.timer.type;
-          let title = "Focus Session Achieved!";
-          let desc = "Time to take a break or start the next block.";
-          let btnText = "Stop Alarm";
-
-          if (type === "shortBreak" || type === "longBreak") {
-            title = "Break Completed!";
-            desc = "Ready to lock in? Let's start the next Focus session!";
-            btnText = "Start Next Focus";
-          }
-
-          banner = document.createElement("div");
-          banner.id = "floating_alarm_banner";
-          banner.className = "floating_alarm_banner";
-          banner.innerHTML = `
-            <div class="alarm_banner_content">
-              <span class="alarm_icon">
-                <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                  <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-                </svg>
-              </span>
-              <div class="alarm_text">
-                <h3>${title}</h3>
-                <p>${desc}</p>
-              </div>
-              <button class="alarm_stop_btn" id="btn_floating_stop_alarm">${btnText}</button>
-            </div>
-          `;
-          document.body.appendChild(banner);
-
-          document.getElementById("btn_floating_stop_alarm").addEventListener("click", () => {
-            this.store.stopAlarm();
-            if (type === "shortBreak" || type === "longBreak") {
-              this.store.startTimer();
-            }
-          });
-        }
-        // Force reflow to ensure CSS transitions trigger properly
-        banner.offsetHeight;
-        banner.classList.add("visible");
+      if (sound === "steady_ascent") {
+        try {
+          this.previewAudio = new Audio("A_Steady_Ascent.mp3");
+          this.previewAudio.play().catch(() => {});
+          this.previewTimeout = setTimeout(() => { if (this.previewAudio) this.previewAudio.pause(); }, 2200);
+        } catch (_) {}
       } else {
-        if (banner) {
-          banner.classList.remove("visible");
-          setTimeout(() => {
-            if (banner.parentNode) {
-              banner.remove();
-            }
-          }, 400);
-        }
+        SoundEffects.playCompletionChime();
       }
     }
 
-    escapeHTML(str) {
-      if (str === null || str === undefined) return "";
-      return String(str)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+    // -----------------------------------------------------------------------
+    // 8. DIALOG OPENERS & SUBMISSIONS (Task, Routine, Habit, Personality)
+    // -----------------------------------------------------------------------
+    openBottomSheet(task = null, initialData = null) {
+      if (!this.taskDialog) return;
+      const dateChips = this.sheetForm ? this.sheetForm.querySelectorAll(".date_chip") : [];
+      const dateInput = document.getElementById("task_due_date");
+      const urlInput = document.getElementById("task_url");
+      const advDetails = document.getElementById("sheet_advanced_details");
+
+      if (task) {
+        this.activeEditingTaskId = task.id;
+        if (this.sheetTitle) this.sheetTitle.textContent = "Edit Task";
+        if (this.sheetSubmitBtn) this.sheetSubmitBtn.textContent = "Save Changes";
+        if (this.sheetDeleteBtn) this.sheetDeleteBtn.hidden = false;
+
+        const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+        setVal("task_title", task.title || "");
+        setVal("task_desc", task.description || "");
+        if (urlInput) urlInput.value = task.url || "";
+        setVal("task_due_date", task.isLater ? "" : (task.dueDate || getLocalDateString()));
+        setVal("task_priority", task.priority || "Medium");
+        this.updatePriorityPillsUI(task.priority || "Medium");
+        setVal("task_category", task.category || "Inbox");
+        setVal("task_duration", String(task.estimatedDuration || 25));
+        setVal("task_recurring", task.recurring || "none");
+        if (advDetails) advDetails.open = Boolean(task.recurring && task.recurring !== "none");
+
+        const todayStr = getLocalDateString();
+        const tomStr = getNDaysFromNow(1);
+        const wkStr = getNDaysFromNow(7);
+        let matched = false;
+        dateChips.forEach((c) => {
+          c.classList.remove("active");
+          const days = c.getAttribute("data-days");
+          if (days === "0" && !task.isLater && task.dueDate === todayStr) { c.classList.add("active"); matched = true; }
+          else if (days === "1" && !task.isLater && task.dueDate === tomStr) { c.classList.add("active"); matched = true; }
+          else if (days === "7" && !task.isLater && task.dueDate === wkStr) { c.classList.add("active"); matched = true; }
+          else if (task.isLater && c.id === "chip_do_later") { c.classList.add("active"); matched = true; }
+        });
+        if (!matched && !task.isLater && dateInput) {
+          document.getElementById("chip_custom_date")?.classList.add("active");
+          dateInput.hidden = false;
+          dateInput.style.display = "block";
+        } else if (dateInput) {
+          dateInput.hidden = true;
+          dateInput.style.display = "none";
+        }
+      } else {
+        this.activeEditingTaskId = null;
+        if (this.sheetTitle) this.sheetTitle.textContent = "New Task";
+        if (this.sheetSubmitBtn) this.sheetSubmitBtn.textContent = "Add Task";
+        if (this.sheetDeleteBtn) this.sheetDeleteBtn.hidden = true;
+        if (this.sheetForm) this.sheetForm.reset();
+        if (advDetails) advDetails.open = false;
+
+        const initPri = initialData?.priority || this.quickAddState.priority || "Medium";
+        const initCat = initialData?.category || this.quickAddState.category || "Inbox";
+        const dateMode = initialData?.dateMode || this.quickAddState.dateMode || "today";
+        const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+        setVal("task_title", initialData?.title || "");
+        setVal("task_desc", "");
+        if (urlInput) urlInput.value = initialData?.url || "";
+        setVal("task_priority", initPri);
+        this.updatePriorityPillsUI(initPri);
+        setVal("task_category", initCat);
+        setVal("task_duration", "25");
+        setVal("task_recurring", "none");
+
+        dateChips.forEach((c) => c.classList.remove("active"));
+        if (dateInput) { dateInput.hidden = true; dateInput.style.display = "none"; }
+        if (dateMode === "tomorrow") {
+          setVal("task_due_date", getNDaysFromNow(1));
+          this.sheetForm?.querySelector('.date_chip[data-days="1"]')?.classList.add("active");
+        } else if (dateMode === "later") {
+          setVal("task_due_date", "");
+          document.getElementById("chip_do_later")?.classList.add("active");
+        } else {
+          setVal("task_due_date", getLocalDateString());
+          this.sheetForm?.querySelector('.date_chip[data-days="0"]')?.classList.add("active");
+        }
+      }
+
+      this.openDialog(this.taskDialog);
+      setTimeout(() => document.getElementById("task_title")?.focus(), 40);
     }
 
-    // -------------------------------------------------------------------------
-    // PICTURE-IN-PICTURE NATIVE FOCUS OVERLAY
-    // -------------------------------------------------------------------------
-    async openDocumentPiP() {
-      if (!('documentPictureInPicture' in window)) {
-        this.showToast("Always-on-top overlay is not supported in this browser.", "info");
+    closeBottomSheet() {
+      this.closeDialog(this.taskDialog);
+      this.activeEditingTaskId = null;
+      this.isSubmitting = false;
+      if (this.sheetSubmitBtn) this.sheetSubmitBtn.disabled = false;
+    }
+
+    updatePriorityPillsUI(val) {
+      document.querySelectorAll("#priority_pill_group .priority_pill_option").forEach((p) => {
+        p.classList.toggle("active", p.getAttribute("data-priority") === val);
+      });
+    }
+
+    handleTaskFormSubmission() {
+      if (this.isSubmitting) return;
+      const title = (document.getElementById("task_title")?.value || "").trim();
+      if (!title) return;
+
+      this.isSubmitting = true;
+      if (this.sheetSubmitBtn) this.sheetSubmitBtn.disabled = true;
+
+      const description = (document.getElementById("task_desc")?.value || "").trim();
+      const url = sanitizeUrl(document.getElementById("task_url")?.value || "");
+      let dueDate = document.getElementById("task_due_date")?.value || "";
+      const priority = document.getElementById("task_priority")?.value || "Medium";
+      const category = document.getElementById("task_category")?.value || "Inbox";
+      const estimatedDuration = parseInt(document.getElementById("task_duration")?.value, 10) || 25;
+      const recurring = document.getElementById("task_recurring")?.value || "none";
+      const doLaterChip = document.getElementById("chip_do_later");
+      const isLater = Boolean((doLaterChip && doLaterChip.classList.contains("active")) || !dueDate);
+      if (!dueDate) dueDate = getLocalDateString();
+
+      const data = { title, description, url, dueDate, priority, category, estimatedDuration, recurring, isLater };
+      if (this.activeEditingTaskId !== null) {
+        this.store.updateTask(this.activeEditingTaskId, data);
+      } else {
+        const created = this.store.addTask(data);
+        if (created) setTimeout(() => this.triggerCelebration(created.id), 150);
+      }
+      this.closeBottomSheet();
+    }
+
+    openRoutineSheet(block = null) {
+      if (!this.routineDialog) return;
+      const titleEl = document.getElementById("routine_sheet_title");
+      const submitBtn = document.getElementById("routine_sheet_submit");
+      const iconEl = document.getElementById("routine_icon");
+
+      if (block) {
+        this.activeEditingRoutineId = block.id;
+        if (titleEl) titleEl.textContent = "Edit Time Block";
+        if (submitBtn) submitBtn.textContent = "Save Block";
+        document.getElementById("routine_title").value = block.title || "";
+        document.getElementById("routine_start_time").value = block.startTime || "09:00";
+        document.getElementById("routine_end_time").value = block.endTime || "10:00";
+        document.getElementById("routine_category").value = block.category || "Routine";
+        document.getElementById("routine_color").value = block.color || "indigo";
+        if (iconEl) iconEl.value = block.icon || "";
+        this.routineForm?.querySelectorAll("input[name='routine_days']").forEach((cb) => {
+          cb.checked = Array.isArray(block.days) && block.days.includes(cb.value);
+        });
+      } else {
+        this.activeEditingRoutineId = null;
+        if (titleEl) titleEl.textContent = "Schedule Time Block";
+        if (submitBtn) submitBtn.textContent = "Add Block";
+        this.routineForm?.reset();
+        if (iconEl) iconEl.value = "";
+        this.routineForm?.querySelectorAll("input[name='routine_days']").forEach((cb) => {
+          cb.checked = true;
+        });
+      }
+      this.openDialog(this.routineDialog);
+      setTimeout(() => document.getElementById("routine_title")?.focus(), 40);
+    }
+
+    closeRoutineSheet() {
+      this.closeDialog(this.routineDialog);
+      this.activeEditingRoutineId = null;
+      this.isSubmitting = false;
+    }
+
+    handleRoutineFormSubmission() {
+      if (this.isSubmitting) return;
+      const title = (document.getElementById("routine_title")?.value || "").trim();
+      const startTime = document.getElementById("routine_start_time")?.value || "";
+      const endTime = document.getElementById("routine_end_time")?.value || "";
+      const category = document.getElementById("routine_category")?.value || "Routine";
+      const color = document.getElementById("routine_color")?.value || "indigo";
+      const icon = (document.getElementById("routine_icon")?.value || "").trim();
+      const days = Array.from(this.routineForm?.querySelectorAll("input[name='routine_days']:checked") || []).map((cb) => cb.value);
+
+      if (!title || !startTime || !endTime || days.length === 0) {
+        this.showToast("Specify a title, start/end times, and at least one weekday", "error");
+        return;
+      }
+      const [sh, sm] = startTime.split(":").map(Number);
+      const [eh, em] = endTime.split(":").map(Number);
+      if (sh * 60 + sm >= eh * 60 + em) {
+        this.showToast("Start time must be earlier than end time", "error");
         return;
       }
 
-      // If already open, close it
-      if (this.pipWindow) {
-        this.closeDocumentPiP();
+      this.isSubmitting = true;
+      const overlaps = this.store.checkRoutineOverlap(startTime, endTime, days, this.activeEditingRoutineId);
+      if (overlaps.length > 0) {
+        this.showToast(`Note: overlaps with "${overlaps[0].block.title}"`, "info");
+      }
+
+      const data = { title, startTime, endTime, category, color, icon, days };
+      if (this.activeEditingRoutineId !== null) this.store.updateRoutineBlock(this.activeEditingRoutineId, data);
+      else this.store.addRoutineBlock(data);
+      this.closeRoutineSheet();
+    }
+
+    openHabitSheet(habit = null) {
+      if (!this.habitDialog) return;
+      const titleEl = document.getElementById("habit_sheet_title");
+      const submitBtn = document.getElementById("habit_sheet_submit");
+      if (habit) {
+        this.activeEditingHabitId = habit.id;
+        if (titleEl) titleEl.textContent = "Edit Habit";
+        if (submitBtn) submitBtn.textContent = "Save Habit";
+        document.getElementById("habit_title").value = habit.title || "";
+        document.getElementById("habit_category").value = habit.category || "Routine";
+        document.getElementById("habit_color").value = habit.color || "indigo";
+      } else {
+        this.activeEditingHabitId = null;
+        if (titleEl) titleEl.textContent = "New Atomic Habit";
+        if (submitBtn) submitBtn.textContent = "Create Habit";
+        this.habitForm?.reset();
+      }
+      this.openDialog(this.habitDialog);
+      setTimeout(() => document.getElementById("habit_title")?.focus(), 40);
+    }
+
+    closeHabitSheet() {
+      this.closeDialog(this.habitDialog);
+      this.activeEditingHabitId = null;
+      this.isSubmitting = false;
+    }
+
+    // -----------------------------------------------------------------------
+    // 9. PERSONALITY DNA QUIZ
+    // -----------------------------------------------------------------------
+    openPersonalityQuiz() {
+      if (!this.personalityDialog) return;
+      this.currentQuizStep = 1;
+      this.quizAnswers = this.personalityProfile
+        ? {
+            chronotype: this.personalityProfile.chronotype,
+            procrastination: this.personalityProfile.procrastination,
+            pacing: this.personalityProfile.pacing,
+            coach_voice: this.personalityProfile.coachVoice,
+            capacity_limit: String(this.personalityProfile.capacityLimit || "3")
+          }
+        : {};
+      this.openDialog(this.personalityDialog);
+      this.renderQuizStep(1);
+    }
+
+    closePersonalityQuiz() {
+      this.closeDialog(this.personalityDialog);
+    }
+
+    renderQuizStep(step) {
+      if (!this.personalityStepContent) return;
+      this.currentQuizStep = step;
+
+      if (this.personalityStepperBar) {
+        this.personalityStepperBar.querySelectorAll(".stepper_dot").forEach((dot, idx) => {
+          dot.classList.toggle("completed", idx + 1 < step || step > 5);
+          dot.classList.toggle("active", idx + 1 === step);
+        });
+      }
+
+      if (step >= 1 && step <= 5) {
+        const q = PERSONALITY_QUESTIONS[step - 1];
+        const selected = this.quizAnswers[q.id];
+        this.personalityStepContent.innerHTML = `
+          <div class="quiz_step_header">
+            <span class="quiz_step_kicker">${escapeHTML(q.kicker)}</span>
+            <h3 class="quiz_step_title">${escapeHTML(q.title)}</h3>
+            <p class="quiz_step_subtitle">${escapeHTML(q.subtitle)}</p>
+          </div>
+          <div class="quiz_options_grid">
+            ${q.options.map((opt) => `
+              <button type="button" class="personality_option_card ${selected === opt.value ? "selected" : ""}" data-val="${escapeHTML(opt.value)}">
+                <span class="option_icon_box">${opt.icon}</span>
+                <span class="option_text_col">
+                  <span class="option_label">${escapeHTML(opt.label)}</span>
+                  <span class="option_desc">${escapeHTML(opt.desc)}</span>
+                </span>
+              </button>
+            `).join("")}
+          </div>
+        `;
+        this.personalityStepContent.querySelector(".quiz_options_grid")?.addEventListener("click", (e) => {
+          const card = e.target.closest(".personality_option_card");
+          if (!card) return;
+          this.quizAnswers[q.id] = card.getAttribute("data-val");
+          this.personalityStepContent.querySelectorAll(".personality_option_card").forEach((c) => c.classList.toggle("selected", c === card));
+        });
+        if (this.personalityPrevBtn) this.personalityPrevBtn.hidden = step <= 1;
+        if (this.personalityNextBtn) this.personalityNextBtn.textContent = step === 5 ? "See Archetype" : "Continue";
+      } else {
+        const arch = computeArchetype(this.quizAnswers);
+        this.personalityStepContent.innerHTML = `
+          <div class="personality_result_container">
+            <div class="personality_badge_hero">
+              <div class="personality_hero_icon">${arch.heroIcon}</div>
+              <h3>${escapeHTML(arch.archetype)}</h3>
+              <p>${escapeHTML(arch.strategyTip)}</p>
+            </div>
+            <div class="personality_traits_grid">
+              <div class="trait_card superpower"><span class="trait_label">Superpower</span><span>${escapeHTML(arch.superpower)}</span></div>
+              <div class="trait_card blindspot"><span class="trait_label">Watchout</span><span>${escapeHTML(arch.blindspot)}</span></div>
+            </div>
+          </div>
+        `;
+        if (this.personalityPrevBtn) this.personalityPrevBtn.hidden = false;
+        if (this.personalityNextBtn) this.personalityNextBtn.textContent = "Activate Profile";
+      }
+    }
+
+    handlePersonalityNext() {
+      if (this.currentQuizStep <= 5) {
+        const q = PERSONALITY_QUESTIONS[this.currentQuizStep - 1];
+        if (!this.quizAnswers[q.id]) this.quizAnswers[q.id] = q.options[0].value;
+        this.renderQuizStep(this.currentQuizStep + 1);
+      } else {
+        const arch = computeArchetype(this.quizAnswers);
+        const findLabel = (idx, key, fallback) => PERSONALITY_QUESTIONS[idx].options.find((o) => o.value === this.quizAnswers[key])?.label || fallback;
+        const profile = {
+          ...arch,
+          chronotype: this.quizAnswers.chronotype || "early_falcon",
+          chronotypeLabel: findLabel(0, "chronotype", "Morning"),
+          procrastination: this.quizAnswers.procrastination || "perfectionism",
+          procrastinationLabel: findLabel(1, "procrastination", "Perfectionism"),
+          pacing: this.quizAnswers.pacing || "sprints",
+          pacingLabel: findLabel(2, "pacing", "Sprints"),
+          coachVoice: this.quizAnswers.coach_voice || "stoic",
+          coachVoiceLabel: findLabel(3, "coach_voice", "Stoic"),
+          capacityLimit: parseInt(this.quizAnswers.capacity_limit || "3", 10),
+          updatedAt: new Date().toISOString()
+        };
+        this.store.setPersonalityProfile(profile);
+        this.closePersonalityQuiz();
+        this.showToast(`${profile.archetype} profile activated`, "success");
+      }
+    }
+
+    handlePersonalityPrev() {
+      if (this.currentQuizStep > 1) this.renderQuizStep(this.currentQuizStep - 1);
+    }
+
+    // -----------------------------------------------------------------------
+    // 10. AI STRATEGIST, TOMORROW BRIDGE, CLARITY BREAKDOWN & HABIT COACH
+    //     (Strict Safe Escaping — Zero Raw LLM innerHTML, Capped Payloads)
+    // -----------------------------------------------------------------------
+    async getCandidateGeminiModels() {
+      if (Array.isArray(this.cachedGeminiModels) && this.cachedGeminiModels.length > 0) {
+        return this.cachedGeminiModels;
+      }
+      const stored = await Storage.getExtensionLocal("aurora_gemini_models", null);
+      if (Array.isArray(stored) && stored.length > 0) {
+        this.cachedGeminiModels = stored;
+        return stored;
+      }
+      this.cachedGeminiModels = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
+      return this.cachedGeminiModels;
+    }
+
+    async callGeminiWithFallback(bodyPayload) {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        throw new Error("Offline — AI features require an internet connection.");
+      }
+      if (!this.geminiApiKey) throw new Error("Gemini API key is not configured.");
+
+      const models = (await this.getCandidateGeminiModels()).slice(0, 4);
+      let lastError = null;
+      for (const model of models) {
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), 10000);
+        try {
+          const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(this.geminiApiKey)}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(bodyPayload),
+              signal: controller.signal
+            }
+          );
+          if (res.ok) return { data: await res.json(), model };
+          if (res.status === 401 || res.status === 403) {
+            throw new Error("Invalid or unauthorized Gemini API key.");
+          }
+          lastError = new Error(`${model}: HTTP ${res.status}`);
+        } catch (err) {
+          lastError = err;
+          if (err.message && err.message.includes("unauthorized")) break;
+        } finally {
+          clearTimeout(tid);
+        }
+      }
+      throw lastError || new Error("Gemini request failed.");
+    }
+
+    getMorningMomentumPlan() {
+      if (!this.tomorrowPlan) return null;
+      if (this.tomorrowPlan.targetDate === getLocalDateString() && !this.tomorrowPlan.dismissed) {
+        return this.tomorrowPlan;
+      }
+      return null;
+    }
+
+    saveTomorrowPlan(plan) {
+      this.tomorrowPlan = plan;
+      Storage.savePreference("tomorrow_plan", plan || null).catch(() => {});
+    }
+
+    renderMorningMomentumCardHTML(plan) {
+      return `
+        <div class="morning_momentum_bridge_card">
+          <div class="morning_bridge_badge_row">
+            <span class="morning_bridge_pill">🌅 Morning Momentum · ${this.eveningPlanningStreak}d Streak</span>
+            <button type="button" class="morning_bridge_dismiss_btn" id="btn_dismiss_morning_bridge" aria-label="Dismiss">✕</button>
+          </div>
+          <h4 class="morning_bridge_title">${escapeHTML(plan.keystoneTitle || "Keystone Goal")}</h4>
+          <p class="morning_bridge_starter">⚡ 2-Min Starter: ${escapeHTML(plan.microStarter || "Open your workspace and do the first step.")}</p>
+          <div class="morning_bridge_actions">
+            ${plan.microStarterDone
+              ? `<span class="morning_bridge_done_badge">✓ 2-Min Starter Done</span>`
+              : `<button type="button" class="today_ai_btn primary" id="btn_launch_morning_micro_start">Launch 2m Focus</button>
+                 <button type="button" class="today_ai_btn secondary" id="btn_complete_morning_micro_start">✓ Started</button>`}
+          </div>
+        </div>
+      `;
+    }
+
+    bindMorningCardEvents(plan) {
+      document.getElementById("btn_dismiss_morning_bridge")?.addEventListener("click", () => {
+        this.saveTomorrowPlan({ ...plan, dismissed: true });
+        this.renderTodayHeroCard();
+      });
+      document.getElementById("btn_launch_morning_micro_start")?.addEventListener("click", () => {
+        this.store.setView("focus");
+        this.store.timer.duration = 120;
+        this.store.timer.totalDuration = 120;
+        this.store.startTimer(plan.keystoneTaskId || null);
+      });
+      document.getElementById("btn_complete_morning_micro_start")?.addEventListener("click", () => {
+        this.saveTomorrowPlan({ ...plan, microStarterDone: true });
+        this.store.awardXP(20);
+        this.showToast("Morning starter conquered (+20 XP)", "success");
+        this.renderTodayHeroCard();
+      });
+    }
+
+    renderTodayAIBanner(todayTasks) {
+      const container = document.getElementById("today_ai_banner_container");
+      if (!container) return;
+
+      const hasLocked = Boolean(this.tomorrowPlan && this.tomorrowPlan.targetDate === getNDaysFromNow(1) && this.tomorrowPlan.committed);
+      container.innerHTML = `
+        <div class="today_ai_deck">
+          <div class="focus_mode_tabs_bar">
+            <button type="button" class="focus_mode_tab ${this.focusAITab === "today" ? "active" : ""}" data-ai-tab="today">Today Plan (${todayTasks.length})</button>
+            <button type="button" class="focus_mode_tab ${this.focusAITab === "tomorrow" ? "active" : ""}" data-ai-tab="tomorrow">Plan Tomorrow ${hasLocked ? "✓" : ""}</button>
+          </div>
+          <div id="focus_ai_content_area"></div>
+        </div>
+      `;
+
+      container.querySelector(".focus_mode_tabs_bar")?.addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-ai-tab]");
+        if (!btn) return;
+        this.focusAITab = btn.getAttribute("data-ai-tab");
+        this.renderTodayAIBanner(todayTasks);
+      });
+
+      const area = document.getElementById("focus_ai_content_area");
+      if (!area) return;
+
+      if (this.focusAITab === "today") {
+        const profile = this.personalityProfile;
+        area.innerHTML = `
+          <div class="today_ai_header">
+            <div class="today_ai_title_group">
+              <h3>Focus Strategist</h3>
+              <span class="today_ai_tag">${profile ? escapeHTML(profile.archetype) : "Heuristic + AI"}</span>
+            </div>
+            <div class="today_ai_actions">
+              <button type="button" id="btn_today_ai_plan" class="today_ai_btn primary">Plan Today</button>
+              <button type="button" id="btn_today_ai_prioritize" class="today_ai_btn secondary">Smart Order</button>
+              ${this.todayAIPlan || this.todayAITaskOrder ? `<button type="button" id="btn_today_ai_reset" class="today_ai_btn text_only">Reset</button>` : ""}
+            </div>
+          </div>
+          <div id="today_ai_plan_result" class="today_ai_plan_result"></div>
+        `;
+        if (this.todayAIPlan) this.renderTodayAIPlanDetails(this.todayAIPlan, todayTasks);
+        document.getElementById("btn_today_ai_plan")?.addEventListener("click", () => this.generateTodayAIPlan(todayTasks));
+        document.getElementById("btn_today_ai_prioritize")?.addEventListener("click", () => this.autoPrioritizeTodayTasks(todayTasks));
+        document.getElementById("btn_today_ai_reset")?.addEventListener("click", () => {
+          this.todayAIPlan = null;
+          this.todayAITaskOrder = null;
+          this.renderTodayTaskList();
+        });
+      } else {
+        const plan = this.tomorrowPlanDraft || (hasLocked ? this.tomorrowPlan : null);
+        area.innerHTML = `
+          <div class="today_ai_header">
+            <div class="today_ai_title_group">
+              <h3>Tomorrow Blueprint</h3>
+              <span class="today_ai_tag">${this.eveningPlanningStreak}d Streak</span>
+            </div>
+            <div class="today_ai_actions">
+              <button type="button" id="btn_generate_tomorrow_blueprint" class="today_ai_btn primary">Plan Tomorrow</button>
+              ${plan ? `<button type="button" id="btn_reset_tomorrow_draft" class="today_ai_btn text_only">Reset</button>` : ""}
+            </div>
+          </div>
+          <div id="tomorrow_blueprint_result_slot"></div>
+        `;
+        const slot = document.getElementById("tomorrow_blueprint_result_slot");
+        if (plan && slot) this.renderTomorrowBlueprintDetails(slot, plan);
+        document.getElementById("btn_generate_tomorrow_blueprint")?.addEventListener("click", () => this.generateTomorrowBlueprint());
+        document.getElementById("btn_reset_tomorrow_draft")?.addEventListener("click", () => {
+          this.tomorrowPlanDraft = null;
+          this.saveTomorrowPlan(null);
+          this.renderTodayAIBanner(todayTasks);
+        });
+      }
+    }
+
+    generateHeuristicDailyPlan(todayTasks) {
+      const profile = this.personalityProfile || { archetype: "Balanced Achiever", chronotypeLabel: "Morning Peak", procrastination: "perfectionism", capacityLimit: 3 };
+      const weights = { High: 3, Medium: 2, Low: 1 };
+      const sorted = [...todayTasks].sort((a, b) => (weights[b.priority] || 2) - (weights[a.priority] || 2));
+      const cap = Math.max(1, profile.capacityLimit || 3);
+      const chosen = sorted.slice(0, cap);
+      const overflow = sorted.slice(cap);
+      const top = chosen[0];
+
+      return {
+        executiveSummary: `Focus on ${chosen.length} priority goal${chosen.length === 1 ? "" : "s"} matched to ${profile.chronotypeLabel}.`,
+        topFocusTaskId: top ? top.id : null,
+        antiProcrastinationTip: top ? `Spend 2 minutes opening "${top.title}" and writing the first bullet.` : "",
+        recommendedOrder: chosen.map((t, i) => ({ taskId: t.id, taskTitle: t.title, order: i + 1 })),
+        overflowTasks: overflow.map((t) => ({ taskId: t.id, title: t.title, reason: `Above ${cap}-task daily cap` }))
+      };
+    }
+
+    async generateTodayAIPlan(todayTasks) {
+      if (todayTasks.length === 0) {
+        this.showToast("Add at least 1 task for today first", "info");
+        return;
+      }
+      if (!this.geminiApiKey || (typeof navigator !== "undefined" && !navigator.onLine)) {
+        const plan = this.generateHeuristicDailyPlan(todayTasks);
+        this.todayAIPlan = plan;
+        this.todayAITaskOrder = plan.recommendedOrder.map((r) => r.taskId);
+        this.renderTodayTaskList();
+        return;
+      }
+
+      const resultEl = document.getElementById("today_ai_plan_result");
+      if (resultEl) resultEl.innerHTML = `<div class="ai_coach_loading">Planning today's focus...</div>`;
+
+      // Cap payload to top 25 tasks so large backlogs never bloat prompt serialization
+      const capped = todayTasks.slice(0, 25).map((t) => ({
+        id: t.id,
+        title: t.title,
+        priority: t.priority,
+        category: t.category,
+        estimatedDuration: t.estimatedDuration || 25
+      }));
+
+      try {
+        const cap = this.personalityProfile?.capacityLimit || 3;
+        const { data } = await this.callGeminiWithFallback({
+          contents: [{ parts: [{ text: `Select top ${cap} tasks for today and put excess in overflowTasks. Tasks: ${JSON.stringify(capped)}. Return ONLY JSON: {"executiveSummary":"...","topFocusTaskId":${capped[0].id},"antiProcrastinationTip":"...","recommendedOrder":[{"taskId":${capped[0].id},"order":1,"timeSlot":"09:00-09:30"}],"overflowTasks":[{"taskId":0,"reason":"..."}]}` }] }],
+          generationConfig: { temperature: 0.2, responseMimeType: "application/json" }
+        });
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        const plan = JSON.parse(text);
+        this.todayAIPlan = plan;
+        if (Array.isArray(plan.recommendedOrder)) {
+          this.todayAITaskOrder = plan.recommendedOrder.map((r) => r.taskId);
+        }
+        this.renderTodayTaskList();
+      } catch (_) {
+        const fallback = this.generateHeuristicDailyPlan(todayTasks);
+        this.todayAIPlan = fallback;
+        this.todayAITaskOrder = fallback.recommendedOrder.map((r) => r.taskId);
+        this.renderTodayTaskList();
+      }
+    }
+
+    async autoPrioritizeTodayTasks(todayTasks) {
+      if (todayTasks.length <= 1) return;
+      const weights = { High: 3, Medium: 2, Low: 1 };
+      const fallbackOrder = [...todayTasks]
+        .sort((a, b) => (weights[b.priority] || 2) - (weights[a.priority] || 2) || (a.estimatedDuration || 25) - (b.estimatedDuration || 25))
+        .map((t) => t.id);
+
+      if (!this.geminiApiKey || (typeof navigator !== "undefined" && !navigator.onLine)) {
+        this.todayAITaskOrder = fallbackOrder;
+        this.renderTodayTaskList();
+        this.showToast("Tasks ordered by leverage", "success");
+        return;
+      }
+
+      const capped = todayTasks.slice(0, 25).map((t) => ({ id: t.id, title: t.title, priority: t.priority, duration: t.estimatedDuration || 25 }));
+      try {
+        const { data } = await this.callGeminiWithFallback({
+          contents: [{ parts: [{ text: `Order these task IDs by impact: ${JSON.stringify(capped)}. Return ONLY a JSON array of IDs.` }] }],
+          generationConfig: { temperature: 0.1, responseMimeType: "application/json" }
+        });
+        const ordered = JSON.parse(data.candidates?.[0]?.content?.parts?.[0]?.text || "[]");
+        this.todayAITaskOrder = Array.isArray(ordered) && ordered.length ? ordered : fallbackOrder;
+      } catch (_) {
+        this.todayAITaskOrder = fallbackOrder;
+      }
+      this.renderTodayTaskList();
+      this.showToast("Smart order applied", "success");
+    }
+
+    renderTodayAIPlanDetails(plan, todayTasks) {
+      const el = document.getElementById("today_ai_plan_result");
+      if (!el) return;
+      const top = this.store.getTaskById(plan.topFocusTaskId) || todayTasks[0];
+      const overflow = Array.isArray(plan.overflowTasks) ? plan.overflowTasks.filter((o) => this.store.getTaskById(o.taskId)) : [];
+
+      el.innerHTML = `
+        <div class="today_ai_plan_card">
+          <p class="today_ai_summary">${escapeHTML(plan.executiveSummary || "")}</p>
+          ${top ? `<div class="today_ai_conquer_box"><strong>🎯 #1 Keystone: ${escapeHTML(top.title)}</strong><button type="button" class="today_ai_btn primary" id="btn_ai_launch_top_task">Start Focus</button></div>` : ""}
+          ${plan.antiProcrastinationTip ? `<p class="today_ai_inertia_box">⚡ ${escapeHTML(plan.antiProcrastinationTip)}</p>` : ""}
+          ${overflow.length > 0 ? `<div class="today_ai_overflow_advisory"><span>${overflow.length} task(s) exceed your daily cap.</span><button type="button" class="today_ai_btn secondary" id="btn_defer_overflow_tasks">Move ${overflow.length} to Tomorrow</button></div>` : ""}
+        </div>
+      `;
+
+      document.getElementById("btn_ai_launch_top_task")?.addEventListener("click", () => {
+        if (!top) return;
+        this.store.setView("focus");
+        this.store.startTimer(top.id);
+      });
+
+      document.getElementById("btn_defer_overflow_tasks")?.addEventListener("click", () => {
+        const tom = getNDaysFromNow(1);
+        const batch = overflow.map((o) => ({ id: o.taskId, data: { dueDate: tom, isLater: false } }));
+        this.todayAIPlan = null;
+        this.store.updateTasksBatch(batch, `Moved ${batch.length} overflow task(s) to Tomorrow`);
+      });
+    }
+
+    generateTomorrowBlueprint() {
+      const active = this.getFilteredActiveTasks("all");
+      const keystone = active.find((t) => t.priority === "High") || active[0] || { id: 0, title: "Deep Focus Milestone", priority: "High", category: "Work" };
+      const supporting = active.filter((t) => t.id !== keystone.id).slice(0, 2).map((t) => ({ taskId: t.id, title: t.title, estimatedDuration: t.estimatedDuration || 25 }));
+      const draft = {
+        keystoneTaskId: keystone.id,
+        keystoneTitle: keystone.title,
+        keystonePriority: keystone.priority || "High",
+        keystoneCategory: keystone.category || "Work",
+        microStarter: `Open "${keystone.title}" and draft the first 2-minute step.`,
+        supportingTasks: supporting,
+        committed: false
+      };
+      this.tomorrowPlanDraft = draft;
+      const slot = document.getElementById("tomorrow_blueprint_result_slot");
+      if (slot) this.renderTomorrowBlueprintDetails(slot, draft);
+    }
+
+    renderTomorrowBlueprintDetails(slot, plan) {
+      const tomStr = getNDaysFromNow(1);
+      const committed = Boolean(plan.committed && plan.targetDate === tomStr);
+      slot.innerHTML = `
+        <div class="tomorrow_plan_card">
+          <h4>🎯 ${escapeHTML(plan.keystoneTitle || "Keystone Goal")}</h4>
+          <p>⚡ ${escapeHTML(plan.microStarter || "")}</p>
+          ${committed
+            ? `<div class="tomorrow_committed_banner">✓ Locked in for ${tomStr}</div>`
+            : `<button type="button" class="today_ai_btn primary" id="btn_lock_tomorrow_blueprint">Lock In Tomorrow</button>`}
+        </div>
+      `;
+      document.getElementById("btn_lock_tomorrow_blueprint")?.addEventListener("click", () => {
+        const updates = [];
+        if (plan.keystoneTaskId && this.store.getTaskById(plan.keystoneTaskId)) {
+          updates.push({ id: plan.keystoneTaskId, data: { dueDate: tomStr, isLater: false } });
+        }
+        (plan.supportingTasks || []).forEach((s) => {
+          if (s.taskId && this.store.getTaskById(s.taskId)) {
+            updates.push({ id: s.taskId, data: { dueDate: tomStr, isLater: false } });
+          }
+        });
+        if (updates.length > 0) this.store.updateTasksBatch(updates);
+        const locked = { ...plan, targetDate: tomStr, committed: true, dismissed: false, microStarterDone: false };
+        this.saveTomorrowPlan(locked);
+        this.tomorrowPlanDraft = locked;
+        this.eveningPlanningStreak += 1;
+        Storage.savePreference("evening_planning_streak", this.eveningPlanningStreak).catch(() => {});
+        this.showToast("Tomorrow's blueprint locked in", "success");
+        this.renderTomorrowBlueprintDetails(slot, locked);
+      });
+    }
+
+    async openAIBreakdownDrawer(task, card) {
+      const slot = card.querySelector(".task_ai_drawer_slot");
+      if (!slot) return;
+      if (slot.innerHTML.trim() !== "") {
+        slot.innerHTML = "";
+        return;
+      }
+      if (!this.geminiApiKey) {
+        slot.innerHTML = `<div class="task_ai_breakdown_deck"><p>Add a Gemini API key in Settings to generate AI subtask breakdowns.</p></div>`;
+        return;
+      }
+      slot.innerHTML = `<div class="task_ai_breakdown_deck"><p>Generating action steps...</p></div>`;
+      try {
+        const { data } = await this.callGeminiWithFallback({
+          contents: [{ parts: [{ text: `Break down task "${task.title}" (${task.description || "no notes"}) into 3-5 small actionable subtasks. Return ONLY JSON: {"firstMicroStep":"...","subtasks":["step 1","step 2","step 3"]}` }] }],
+          generationConfig: { temperature: 0.2, responseMimeType: "application/json" }
+        });
+        const parsed = JSON.parse(data.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
+        const subs = Array.isArray(parsed.subtasks) ? parsed.subtasks : [];
+        slot.innerHTML = `
+          <div class="task_ai_breakdown_deck">
+            ${parsed.firstMicroStep ? `<p>⚡ <strong>2m Starter:</strong> ${escapeHTML(parsed.firstMicroStep)}</p>` : ""}
+            <ul>${subs.map((s) => `<li>${escapeHTML(s)}</li>`).join("")}</ul>
+            <div class="task_ai_actions_row">
+              <button type="button" class="today_ai_btn primary" data-bd="commit">Add ${subs.length} Subtasks</button>
+              <button type="button" class="today_ai_btn secondary" data-bd="close">Dismiss</button>
+            </div>
+          </div>
+        `;
+        slot.addEventListener("click", (e) => {
+          const btn = e.target.closest("button[data-bd]");
+          if (!btn) return;
+          e.stopPropagation();
+          if (btn.getAttribute("data-bd") === "commit" && subs.length > 0) {
+            this.store.addSubtasks(task.id, subs);
+            this.showToast(`Added ${subs.length} subtasks`, "success");
+          }
+          slot.innerHTML = "";
+        }, { once: true });
+      } catch (err) {
+        slot.innerHTML = `<div class="task_ai_breakdown_deck"><p>${escapeHTML(err.message || "Could not generate breakdown.")}</p></div>`;
+      }
+    }
+
+    async evaluateHabitWithAI(habitTitle, habitId) {
+      const card = document.getElementById("habit_ai_advisory_card");
+      if (!card) return;
+      const lower = habitTitle.toLowerCase();
+      const risky = ["smoke", "smoking", "cigarette", "vape", "doomscroll", "junk food", "binge drink", "skip meal", "procrastinat"];
+      const matched = risky.some((term) => lower.includes(term));
+
+      if (!this.geminiApiKey || (typeof navigator !== "undefined" && !navigator.onLine)) {
+        if (matched) {
+          this.showAIAdvisoryCard(habitId, habitTitle, "This habit may undermine focus or health.", "5-minute walk or glass of water", "Swap the trigger cue with a fast healthy action.");
+        }
         return;
       }
 
       try {
-        // Request absolute minimum dimensions. Chromium enforces ~160×160 minimum,
-        // but content is designed as a slim 50px toolbar strip to feel ultra-compact.
-        const pipWindow = await window.documentPictureInPicture.requestWindow({
-          width: 320,
-          height: 50
+        const { data } = await this.callGeminiWithFallback({
+          contents: [{ parts: [{ text: `Evaluate if habit "${habitTitle}" is unhealthy or counterproductive. Return ONLY JSON: {"isUnhealthy":boolean,"risk":"...","alternative":"...","tip":"..."}` }] }],
+          generationConfig: { temperature: 0.1, responseMimeType: "application/json" }
         });
-
-        this.pipWindow = pipWindow;
-        if (this.timerPipToggleBtn) this.timerPipToggleBtn.classList.add("active");
-
-        // Copy computed CSS variables from main body
-        const rootStyles = getComputedStyle(document.body);
-        const variables = [
-          '--bg-primary', '--bg-secondary', '--card-bg',
-          '--text-primary', '--text-secondary', '--text-muted',
-          '--border-color', '--accent-primary',
-          '--shadow-sm', '--shadow-md', '--shadow-lg'
-        ];
-        let variablesCSS = ':root {\n';
-        for (const varName of variables) {
-          const val = rootStyles.getPropertyValue(varName);
-          if (val) variablesCSS += `  ${varName}: ${val.trim()};\n`;
+        const parsed = JSON.parse(data.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
+        if (parsed.isUnhealthy) {
+          this.showAIAdvisoryCard(habitId, habitTitle, parsed.risk, parsed.alternative, parsed.tip);
+        } else {
+          card.hidden = true;
         }
-        variablesCSS += '}\n';
+      } catch (_) {
+        if (matched) {
+          this.showAIAdvisoryCard(habitId, habitTitle, "This habit may undermine focus or health.", "5-minute mindful break", "Replace the craving with a positive cue.");
+        }
+      }
+    }
 
-        const varStyle = pipWindow.document.createElement('style');
-        varStyle.textContent = variablesCSS;
-        pipWindow.document.head.appendChild(varStyle);
+    showAIAdvisoryCard(habitId, title, risk, alternative, tip) {
+      const card = document.getElementById("habit_ai_advisory_card");
+      if (!card) return;
+      this.pendingUnhealthyHabit = { id: habitId, alternativeTitle: alternative || "5-minute breathing", category: "Health" };
+      const setTxt = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+      setTxt("ai_advisory_title", `Health Check: "${title}"`);
+      setTxt("ai_advisory_reason", risk || "May reduce long-term focus.");
+      setTxt("ai_advisory_alternative", alternative || "5-minute breathing");
+      setTxt("ai_advisory_tip", tip || "");
+      card.hidden = false;
+    }
 
-        // Ultra-compact slim toolbar styles — content hugs top, zero wasted space
-        const style = pipWindow.document.createElement('style');
-        style.textContent = `
-          *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-          body {
-            margin: 0; padding: 0;
-            background: var(--bg-primary, #0d1117);
-            color: var(--text-primary, #e6edf3);
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
-            overflow: hidden;
-            user-select: none;
-          }
-          .pip_strip {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            width: 100%;
-            height: 50px;
-            padding: 0 10px;
-            background: var(--bg-secondary, #161b22);
-            border-bottom: 2px solid var(--accent-primary, #6366f1);
-            position: relative;
-          }
-          .pip_timer_text {
-            font-size: 22px;
-            font-weight: 800;
-            letter-spacing: -0.5px;
-            color: var(--text-primary, #e6edf3);
-            font-variant-numeric: tabular-nums;
-            line-height: 1;
-          }
-          .pip_label {
-            font-size: 8px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: var(--text-muted, #8b949e);
-            margin-top: 1px;
-          }
-          .pip_left { display: flex; align-items: center; gap: 10px; }
-          .pip_text_col { display: flex; flex-direction: column; }
-          .pip_controls { display: flex; gap: 3px; align-items: center; }
-          .pip_btn {
-            background: var(--bg-primary, #0d1117);
-            border: 1px solid var(--border-color, #30363d);
-            color: var(--text-primary, #e6edf3);
-            border-radius: 4px;
-            width: 26px; height: 26px;
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer;
-            transition: all 0.15s;
-            padding: 0;
-          }
-          .pip_btn:hover {
-            background: var(--accent-primary, #6366f1);
-            border-color: var(--accent-primary, #6366f1);
-            color: #fff;
-          }
-          .pip_btn.restart_accent {
-            border-color: var(--accent-primary, #6366f1);
-            color: var(--accent-primary, #6366f1);
-          }
-          .pip_btn.restart_accent:hover {
-            background: var(--accent-primary, #6366f1);
-            color: #fff;
-          }
-          .pip_btn.skip_accent {
-            color: var(--text-primary, #e6edf3);
-          }
-          .pip_btn.skip_accent:hover {
-            background: var(--accent-secondary, #10b981);
-            border-color: var(--accent-secondary, #10b981);
-            color: #fff;
-          }
-          .pip_progress {
-            position: absolute;
-            bottom: 0; left: 0;
-            height: 2px;
-            background: var(--accent-primary, #6366f1);
-            transition: width 1s linear;
-          }
-        `;
-        pipWindow.document.head.appendChild(style);
+    async analyzeHabitsWithAI(customPrompt = null) {
+      const box = document.getElementById("habit_ai_coach_results");
+      if (!box) return;
+      if (!this.geminiApiKey) {
+        box.innerHTML = `<div class="ai_coach_placeholder"><p>Add your Gemini API key in Settings to unlock Habit Coach insights.</p></div>`;
+        return;
+      }
+      if (this.store.habits.length === 0) {
+        box.innerHTML = `<div class="ai_coach_placeholder"><p>Add at least 1 habit first.</p></div>`;
+        return;
+      }
 
-        // Build the ultra-slim toolbar strip
-        const strip = pipWindow.document.createElement('div');
-        strip.className = 'pip_strip';
-        strip.innerHTML = `
-          <div class="pip_left">
-            <div class="pip_text_col">
-              <div class="pip_timer_text" id="pip_time">25:00</div>
-              <div class="pip_label" id="pip_label">FOCUS</div>
+      box.innerHTML = `<div class="ai_coach_loading">Analyzing your habit consistency...</div>`;
+      const summary = this.store.habits.slice(0, 30).map((h) => ({
+        title: h.title,
+        category: h.category,
+        streak: h.streak || 0,
+        best: h.maxStreak || 0
+      }));
+
+      try {
+        const { data, model } = await this.callGeminiWithFallback({
+          contents: [{ parts: [{ text: `You are an Atomic Habits coach. Habits: ${JSON.stringify(summary)}. Question: "${customPrompt || "Diagnose consistency and suggest habit stacking."}". Return ONLY JSON: {"diagnosis":"...","stackingBlueprints":["After X, I will Y"],"weeklyChallenge":"..."}` }] }],
+          generationConfig: { temperature: 0.3, responseMimeType: "application/json" }
+        });
+        const parsed = JSON.parse(data.candidates?.[0]?.content?.parts?.[0]?.text || "{}");
+        const stacks = Array.isArray(parsed.stackingBlueprints) ? parsed.stackingBlueprints : [];
+        // Safe strictly-escaped DOM markup (ZERO raw LLM HTML!)
+        box.innerHTML = `
+          <div class="ai_coach_content_rendered">
+            <h4>Consistency Diagnosis</h4>
+            <p>${escapeHTML(parsed.diagnosis || "")}</p>
+            ${stacks.length > 0 ? `<h4>Habit Stacking Blueprint</h4><ul>${stacks.map((s) => `<li>${escapeHTML(s)}</li>`).join("")}</ul>` : ""}
+            <h4>7-Day Challenge</h4>
+            <p>${escapeHTML(parsed.weeklyChallenge || "")}</p>
+            <div class="ai_coach_footer_meta">
+              <span>Powered by ${escapeHTML(model)}</span>
+              <button type="button" class="ai_prompt_chip" id="btn_reask_ai_coach">Ask Follow-up</button>
             </div>
           </div>
-          <div class="pip_controls">
-            <button class="pip_btn" id="pip_play_pause" title="Play/Pause">
-              <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-            </button>
-            <button class="pip_btn skip_accent" id="pip_skip" title="Skip to Break">
-              <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" y1="5" x2="19" y2="19" stroke="currentColor" stroke-width="2.5"></line></svg>
-            </button>
-            <button class="pip_btn restart_accent" id="pip_restart" title="Reset & Start Again">
-              <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-            </button>
-            <button class="pip_btn" id="pip_stop" title="Stop">
-              <svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
-            </button>
-          </div>
-          <div class="pip_progress" id="pip_progress"></div>
         `;
-        pipWindow.document.body.appendChild(strip);
+        document.getElementById("btn_reask_ai_coach")?.addEventListener("click", async () => {
+          const q = await this.showConfirmDialog({
+            title: "Ask Habit Coach",
+            message: "What habit challenge would you like coaching on?",
+            requireInput: true,
+            inputLabel: "Question",
+            inputPlaceholder: "e.g., How do I stay consistent on weekends?",
+            okLabel: "Ask"
+          });
+          if (q) this.analyzeHabitsWithAI(q);
+        });
+      } catch (err) {
+        box.innerHTML = `<div class="ai_coach_placeholder"><p>Coach unavailable: ${escapeHTML(err.message || "Network error")}</p></div>`;
+      }
+    }
 
-        // Grab PiP DOM refs
-        const pipTime = pipWindow.document.getElementById('pip_time');
-        const pipLabel = pipWindow.document.getElementById('pip_label');
-        const pipPlayPause = pipWindow.document.getElementById('pip_play_pause');
-        const pipSkip = pipWindow.document.getElementById('pip_skip');
-        const pipStop = pipWindow.document.getElementById('pip_stop');
-        const pipRestart = pipWindow.document.getElementById('pip_restart');
-        const pipProgress = pipWindow.document.getElementById('pip_progress');
+    // -----------------------------------------------------------------------
+    // 11. FEEDBACK: UNDO TOAST, INLINE ERROR ALERT, CELEBRATIONS & OPT-IN PiP
+    // -----------------------------------------------------------------------
+    showToast(message, type = "success", opts = {}) {
+      if (!this.toastRegion) return;
+      if (this.toastTimer) {
+        clearTimeout(this.toastTimer);
+        this.toastTimer = null;
+      }
+      this.activeToastUndo = typeof opts.onUndo === "function" ? opts.onUndo : null;
 
-        const typeLabels = { pomodoro: 'FOCUS', shortBreak: 'SHORT BREAK', longBreak: 'LONG BREAK', stopwatch: 'STOPWATCH' };
+      this.toastRegion.className = `toast_region visible ${type}`;
+      this.toastRegion.innerHTML = `
+        <div class="toast_pill">
+          <span id="toast_message" class="toast_msg">${escapeHTML(message)}</span>
+          ${this.activeToastUndo ? `<button type="button" id="toast_undo_btn" class="toast_undo_btn">${escapeHTML(opts.undoLabel || "Undo")}</button>` : ""}
+        </div>
+      `;
 
-        const updatePiPUI = (t) => {
-          const mins = Math.floor(Math.abs(t.duration) / 60);
-          const secs = Math.abs(t.duration) % 60;
-          if (pipTime) pipTime.textContent = `${mins}:${secs.toString().padStart(2, "0")}`;
-          if (pipLabel) pipLabel.textContent = typeLabels[t.type] || 'FOCUS';
+      const undoBtn = document.getElementById("toast_undo_btn");
+      if (undoBtn && this.activeToastUndo) {
+        const fn = this.activeToastUndo;
+        undoBtn.addEventListener("click", () => {
+          this.activeToastUndo = null;
+          this.toastRegion.classList.remove("visible");
+          fn();
+        }, { once: true });
+      }
 
-          const isBreak = t.type === 'shortBreak' || t.type === 'longBreak';
-          if (strip) {
-            strip.style.borderBottomColor = isBreak ? 'var(--accent-secondary, #10b981)' : 'var(--accent-primary, #6366f1)';
-          }
+      this.toastTimer = setTimeout(() => {
+        this.toastRegion.classList.remove("visible");
+        this.activeToastUndo = null;
+        this.toastTimer = null;
+      }, opts.duration || (this.activeToastUndo ? 4500 : 2800));
+    }
 
-          // Progress bar width
-          if (pipProgress) {
-            let pct = 100;
-            if (t.type !== 'stopwatch' && t.totalDuration > 0) pct = (t.duration / t.totalDuration) * 100;
-            else if (t.type === 'stopwatch') pct = ((t.duration % 60) / 60) * 100;
-            pipProgress.style.width = `${pct}%`;
-            pipProgress.style.backgroundColor = isBreak ? 'var(--accent-secondary, #10b981)' : 'var(--accent-primary, #6366f1)';
-          }
+    showInlineError(message, opts = {}) {
+      if (!this.inlineErrorAlert) return;
+      this.inlineErrorAlert.hidden = false;
+      if (this.inlineErrorText) this.inlineErrorText.textContent = message;
+      if (this.inlineErrorActionBtn) {
+        if (opts.actionLabel && typeof opts.onAction === "function") {
+          this.inlineErrorActionBtn.hidden = false;
+          this.inlineErrorActionBtn.textContent = opts.actionLabel;
+          this.inlineErrorActionBtn.onclick = null;
+          const clone = this.inlineErrorActionBtn.cloneNode(true);
+          this.inlineErrorActionBtn.replaceWith(clone);
+          this.inlineErrorActionBtn = clone;
+          this.inlineErrorActionBtn.addEventListener("click", opts.onAction);
+        } else {
+          this.inlineErrorActionBtn.hidden = true;
+        }
+      }
+      if (this.srAssertive) this.srAssertive.textContent = message;
+    }
 
-          // Dynamic skip tooltip
-          if (pipSkip) {
-            pipSkip.title = isBreak ? 'Skip Break → Start Focus' : 'Skip Focus → Start Break';
-            pipSkip.setAttribute('aria-label', pipSkip.title);
-          }
+    hideInlineError() {
+      if (this.inlineErrorAlert) this.inlineErrorAlert.hidden = true;
+    }
 
-          // Toggle play/pause icon
-          if (pipPlayPause) {
-            pipPlayPause.innerHTML = t.isRunning
-              ? `<svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><rect x="4" y="4" width="4" height="16" rx="1"/><rect x="16" y="4" width="4" height="16" rx="1"/></svg>`
-              : `<svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
-          }
+    triggerCelebration(taskId) {
+      if (prefersReducedMotion()) return;
+      const card = document.querySelector(`.task_card[data-id="${CSS.escape(String(taskId))}"]`);
+      if (!card) return;
+      card.classList.add("celebrating");
+      setTimeout(() => card.classList.remove("celebrating"), 500);
+      const chk = card.querySelector(".checkbox_btn");
+      if (chk) this.triggerElementCelebration(chk);
+    }
+
+    triggerElementCelebration(elementOrId) {
+      if (prefersReducedMotion()) return;
+      const node = typeof elementOrId === "string" ? document.getElementById(elementOrId) : elementOrId;
+      if (!node) return;
+      const rect = node.getBoundingClientRect();
+      const colors = ["#6366f1", "#10b981", "#f43f5e", "#f59e0b"];
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+
+      for (let i = 0; i < 10; i++) {
+        const p = document.createElement("div");
+        p.className = "celebration_particle";
+        p.style.cssText = `position:fixed;left:${x}px;top:${y}px;width:6px;height:6px;border-radius:50%;background:${colors[i % colors.length]};pointer-events:none;z-index:9999;`;
+        document.body.appendChild(p);
+        const angle = (Math.PI * 2 * i) / 10 + Math.random() * 0.4;
+        const vel = 36 + Math.random() * 44;
+        const anim = p.animate(
+          [
+            { transform: "translate3d(0,0,0) scale(1)", opacity: 1 },
+            { transform: `translate3d(${Math.cos(angle) * vel}px,${Math.sin(angle) * vel}px,0) scale(0.2)`, opacity: 0 }
+          ],
+          { duration: 480, easing: "cubic-bezier(0.16,1,0.3,1)" }
+        );
+        anim.onfinish = () => p.remove();
+      }
+    }
+
+    checkOverdueDeadlines() {
+      const today = getLocalDateString();
+      let overdue = 0;
+      for (let i = 0; i < this.store.tasks.length; i++) {
+        const t = this.store.tasks[i];
+        if (t.id !== "general_focus" && !t.completed && !t.isLater && t.dueDate < today) overdue += 1;
+      }
+      if (overdue > 0) {
+        setTimeout(() => {
+          NotificationService.send(
+            "Overdue Focus Items",
+            { body: `You have ${overdue} overdue task${overdue === 1 ? "" : "s"} waiting.` },
+            this.store.notificationsEnabled
+          );
+        }, 1800);
+      }
+    }
+
+    async openDocumentPiP() {
+      if (!("documentPictureInPicture" in window)) {
+        this.showToast("Picture-in-Picture is not supported in this browser", "info");
+        return;
+      }
+      if (this.pipWindow) {
+        this.closeDocumentPiP();
+        return;
+      }
+      try {
+        const pipWin = await window.documentPictureInPicture.requestWindow({ width: 320, height: 54 });
+        this.pipWindow = pipWin;
+        this.timerPipToggleBtn?.classList.add("active");
+
+        const style = pipWin.document.createElement("style");
+        style.textContent = `*{box-sizing:border-box;margin:0;padding:0}body{background:#0f141e;color:#f1f5f9;font-family:system-ui,sans-serif;overflow:hidden}.pip_strip{display:flex;align-items:center;justify-content:space-between;height:54px;padding:0 12px;border-bottom:2px solid #6366f1}.pip_time{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}.pip_controls{display:flex;gap:6px}.pip_btn{background:#1e293b;color:#f8fafc;border:1px solid #334155;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:12px}`;
+        pipWin.document.head.appendChild(style);
+
+        const strip = pipWin.document.createElement("div");
+        strip.className = "pip_strip";
+        strip.innerHTML = `<span class="pip_time" id="pip_time">25:00</span><div class="pip_controls"><button type="button" class="pip_btn" id="pip_toggle">Pause</button><button type="button" class="pip_btn" id="pip_stop">Stop</button></div>`;
+        pipWin.document.body.appendChild(strip);
+
+        const timeEl = pipWin.document.getElementById("pip_time");
+        const toggleBtn = pipWin.document.getElementById("pip_toggle");
+        const stopBtn = pipWin.document.getElementById("pip_stop");
+
+        const update = (t) => {
+          const m = Math.floor(Math.abs(t.duration) / 60);
+          const s = Math.abs(t.duration) % 60;
+          if (timeEl) timeEl.textContent = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+          if (toggleBtn) toggleBtn.textContent = t.isRunning ? "Pause" : "Start";
         };
+        update(this.store.timer);
 
-        updatePiPUI(this.store.timer);
-
-        // Bind controls
-        pipPlayPause.addEventListener('click', () => {
-          this.store.timer.isRunning ? this.store.pauseTimer() : this.store.startTimer();
+        toggleBtn?.addEventListener("click", () => {
+          if (this.store.timer.isRunning) this.store.pauseTimer();
+          else this.store.startTimer();
         });
-
-        pipSkip.addEventListener('click', () => {
-          this.store.skipTimerInterval(true);
-        });
-
-        pipStop.addEventListener('click', () => {
+        stopBtn?.addEventListener("click", () => {
           this.store.resetTimer();
           this.closeDocumentPiP();
         });
 
-        pipRestart.addEventListener('click', () => {
-          this.store.restartTimer();
-        });
-
-        // Clean up previous PiP subscriptions if any
-        if (this.pipUnsubscribers) {
-          this.pipUnsubscribers.forEach(unsub => unsub());
-          this.pipUnsubscribers = [];
-        }
-
-        // Subscribe to ticks
-        const onTick = (t) => updatePiPUI(t);
-        const onStateChange = (t) => updatePiPUI(t);
         this.pipUnsubscribers = [
-          this.store.subscribe('timerTick', onTick),
-          this.store.subscribe('timerStateChanged', onStateChange)
+          this.store.subscribe("timerTick", update),
+          this.store.subscribe("timerStateChanged", update)
         ];
-
-        pipWindow.addEventListener('pagehide', () => {
-          if (this.pipUnsubscribers) {
-            this.pipUnsubscribers.forEach(unsub => unsub());
-            this.pipUnsubscribers = [];
-          }
-          this.pipWindow = null;
-          if (this.timerPipToggleBtn) this.timerPipToggleBtn.classList.remove("active");
-        });
-
+        pipWin.addEventListener("pagehide", () => this.closeDocumentPiP());
       } catch (err) {
-        console.error("Failed to open native Picture-in-Picture window:", err);
+        this.showToast("Could not open Picture-in-Picture overlay", "info");
       }
     }
 
     closeDocumentPiP() {
       if (this.pipUnsubscribers) {
-        this.pipUnsubscribers.forEach(unsub => unsub());
+        this.pipUnsubscribers.forEach((u) => u());
         this.pipUnsubscribers = [];
       }
       if (this.pipWindow) {
-        try { this.pipWindow.close(); } catch(e){}
+        try { this.pipWindow.close(); } catch (_) {}
         this.pipWindow = null;
       }
-      if (this.timerPipToggleBtn) this.timerPipToggleBtn.classList.remove("active");
+      this.timerPipToggleBtn?.classList.remove("active");
+    }
+
+    // Public alias for external callers / benchmark / live_agent
+    setView(viewName, subOptions) {
+      this.store.setView(viewName, subOptions);
     }
   }
 
   // =========================================================================
-  // 4. CHROME EXTENSION DUAL-MODE CONTROLLER
+  // 4. EXTENSION FULL-TAB EXPANSION CONTROLLER (rAF-Throttled Resize)
   // =========================================================================
   function initExtensionControls() {
-    const openTab = () => {
-      if (typeof chrome !== "undefined" && chrome.runtime?.sendMessage) {
-        chrome.runtime.sendMessage({ type: "OPEN_FULL_TAB" }, (response) => {
-          if (chrome.runtime.lastError || !response?.success) {
-            if (chrome.tabs?.create) {
-              chrome.tabs.create({ url: chrome.runtime.getURL("index.html") });
-            } else {
-              window.open("index.html", "_blank");
-            }
-          }
-        });
-      } else {
-        window.open("index.html", "_blank");
+    const openTab = async () => {
+      const res = await sendExtensionMessage({ type: "OPEN_FULL_TAB" });
+      if (!res || !res.success) {
+        if (typeof chrome !== "undefined" && chrome.tabs && chrome.tabs.create) {
+          chrome.tabs.create({ url: chrome.runtime.getURL("index.html") });
+        } else {
+          window.open("index.html", "_blank");
+        }
       }
     };
 
+    ["sidebar_expand_tab_btn", "header_expand_tab_btn", "more_expand_tab_btn"].forEach((id) => {
+      document.getElementById(id)?.addEventListener("click", openTab);
+    });
+
     const sidebarExpandBtn = document.getElementById("sidebar_expand_tab_btn");
-    const headerExpandBtn = document.getElementById("header_expand_tab_btn");
-
-    if (sidebarExpandBtn) {
-      sidebarExpandBtn.addEventListener("click", openTab);
-    }
-    if (headerExpandBtn) {
-      headerExpandBtn.addEventListener("click", openTab);
-    }
-
-    // Adapt expand button visibility based on viewport mode
-    const updateExpandButtonsVisibility = () => {
-      const isWideTab = window.innerWidth > 850;
-      if (sidebarExpandBtn) sidebarExpandBtn.style.display = isWideTab ? "none" : "flex";
-      if (headerExpandBtn) headerExpandBtn.style.display = isWideTab ? "none" : "flex";
+    let resizeRaf = 0;
+    const updateVisibility = () => {
+      resizeRaf = 0;
+      const isWide = window.innerWidth > 850;
+      if (sidebarExpandBtn) sidebarExpandBtn.hidden = isWide;
     };
-
-    window.addEventListener("resize", updateExpandButtonsVisibility);
-    updateExpandButtonsVisibility();
+    window.addEventListener("resize", () => {
+      if (!resizeRaf) resizeRaf = requestAnimationFrame(updateVisibility);
+    }, { passive: true });
+    updateVisibility();
   }
 
   // =========================================================================
-  // 5. ASYNCHRONOUS BOOTLOADER SEQUENCE
+  // 5. ASYNCHRONOUS BOOTLOADER (MV3-Safe Error Recovery — Zero Inline onclick)
   // =========================================================================
   try {
-    // 1. Open IndexedDB and run legacy Local Storage migration check
-    await StorageService.init();
+    if (!Storage || !VirtualList) {
+      throw new Error("Required Aurora modules (storage.js / virtual_list.js) did not load.");
+    }
 
-    // 2. Fetch all loaded records from db object stores
-    const dbData = await StorageService.loadAllData();
+    await Storage.init();
+    const initialData = await Storage.loadInitialData();
+    const store = new TaskStore(initialData);
+    await store.loadExtraPreferences();
 
-    // 3. Construct synchronous State Store & App Controller from memory cache
-    const store = new TaskStore(dbData);
-    window.indigoApp = new AppController(store);
-    console.log("Aurora Companion SPA Booted Flawlessly on Transactional IndexedDB!");
-
-    // 4. Initialize Chrome Extension Tab Expansion & Window Controls
+    const app = new AppController(store);
+    window.indigoApp = app;
+    await app.finalizeBoot();
     initExtensionControls();
   } catch (err) {
-    console.error("Critical failure during Aurora Companion database startup:", err);
+    console.error("Aurora Companion boot error:", err);
     const appEl = document.getElementById("app") || document.body;
     const errorBox = document.createElement("div");
     errorBox.className = "db_fatal_error_banner";
-    errorBox.style.cssText = "position:fixed;inset:0;background:#0d1117;color:#f85149;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;z-index:999999;font-family:-apple-system,BlinkMacSystemFont,sans-serif;";
-    errorBox.innerHTML = `
-      <h2 style="font-size:22px;margin-bottom:12px;color:#fff;">Storage Initialization Failed</h2>
-      <p style="max-width:480px;line-height:1.5;color:#8b949e;margin-bottom:20px;">
-        Aurora Companion could not access local database storage. This can happen in private browsing mode, if browser storage is blocked, or if disk storage quota is exceeded.
-      </p>
-      <button style="padding:10px 20px;border-radius:8px;border:none;background:#6366f1;color:#fff;font-weight:600;cursor:pointer;" onclick="window.location.reload()">Reload Application</button>
-    `;
+    errorBox.setAttribute("role", "alert");
+
+    const heading = document.createElement("h2");
+    heading.textContent = "Storage Initialization Failed";
+    const detail = document.createElement("p");
+    detail.textContent = "Aurora Companion could not access local IndexedDB storage. Check browser storage permissions or disk space.";
+    const reloadBtn = document.createElement("button");
+    reloadBtn.type = "button";
+    reloadBtn.className = "sheet_primary_commit";
+    reloadBtn.textContent = "Reload Application";
+    reloadBtn.addEventListener("click", () => window.location.reload());
+
+    errorBox.append(heading, detail, reloadBtn);
     appEl.appendChild(errorBox);
   }
 });
