@@ -3539,9 +3539,9 @@ document.addEventListener("DOMContentLoaded", async function () {
       } catch (_) {}
 
       const defaultModels = [
-        "gemini-2.0-flash",
-        "gemini-2.5-flash",
-        "gemini-2.5-flash-lite",
+        "gemini-3.5-flash-lite",
+        "gemini-flash-lite-latest",
+        "gemini-3.5-flash",
         "gemini-3.8-flash"
       ];
 
@@ -7715,10 +7715,11 @@ Return ONLY a valid JSON object matching this schema:
                 const supported = modelData.models
                   .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes("generateContent"))
                   .map(m => m.name.replace(/^models\//, ""))
-                  .filter(name => !name.includes("1.5") && !name.includes("1.0"));
-                const flashModels = supported.filter(name => name.includes("flash"));
+                  .filter(name => !name.includes("1.5") && !name.includes("1.0") && !name.includes("2.5-flash-lite"));
+                const liteModels = supported.filter(name => name.includes("flash-lite"));
+                const flashModels = supported.filter(name => name.includes("flash") && !name.includes("flash-lite"));
                 const otherModels = supported.filter(name => !name.includes("flash"));
-                const resolved = [...flashModels, ...otherModels];
+                const resolved = [...liteModels, ...flashModels, ...otherModels];
                 if (resolved.length > 0) {
                   localStorage.setItem("aurora_gemini_models", JSON.stringify(resolved));
                   this.cachedGeminiModels = resolved;
