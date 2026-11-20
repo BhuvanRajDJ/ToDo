@@ -177,9 +177,23 @@
             </div>
             <button type="button" id="welcome_dismiss_btn" class="icon_btn icon_btn_sm" aria-label="Dismiss welcome card">✕</button>
           </div>
-          <p class="welcome_inline_copy">Your tasks, habits, and reflections stay locally in your browser. Zero tracking, zero accounts.</p>
+          <p class="welcome_inline_copy">Pick a starter blueprint to begin immediately, or customize your profile:</p>
+          <div class="welcome_blueprint_grid">
+            <button type="button" class="blueprint_btn" data-blueprint="lead">
+              <strong>👔 Executive / Lead</strong>
+              <span>Review team PRs &amp; daily standup</span>
+            </button>
+            <button type="button" class="blueprint_btn" data-blueprint="engineer">
+              <strong>💻 Software Engineer</strong>
+              <span>Deep focus coding block &amp; tab capture</span>
+            </button>
+            <button type="button" class="blueprint_btn" data-blueprint="creator">
+              <strong>✍️ Creator / Writer</strong>
+              <span>25m daily flow &amp; weekly planning</span>
+            </button>
+          </div>
           <div class="welcome_inline_actions">
-            <button type="button" id="welcome_start_quiz_btn" class="btn btn_sm btn_primary">Tune Productivity DNA</button>
+            <button type="button" id="welcome_start_quiz_btn" class="btn btn_xs btn_ghost">Or Tune Productivity DNA</button>
           </div>
         </article>
 
@@ -231,9 +245,14 @@
             <button type="button" class="filter_pill" data-today-filter="later">Backlog</button>
             <button type="button" class="filter_pill" data-today-filter="completed">Done</button>
           </div>
-          <button type="button" id="today_search_trigger" class="icon_btn icon_btn_sm" popovertarget="today_search_popover" aria-label="Search and filter tasks" title="Search &amp; Filter">
-            <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-          </button>
+          <div class="today_toolbar_actions">
+            <button type="button" id="today_standup_export_btn" class="icon_btn icon_btn_sm" aria-label="Copy daily standup to clipboard" title="Copy Standup Markdown">
+              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M9 14l2 2 4-4"/></svg>
+            </button>
+            <button type="button" id="today_search_trigger" class="icon_btn icon_btn_sm" popovertarget="today_search_popover" aria-label="Search and filter tasks" title="Search &amp; Filter">
+              <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+            </button>
+          </div>
         </div>
 
         <!-- SEARCH & ADVANCED FILTER POPOVER -->
@@ -271,24 +290,50 @@
           <!-- PRIMARY FEED COLUMN -->
           <div class="today_feed_col">
 
-            <!-- NEXT UP / KEYSTONE HERO CARD -->
-            <section id="today_keystone_card" class="keystone_hero_card" aria-label="Next Up Focus">
-              <div id="morning_bridge_slot"></div>
-              <div id="dash_focus_nudge_area" class="dash_focus_nudge_container"></div>
-              <div class="circadian_inline_strip">
-                <div class="circadian_slot">
-                  <span class="slot_kicker">Now</span>
-                  <div id="dash_now_block" class="circadian_slot_body"></div>
+            <!-- NEXT UP / KEYSTONE HERO CARD (COMPACT WITH ACCORDION) -->
+            <section id="today_keystone_card" class="keystone_hero_card collapsed" aria-label="Next Up Focus">
+              <div class="keystone_card_bar">
+                <div class="keystone_bar_info">
+                  <span class="keystone_badge">KEYSTONE</span>
+                  <span id="keystone_mini_title" class="keystone_mini_title">Focus on your next priority</span>
                 </div>
-                <div class="circadian_slot">
-                  <span class="slot_kicker">Next</span>
-                  <div id="dash_next_block" class="circadian_slot_body"></div>
+                <div class="keystone_bar_actions">
+                  <button type="button" id="keystone_mini_action_btn" class="btn btn_xs btn_primary" data-nudge="quick-focus">Focus</button>
+                  <button type="button" id="keystone_collapse_btn" class="icon_btn icon_btn_xs" aria-expanded="false" aria-label="Toggle keystone details" title="Expand circadian view">
+                    <svg class="chevron_icon" aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+                  </button>
+                </div>
+              </div>
+              <div id="keystone_expandable_body" class="keystone_expandable_body" hidden>
+                <div id="morning_bridge_slot"></div>
+                <div id="dash_focus_nudge_area" class="dash_focus_nudge_container"></div>
+                <div class="circadian_inline_strip">
+                  <div class="circadian_slot">
+                    <span class="slot_kicker">Now</span>
+                    <div id="dash_now_block" class="circadian_slot_body"></div>
+                  </div>
+                  <div class="circadian_slot">
+                    <span class="slot_kicker">Next</span>
+                    <div id="dash_next_block" class="circadian_slot_body"></div>
+                  </div>
                 </div>
               </div>
             </section>
 
             <!-- FOCUS TODAY AI STRATEGY SLOT -->
             <div id="today_ai_banner_container"></div>
+
+            <!-- INLINE DAILY HABIT STRIP (RELOCATED ABOVE TASKS) -->
+            <section id="today_habit_strip_section" class="surface_card habit_strip_card" aria-label="Daily Rituals">
+              <div class="section_row_head">
+                <div class="section_row_title">
+                  <h2>Daily Rituals</h2>
+                  <span id="today_habit_strip_count" class="count_chip tabular_num">0/0</span>
+                </div>
+                <button type="button" id="today_habit_view_all_btn" class="link_btn">Manage</button>
+              </div>
+              <div id="today_habit_strip_list" class="habit_strip_list"></div>
+            </section>
 
             <!-- VIRTUALIZED TASK LIST VIEWPORT -->
             <div id="task_list_viewport" class="virtual_list_viewport">
@@ -300,18 +345,6 @@
 
           <!-- SECONDARY RAIL COLUMN (BELOW FEED ON 360px, RIGHT RAIL ON >= 680px) -->
           <div class="today_rail_col">
-
-            <!-- INLINE DAILY HABIT STRIP -->
-            <section id="today_habit_strip_section" class="surface_card habit_strip_card" aria-label="Daily Rituals">
-              <div class="section_row_head">
-                <div class="section_row_title">
-                  <h2>Daily Rituals</h2>
-                  <span id="today_habit_strip_count" class="count_chip tabular_num">0/0</span>
-                </div>
-                <button type="button" id="today_habit_view_all_btn" class="link_btn">Manage</button>
-              </div>
-              <div id="today_habit_strip_list" class="habit_strip_list"></div>
-            </section>
 
             <!-- DAILY MOMENTUM & ALIGNMENT SUMMARY -->
             <section id="today_progress_summary" class="surface_card momentum_summary_card" aria-label="Daily Alignment">

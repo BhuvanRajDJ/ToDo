@@ -572,10 +572,17 @@ if (chrome.action?.onClicked && !chrome.sidePanel?.setPanelBehavior) {
   });
 }
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   (async () => {
     await registerContextMenu();
     await restoreRuntimeState();
+    if (details && details.reason === "install") {
+      try {
+        await chrome.tabs.create({ url: "welcome.html" });
+      } catch (err) {
+        console.warn("Aurora Companion: Failed to open welcome tab:", err);
+      }
+    }
   })();
 });
 

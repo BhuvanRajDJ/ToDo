@@ -267,8 +267,8 @@
 
   /* Circadian Ambiance Phases (subtle top rail + <7% ambient wash) */
   body[data-phase="dawn"] {
-    --phase-tint: #F59E0B;
-    --phase-rail: linear-gradient(90deg, #F59E0B, #EC6A45, var(--accent));
+    --phase-tint: #D97706;
+    --phase-rail: linear-gradient(90deg, #D97706, #EC6A45, var(--accent));
   }
   body[data-phase="day"] {
     --phase-tint: #3B82F6;
@@ -805,15 +805,15 @@
   }
 
   .icon_btn_sm {
-    min-inline-size: 1.875rem;
-    min-block-size: 1.875rem;
+    min-inline-size: 2rem;
+    min-block-size: 2rem;
     padding: 0.25rem;
   }
 
   .icon_btn_xs {
-    min-inline-size: 1.625rem;
-    min-block-size: 1.625rem;
-    padding: 0.1875rem;
+    min-inline-size: 2rem;
+    min-block-size: 2rem;
+    padding: 0.25rem;
     font-size: var(--text-xs);
   }
 
@@ -1207,6 +1207,156 @@
     color: var(--ink-2);
   }
 
+  .welcome_blueprint_grid {
+    display: flex;
+    flex-direction: column;
+    gap: 0.375rem;
+    margin-block: 0.25rem;
+  }
+
+  .blueprint_btn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--radius-sm);
+    background-color: var(--surface-1);
+    border: var(--border-w) solid var(--border-ctrl);
+    color: var(--ink-1);
+    cursor: pointer;
+    text-align: left;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .blueprint_btn:hover {
+    background-color: var(--surface-2);
+    border-color: var(--accent);
+  }
+
+  .blueprint_btn strong {
+    font-size: var(--text-xs);
+    font-weight: 700;
+  }
+
+  .blueprint_btn span {
+    font-size: var(--text-2xs);
+    color: var(--ink-2);
+    margin-block-start: 0.15rem;
+  }
+
+  .welcome_inline_actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-block-start: 0.25rem;
+  }
+
+  /* Full-Tab Welcome & Onboarding Page */
+  .welcome_page_body {
+    min-block-size: 100vh;
+    display: grid;
+    place-items: center;
+    padding: var(--sp-4);
+    background-color: var(--surface-0);
+  }
+
+  .welcome_container {
+    inline-size: 100%;
+    max-inline-size: 32rem;
+  }
+
+  .welcome_card {
+    padding: var(--sp-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-4);
+  }
+
+  .welcome_header {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--sp-2);
+  }
+
+  .welcome_logo {
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .welcome_subtitle {
+    font-size: var(--text-sm);
+    color: var(--ink-2);
+    max-inline-size: 24rem;
+  }
+
+  .pin_guide_section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
+
+  .pin_guide_section h2 {
+    font-size: var(--text-md);
+    text-align: center;
+  }
+
+  .pin_steps_list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-3);
+  }
+
+  .pin_step_item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--sp-3);
+    padding: var(--sp-3);
+    border-radius: var(--radius-sm);
+    background-color: var(--surface-2);
+    border: var(--border-w) solid var(--border-subtle);
+  }
+
+  .step_num {
+    inline-size: 2rem;
+    block-size: 2rem;
+    border-radius: 50%;
+    background-color: var(--accent);
+    color: #FFFFFF;
+    font-weight: 800;
+    display: grid;
+    place-items: center;
+    flex-shrink: 0;
+    font-size: var(--text-sm);
+  }
+
+  .step_content strong {
+    font-size: var(--text-sm);
+    color: var(--ink-1);
+    display: block;
+  }
+
+  .step_content p {
+    font-size: var(--text-xs);
+    color: var(--ink-2);
+    margin-block-start: 0.2rem;
+  }
+
+  .welcome_actions {
+    display: flex;
+    justify-content: center;
+  }
+
+  .btn_lg {
+    min-block-size: 2.75rem;
+    padding: 0.6rem 1.5rem;
+    font-size: var(--text-base);
+    font-weight: 700;
+  }
+
   /* Boot Skeleton */
   .boot_skeleton {
     display: flex;
@@ -1394,6 +1544,13 @@
     gap: var(--sp-2);
   }
 
+  .today_toolbar_actions {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    flex-shrink: 0;
+  }
+
   .filter_pill_strip {
     display: flex;
     align-items: center;
@@ -1576,11 +1733,73 @@
     );
     border: var(--border-w) solid var(--border-subtle);
     border-radius: var(--radius-md);
-    padding: var(--sp-3);
+    padding: var(--sp-2) var(--sp-3);
     box-shadow: var(--shadow-sm);
     display: flex;
     flex-direction: column;
-    gap: var(--sp-3);
+    gap: var(--sp-2);
+    margin-block-end: var(--sp-2);
+    transition: all 0.2s ease;
+  }
+
+  .keystone_card_bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2);
+    min-block-size: 2rem;
+  }
+
+  .keystone_bar_info {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-inline-size: 0;
+    flex: 1;
+  }
+
+  .keystone_badge {
+    font-size: var(--text-2xs);
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background-color: color-mix(in oklab, var(--accent) 12%, transparent);
+    padding: 0.15rem 0.45rem;
+    border-radius: var(--radius-sm);
+    flex-shrink: 0;
+  }
+
+  .keystone_mini_title {
+    font-size: var(--text-xs);
+    font-weight: 700;
+    color: var(--ink-1);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .keystone_bar_actions {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    flex-shrink: 0;
+  }
+
+  .keystone_hero_card.collapsed .keystone_expandable_body {
+    display: none;
+  }
+
+  .keystone_hero_card:not(.collapsed) .chevron_icon {
+    transform: rotate(180deg);
+  }
+
+  .keystone_expandable_body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+    padding-block-start: var(--sp-2);
+    border-block-start: var(--border-w) solid var(--border-subtle);
   }
 
   .dash_nudge_prompt_card {
@@ -1988,8 +2207,8 @@
   }
 
   .sub_check_btn {
-    min-inline-size: 1.25rem;
-    min-block-size: 1.25rem;
+    min-inline-size: 1.75rem;
+    min-block-size: 1.75rem;
     border-radius: 0.25rem;
     border: 1.5px solid var(--border-ctrl);
     display: inline-flex;
@@ -2116,10 +2335,43 @@
   }
 
   /* --- Inline Daily Habit Strip & Momentum Rings --- */
+  .habit_strip_card {
+    padding: var(--sp-2) var(--sp-3);
+    margin-block-end: var(--sp-2);
+  }
+
+  .habit_strip_card .section_row_head {
+    margin-block-end: 0.35rem;
+  }
+
   .habit_strip_list {
     display: flex;
-    flex-wrap: wrap;
+    overflow-x: auto;
+    flex-wrap: nowrap;
     gap: 0.375rem;
+    scrollbar-width: none;
+    padding-block-end: 2px;
+  }
+
+  .habit_strip_list::-webkit-scrollbar {
+    display: none;
+  }
+
+  .task_card.completed_transition {
+    opacity: 0.55;
+    transform: scale(0.98);
+    transition: opacity 0.35s ease, transform 0.35s ease;
+  }
+
+  .task_card.completed_transition .card_title {
+    text-decoration: line-through;
+    color: var(--ink-3);
+  }
+
+  .task_card.completed_transition .checkbox_btn {
+    background-color: var(--success);
+    border-color: var(--success);
+    color: #FFFFFF;
   }
 
   .habit_strip_pill {

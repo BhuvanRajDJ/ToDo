@@ -2531,6 +2531,35 @@ document.addEventListener("DOMContentLoaded", async function () {
         });
       }
 
+      // Welcome 1-click starter blueprints
+      document.querySelectorAll(".blueprint_btn[data-blueprint]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const role = btn.getAttribute("data-blueprint");
+          this.applyStarterBlueprint(role);
+          if (this.welcomeInlineCard) this.welcomeInlineCard.hidden = true;
+          this.store.welcomeDialogShown = true;
+          Storage.savePreference("welcome_dialog_shown", true).catch(() => {});
+        });
+      });
+
+      // Keystone Card Collapse Toggle
+      const keystoneCollapseBtn = document.getElementById("keystone_collapse_btn");
+      const keystoneCard = document.getElementById("today_keystone_card");
+      const keystoneBody = document.getElementById("keystone_expandable_body");
+      if (keystoneCollapseBtn && keystoneCard && keystoneBody) {
+        keystoneCollapseBtn.addEventListener("click", () => {
+          const isCollapsed = keystoneCard.classList.toggle("collapsed");
+          keystoneBody.hidden = isCollapsed;
+          keystoneCollapseBtn.setAttribute("aria-expanded", String(!isCollapsed));
+        });
+      }
+
+      // Standup Markdown Export
+      const standupBtn = document.getElementById("today_standup_export_btn");
+      if (standupBtn) {
+        standupBtn.addEventListener("click", () => this.exportStandupMarkdown());
+      }
+
       // Notification permission banner
       if (NotificationService.isSupported() && Notification.permission === "default" && !this.store.bannerDismissed && this.store.notificationsEnabled && this.notifBanner) {
         this.notifBanner.hidden = false;
@@ -2735,6 +2764,57 @@ document.addEventListener("DOMContentLoaded", async function () {
             } else {
               this.openBottomSheet();
             }
+          } else if (e.key === "c" || e.key === "C") {
+            e.preventDefault();
+            if (this.quickAddInput) {
+              this.quickAddInput.focus();
+              this.quickAddInput.select();
+            }
+          } else if (["1", "2", "3", "4", "5"].includes(e.key)) {
+            e.preventDefault();
+            const views = ["today", "plan", "focus", "habits", "analytics"];
+            const targetView = views[parseInt(e.key, 10) - 1];
+            if (targetView) this.store.setView(targetView);
+          } else if (e.key === "j" || e.key === "ArrowDown") {
+            e.preventDefault();
+            this.navigateTaskList(1);
+          } else if (e.key === "k" || e.key === "ArrowUp") {
+            e.preventDefault();
+            this.navigateTaskList(-1);
+          } else if (e.key === " " || e.code === "Space") {
+            const card = document.activeElement ? document.activeElement.closest(".task_card") : null;
+            if (card && this.store.currentView !== "focus") {
+              e.preventDefault();
+              const taskId = card.getAttribute("data-id");
+              if (taskId) {
+                card.classList.add("completed_transition");
+                const chk = card.querySelector(".checkbox_btn");
+                if (chk) {
+                  chk.setAttribute("aria-pressed", "true");
+                  this.triggerElementCelebration(chk);
+                }
+                setTimeout(() => this.store.toggleTaskComplete(taskId), 350);
+              }
+            } else if (this.store.currentView === "focus") {
+              e.preventDefault();
+              if (this.store.timer.isRunning) this.store.pauseTimer();
+              else this.store.startTimer();
+            }
+          } else if (e.key === "e" || e.key === "E") {
+            const card = document.activeElement ? document.activeElement.closest(".task_card") : null;
+            if (card) {
+              e.preventDefault();
+              const taskId = card.getAttribute("data-id");
+              const task = taskId ? this.store.getTaskById(taskId) : null;
+              if (task) this.openBottomSheet(task);
+            }
+          } else if (e.key === "Delete" || e.key === "Backspace") {
+            const card = document.activeElement ? document.activeElement.closest(".task_card") : null;
+            if (card) {
+              e.preventDefault();
+              const taskId = card.getAttribute("data-id");
+              if (taskId) this.store.deleteTask(taskId);
+            }
           } else if (e.key === "/") {
             e.preventDefault();
             if (this.store.currentView === "plan" && this.planSearchInput) {
@@ -2746,11 +2826,7 @@ document.addEventListener("DOMContentLoaded", async function () {
               this.searchInput.focus();
             }
           } else if (this.store.currentView === "focus") {
-            if (e.key === " " || e.code === "Space") {
-              e.preventDefault();
-              if (this.store.timer.isRunning) this.store.pauseTimer();
-              else this.store.startTimer();
-            } else if (e.key === "r" || e.key === "R") {
+            if (e.key === "r" || e.key === "R") {
               e.preventDefault();
               this.store.restartTimer();
             }
@@ -2873,26 +2949,87 @@ document.addEventListener("DOMContentLoaded", async function () {
       }
     }
 
+    parseQuickAddTokens(rawText) {
+      let text = rawText;
+      let priority = null;
+      let category = null;
+      let dateMode = null;
+
+      // 1. Priority: !high, !keystone, !p1, !med, !medium, !steady, !p2, !low, !gentle, !p3
+      text = text.replace(/!(keystone|high|p1)\b/gi, () => {
+        priority = "High";
+        return "";
+      });
+      text = text.replace(/!(steady|med|medium|p2)\b/gi, () => {
+        priority = "Medium";
+        return "";
+      });
+      text = text.replace(/!(gentle|low|p3)\b/gi, () => {
+        priority = "Low";
+        return "";
+      });
+
+      // 2. Date mode: \b(tomorrow|tmrw|later|backlog|today)\b
+      text = text.replace(/\b(tomorrow|tmrw)\b/gi, () => {
+        dateMode = "tomorrow";
+        return "";
+      });
+      text = text.replace(/\b(later|backlog)\b/gi, () => {
+        dateMode = "later";
+        return "";
+      });
+      text = text.replace(/\btoday\b/gi, () => {
+        dateMode = "today";
+        return "";
+      });
+
+      // 3. Category: @categoryName
+      const availableCats = typeof this.store.getCategories === "function" ? this.store.getCategories() : [];
+      text = text.replace(/@([a-zA-Z0-9_-]+)/g, (match, catName) => {
+        const found = availableCats.find((c) => c.toLowerCase() === catName.toLowerCase());
+        category = found || catName;
+        return "";
+      });
+
+      return {
+        cleanTitle: text.replace(/\s+/g, " ").trim(),
+        priority,
+        category,
+        dateMode
+      };
+    }
+
     submitQuickAdd() {
       if (!this.quickAddInput) return;
-      const title = this.quickAddInput.value.trim();
-      if (!title) {
+      const rawTitle = this.quickAddInput.value.trim();
+      if (!rawTitle) {
         this.quickAddInput.focus();
         return;
       }
 
+      const parsed = this.parseQuickAddTokens(rawTitle);
+      const title = parsed.cleanTitle || rawTitle;
+
+      const dateMode = parsed.dateMode || this.quickAddState.dateMode || "today";
+      const priority = parsed.priority || this.quickAddState.priority || "Medium";
+      const category = parsed.category || this.quickAddState.category || "Inbox";
+
       let dueDate = getLocalDateString();
       let isLater = false;
-      if (this.quickAddState.dateMode === "tomorrow") dueDate = getNDaysFromNow(1);
-      else if (this.quickAddState.dateMode === "later") isLater = true;
+      if (dateMode === "tomorrow") {
+        dueDate = getNDaysFromNow(1);
+      } else if (dateMode === "later") {
+        isLater = true;
+        dueDate = "";
+      }
 
       const task = this.store.addTask({
         title,
         description: "",
         url: this.quickAddState.attachedTab ? this.quickAddState.attachedTab.url : "",
         dueDate,
-        priority: this.quickAddState.priority || "Medium",
-        category: this.quickAddState.category || "Inbox",
+        priority,
+        category,
         estimatedDuration: 25,
         recurring: "none",
         isLater
@@ -2904,7 +3041,138 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.quickAddInput.focus();
 
       if (task) {
-        setTimeout(() => this.triggerCelebration(task.id), 120);
+        this.showToast(`Captured: ${task.title}`, "success");
+      }
+    }
+
+    applyStarterBlueprint(role) {
+      const todayStr = getLocalDateString();
+      if (role === "lead") {
+        this.store.addTask({
+          title: "Review team PRs & milestone roadmap",
+          dueDate: todayStr,
+          priority: "High",
+          category: "Work",
+          estimatedDuration: 30
+        });
+        this.store.addTask({
+          title: "Establish daily keystone intention",
+          dueDate: todayStr,
+          priority: "High",
+          category: "Planning",
+          estimatedDuration: 15
+        });
+        this.store.addTask({
+          title: "Execute 30-second shutdown & standup sync",
+          dueDate: todayStr,
+          priority: "Medium",
+          category: "Review",
+          estimatedDuration: 10
+        });
+        this.showToast("Executive blueprint loaded", "success");
+      } else if (role === "engineer") {
+        this.store.addTask({
+          title: "Deep focus: Core feature sprint",
+          dueDate: todayStr,
+          priority: "High",
+          category: "Dev",
+          estimatedDuration: 45
+        });
+        this.store.addTask({
+          title: "Triage open GitHub notifications & review requests",
+          dueDate: todayStr,
+          priority: "Medium",
+          category: "Dev",
+          estimatedDuration: 20
+        });
+        this.store.addTask({
+          title: "Capture active browser tab to backlog (Press Tab)",
+          dueDate: "",
+          isLater: true,
+          priority: "Low",
+          category: "Research",
+          estimatedDuration: 15
+        });
+        this.showToast("Software engineer blueprint loaded", "success");
+      } else if (role === "creator") {
+        this.store.addTask({
+          title: "Draft daily long-form writing piece (25m flow)",
+          dueDate: todayStr,
+          priority: "High",
+          category: "Creative",
+          estimatedDuration: 25
+        });
+        this.store.addTask({
+          title: "Review weekly publishing horizon & draft queue",
+          dueDate: todayStr,
+          priority: "Medium",
+          category: "Planning",
+          estimatedDuration: 20
+        });
+        this.store.addTask({
+          title: "Inbox zero: organize incoming notes & references",
+          dueDate: todayStr,
+          priority: "Low",
+          category: "Admin",
+          estimatedDuration: 15
+        });
+        this.showToast("Creator blueprint loaded", "success");
+      }
+    }
+
+    exportStandupMarkdown() {
+      const todayStr = getLocalDateString();
+      const allTasks = this.store.tasks;
+      const completedToday = allTasks.filter((t) => t.completed && (!t.completedAt || t.completedAt.startsWith(todayStr)));
+      const pendingToday = allTasks.filter((t) => !t.completed && !t.isLater && t.dueDate <= todayStr);
+
+      let md = `### 🌅 Daily Standup — ${todayStr}\n\n`;
+      md += `**Completed:**\n`;
+      if (completedToday.length === 0) {
+        md += `- *(No tasks completed yet)*\n`;
+      } else {
+        completedToday.forEach((t) => {
+          md += `- [x] ${t.title} (${t.category || "General"})\n`;
+        });
+      }
+
+      md += `\n**In Progress & Priorities:**\n`;
+      if (pendingToday.length === 0) {
+        md += `- *(All planned tasks cleared)*\n`;
+      } else {
+        pendingToday.forEach((t) => {
+          const pri = t.priority === "High" ? " [Keystone]" : "";
+          md += `- [ ] ${t.title}${pri}\n`;
+        });
+      }
+
+      md += `\n*Organized with Aurora Companion*\n`;
+
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+        navigator.clipboard.writeText(md).then(() => {
+          this.showToast("Standup copied to clipboard!", "success");
+        }).catch(() => {
+          this.showToast("Failed to copy standup", "error");
+        });
+      } else {
+        this.showToast("Clipboard not accessible", "error");
+      }
+    }
+
+    navigateTaskList(direction) {
+      const cards = Array.from(document.querySelectorAll("#task_list_container .task_card"));
+      if (cards.length === 0) return;
+      const currentIdx = cards.findIndex((c) => c.contains(document.activeElement) || c === document.activeElement);
+      let nextIdx = 0;
+      if (currentIdx !== -1) {
+        nextIdx = Math.max(0, Math.min(cards.length - 1, currentIdx + direction));
+      } else if (direction === -1) {
+        nextIdx = cards.length - 1;
+      }
+      const targetCard = cards[nextIdx];
+      if (targetCard) {
+        targetCard.focus();
+        targetCard.scrollIntoView({ block: "nearest", behavior: "smooth" });
       }
     }
 
@@ -3479,6 +3747,14 @@ document.addEventListener("DOMContentLoaded", async function () {
         const secs = Math.abs(this.store.timer.duration) % 60;
         const formatted = `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 
+        const miniTitle = document.getElementById("keystone_mini_title");
+        const miniActionBtn = document.getElementById("keystone_mini_action_btn");
+        if (miniTitle) miniTitle.textContent = `Flow: ${activeTask ? activeTask.title : "Deep Focus"} (${formatted})`;
+        if (miniActionBtn) {
+          miniActionBtn.textContent = "Timer";
+          miniActionBtn.setAttribute("data-nudge", "goto-timer");
+        }
+
         nudgeBox.innerHTML = `
           <div class="dash_nudge_prompt_card active_focus">
             <div class="nudge_text">
@@ -3507,7 +3783,17 @@ document.addEventListener("DOMContentLoaded", async function () {
           }
         }
 
+        const miniTitle = document.getElementById("keystone_mini_title");
+        const miniActionBtn = document.getElementById("keystone_mini_action_btn");
+
         if (keystone) {
+          if (miniTitle) miniTitle.textContent = keystone.title;
+          if (miniActionBtn) {
+            miniActionBtn.textContent = "Focus";
+            miniActionBtn.setAttribute("data-nudge", "start-keystone");
+            miniActionBtn.setAttribute("data-task-id", String(keystone.id));
+          }
+
           nudgeBox.innerHTML = `
             <div class="dash_nudge_prompt_card">
               <div class="nudge_text">
@@ -3521,6 +3807,12 @@ document.addEventListener("DOMContentLoaded", async function () {
             </div>
           `;
         } else {
+          if (miniTitle) miniTitle.textContent = "All priorities cleared";
+          if (miniActionBtn) {
+            miniActionBtn.textContent = "Rest";
+            miniActionBtn.setAttribute("data-nudge", "quick-focus");
+          }
+
           nudgeBox.innerHTML = `
             <div class="dash_nudge_prompt_card clean_slate">
               <div class="nudge_text">
@@ -3531,6 +3823,29 @@ document.addEventListener("DOMContentLoaded", async function () {
             </div>
           `;
         }
+      }
+
+      const keystoneCard = document.getElementById("today_keystone_card");
+      if (keystoneCard && !keystoneCard.dataset.bound) {
+        keystoneCard.dataset.bound = "true";
+        keystoneCard.addEventListener("click", (e) => {
+          const btn = e.target.closest("button[data-nudge]");
+          if (!btn) return;
+          const act = btn.getAttribute("data-nudge");
+          if (act === "goto-timer") {
+            this.store.setView("focus");
+          } else if (act === "stop-timer") {
+            this.store.resetTimer();
+          } else if (act === "start-keystone") {
+            const id = btn.getAttribute("data-task-id");
+            const task = this.store.getTaskById(id);
+            this.store.setView("focus");
+            if (task) this.store.startTimer(task.id);
+          } else if (act === "quick-focus") {
+            this.store.setView("focus");
+            this.store.startTimer();
+          }
+        });
       }
 
       if (!nudgeBox.dataset.bound) {
@@ -4039,6 +4354,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       const card = document.createElement("article");
       card.className = `task_card priority-${priority} ${task.completed ? "completed" : ""} ${isExpanded ? "expanded" : ""}`;
       card.setAttribute("data-id", String(task.id));
+      card.setAttribute("tabindex", "0");
 
       // Due status badge (pure local string comparison — zero per-card Date objects for common cases!)
       let statusBadge = "";
@@ -4155,7 +4471,20 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       if (action === "toggle") {
         e.stopPropagation();
-        this.store.toggleTaskComplete(task.id);
+        const card = target.closest(".task_card");
+        if (card && !task.completed) {
+          card.classList.add("completed_transition");
+          const chk = card.querySelector(".checkbox_btn");
+          if (chk) {
+            chk.setAttribute("aria-pressed", "true");
+            this.triggerElementCelebration(chk);
+          }
+          setTimeout(() => {
+            this.store.toggleTaskComplete(task.id);
+          }, 350);
+        } else {
+          this.store.toggleTaskComplete(task.id);
+        }
       } else if (action === "delete") {
         e.stopPropagation();
         this.store.deleteTask(task.id);
