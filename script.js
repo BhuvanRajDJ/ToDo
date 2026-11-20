@@ -1899,6 +1899,14 @@ document.addEventListener("DOMContentLoaded", async function () {
       this.updateSidebarClass();
       this.updateOfflineBadge();
 
+      if (window.matchMedia) {
+        window.matchMedia("(prefers-color-scheme: light)").addEventListener("change", () => {
+          if (this.store.theme === "system") {
+            this.updateThemeClasses();
+          }
+        });
+      }
+
       // Periodically refresh circadian phase (every 10m)
       this.phaseInterval = setInterval(() => this.updateCircadianPhase(), 600000);
     }
@@ -2686,7 +2694,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       const dayTabsBar = document.getElementById("routine_day_tabs_bar");
       if (dayTabsBar) {
         dayTabsBar.addEventListener("click", (e) => {
-          const tab = e.target.closest(".routine_day_tab");
+          const tab = e.target.closest(".routine_day_tab, .day_tab, button[data-day]");
           if (!tab) return;
           this.selectedRoutineDay = tab.getAttribute("data-day");
           this.renderRoutineUI();
@@ -2695,7 +2703,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       const layoutPills = document.getElementById("routine_layout_pills");
       if (layoutPills) {
         layoutPills.addEventListener("click", (e) => {
-          const btn = e.target.closest(".pill_btn");
+          const btn = e.target.closest(".pill_btn, .seg_tab, button[data-layout]");
           if (!btn) return;
           this.routineLayoutMode = btn.getAttribute("data-layout");
           this.renderRoutineUI();
@@ -3531,9 +3539,21 @@ document.addEventListener("DOMContentLoaded", async function () {
           ? (window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
           : theme;
 
+      const docEl = document.documentElement;
+      if (docEl) {
+        docEl.style.colorScheme = resolvedTheme;
+        docEl.dataset.theme = theme;
+        docEl.dataset.resolvedTheme = resolvedTheme;
+        docEl.dataset.accent = accent;
+        docEl.classList.remove("theme-dark", "theme-light");
+        docEl.classList.add(`theme-${resolvedTheme}`);
+      }
+
+      document.body.style.colorScheme = resolvedTheme;
       document.body.classList.remove("theme-dark", "theme-light", "accent-indigo", "accent-emerald", "accent-rose", "accent-amber");
       document.body.classList.add(`theme-${resolvedTheme}`, `accent-${legacyAccent}`);
       document.body.dataset.theme = theme;
+      document.body.dataset.resolvedTheme = resolvedTheme;
       document.body.dataset.accent = accent;
       document.body.dataset.style = this.store.uiStyle || "atelier";
 
@@ -3666,7 +3686,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         if (!panel) return;
         const isActive = key === active;
         panel.hidden = !isActive;
-        panel.style.display = isActive ? (key === "focus" ? "flex" : "block") : "none";
+        panel.style.display = isActive ? "flex" : "none";
       });
 
       document.body.classList.toggle("view-timer-active", active === "focus");
@@ -4625,10 +4645,10 @@ document.addEventListener("DOMContentLoaded", async function () {
       const wrapper = document.getElementById("routine_timetable_scroller");
       if (!wrapper) return;
 
-      document.querySelectorAll("#routine_day_tabs_bar .routine_day_tab").forEach((t) => {
+      document.querySelectorAll("#routine_day_tabs_bar button[data-day]").forEach((t) => {
         t.classList.toggle("active", t.getAttribute("data-day") === this.selectedRoutineDay);
       });
-      document.querySelectorAll("#routine_layout_pills .pill_btn").forEach((p) => {
+      document.querySelectorAll("#routine_layout_pills button[data-layout]").forEach((p) => {
         p.classList.toggle("active", p.getAttribute("data-layout") === this.routineLayoutMode);
       });
 
@@ -5838,10 +5858,10 @@ document.addEventListener("DOMContentLoaded", async function () {
           <div class="setting_row">
             <span class="setting_label">Accent</span>
             <div class="accent_pills_grid" id="settings_accent_toggle">
-              <button type="button" class="accent_pill ${curAccent === "aurora" ? "active" : ""}" data-accent="aurora" aria-label="Aurora Indigo"></button>
-              <button type="button" class="accent_pill ${curAccent === "pine" ? "active" : ""}" data-accent="pine" aria-label="Pine Emerald"></button>
-              <button type="button" class="accent_pill ${curAccent === "terracotta" ? "active" : ""}" data-accent="terracotta" aria-label="Terracotta Rose"></button>
-              <button type="button" class="accent_pill ${curAccent === "solar" ? "active" : ""}" data-accent="solar" aria-label="Solar Amber"></button>
+              <button type="button" class="accent_pill ${curAccent === "aurora" ? "active" : ""}" data-accent="aurora" aria-label="Aurora Indigo" title="Aurora Indigo"></button>
+              <button type="button" class="accent_pill ${curAccent === "pine" ? "active" : ""}" data-accent="pine" aria-label="Pine Emerald" title="Pine Emerald"></button>
+              <button type="button" class="accent_pill ${curAccent === "terracotta" ? "active" : ""}" data-accent="terracotta" aria-label="Terracotta Rose" title="Terracotta Rose"></button>
+              <button type="button" class="accent_pill ${curAccent === "solar" ? "active" : ""}" data-accent="solar" aria-label="Solar Amber" title="Solar Amber"></button>
             </div>
           </div>
         </div>
@@ -5914,6 +5934,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         const btn = e.target.closest("button[data-theme]");
         if (!btn) return;
         this.store.setTheme(btn.getAttribute("data-theme"));
+        this.updateThemeClasses();
         this.renderSettingsUI();
       });
 
@@ -5921,6 +5942,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         const btn = e.target.closest("button[data-style]");
         if (!btn) return;
         this.store.setUiStyle(btn.getAttribute("data-style"));
+        this.updateThemeClasses();
         this.renderSettingsUI();
       });
 
@@ -5928,6 +5950,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         const btn = e.target.closest("button[data-accent]");
         if (!btn) return;
         this.store.setAccent(btn.getAttribute("data-accent"));
+        this.updateThemeClasses();
         this.renderSettingsUI();
       });
 
